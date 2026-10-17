@@ -21,16 +21,17 @@ jobs:
       XDG_CACHE_HOME: ${{ github.workspace }}/.cache
       npm_config_cache: ${{ github.workspace }}/.npm-cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: 452f0ac6e46e2137bf469e96b66f5f798afec099
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
       - name: Install Android build tools
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'build-tools;35.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
       - run: npm ci --no-audit --no-fund
