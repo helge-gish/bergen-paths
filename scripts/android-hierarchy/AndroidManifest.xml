@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="no.trakk.hierarchy"><uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/><application android:label="Trakk emulator hierarchy"/><instrumentation android:name="no.trakk.hierarchy.Dump" android:targetPackage="no.trakk.hierarchy"/></manifest>
