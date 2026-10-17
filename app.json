@@ -2,24 +2,44 @@
   "expo": {
     "name": "Tråkk",
     "slug": "trakk",
-    "platforms": ["android", "ios"],
-    "version": "0.1.0",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "trakk",
     "icon": "./assets/trakk-icon.png",
-    "ios": { "bundleIdentifier": "no.trakk.app", "supportsTablet": false },
-    "android": { "package": "no.trakk.app", "permissions": ["android.permission.POST_NOTIFICATIONS"] },
+    "ios": {
+      "bundleIdentifier": "no.trakk.app",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "no.trakk.app",
+      "versionCode": 3,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/trakk-icon.png",
+        "backgroundColor": "#183D32"
+      }
+    },
     "plugins": [
       "@maplibre/maplibre-react-native",
       "expo-sqlite",
-      ["expo-location", {
-        "locationWhenInUsePermission": "Tråkk bruker posisjonen din til å tegne turen og finne stier i nærheten.",
-        "locationAlwaysAndWhenInUsePermission": "Tråkk registrerer turen også når skjermen er låst. Registreringen stopper når du avslutter turen.",
-        "isAndroidBackgroundLocationEnabled": true,
-        "isAndroidForegroundServiceEnabled": true,
-        "isIosBackgroundLocationEnabled": true
-      }]
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Tråkk bruker posisjonen din til å tegne turen og finne stier i nærheten.",
+          "locationAlwaysAndWhenInUsePermission": "Tråkk registrerer turen også når skjermen er låst. Registreringen stopper når du avslutter turen.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ]
     ]
   }
 }

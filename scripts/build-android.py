@@ -43,7 +43,10 @@ if 'distributionSha256Sum=' not in contents:
         raise SystemExit('Invalid Gradle SHA-256 response.')
     wrapper.write_text(contents + '\ndistributionSha256Sum=' + checksum + '\n')
 
-args = ['./gradlew', ':app:assembleRelease', '--no-daemon', '--max-workers=2', '-PreactNativeArchitectures=arm64-v8a']
+architectures = env.get('TRAKK_ANDROID_ARCHITECTURES', 'arm64-v8a')
+if not re.fullmatch(r'(arm64-v8a|x86_64)(,(arm64-v8a|x86_64))*', architectures):
+    raise SystemExit('Unsupported Android architecture list.')
+args = ['./gradlew', ':app:assembleRelease', '--no-daemon', '--max-workers=2', '-PreactNativeArchitectures=' + architectures]
 jvm = '-Xmx4g -XX:MaxMetaspaceSize=1g'
 # The system Java trust store contains this environment's configured root CAs.
 # Keep certificate validation enabled when using a separately installed JDK.
@@ -67,4 +70,9 @@ if result.returncode:
 apk = root / 'android/app/build/outputs/apk/release/app-release.apk'
 if not apk.is_file():
     raise SystemExit('Build returned success without the expected APK.')
-print('Test APK (arm64, debug signing):', apk)
+permissions = subprocess.check_output([
+    str(sdk / 'build-tools/36.0.0/aapt'), 'dump', 'permissions', str(apk)
+], text=True)
+if 'android.permission.RECEIVE_BOOT_COMPLETED' not in permissions:
+    raise SystemExit('APK is missing RECEIVE_BOOT_COMPLETED, required by persisted GPS jobs.')
+print('Test APK (' + architectures + ', debug signing):', apk)

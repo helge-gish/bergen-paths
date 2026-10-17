@@ -18,7 +18,7 @@ import { TrailMap } from './src/ui/TrailMap';
 import { Compass } from './src/ui/Compass';
 import { Discoveries } from './src/ui/Discoveries';
 import { collectionProgress, type Discovery } from './src/domain/discoveries';
-import { fetchDiscoveries } from './src/services/osm';
+import { fetchDiscoveries, fetchStreets } from './src/services/osm';
 import { exportLog } from './src/services/export';
 
 type Tab = 'explore' | 'passport' | 'history' | 'profile';
@@ -30,6 +30,7 @@ function snapshot() {
   const progress = collectionProgress(discoveries, trips);
   let changed = false;
   for (const [id, p] of Object.entries(progress)) if (p.collected && awards[id] === undefined) { awards[id] = p.firstVisit ?? Date.now(); changed = true; }
+  for (const item of discoveries) if (item.kind === 'street' && !progress[item.id]?.collected && awards[item.id] !== undefined) { delete awards[item.id]; changed = true; }
   if (changed) store.setSetting('osmAwards', awards);
   return { active: store.active(), trips, trails: store.trails(), discoveries, awards, profile: store.profile(), error: store.setting<string | null>('trackingError', null), audioError: store.setting<string | null>('audioError', null) };
 }
@@ -72,6 +73,7 @@ function Trakk() {
   const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<'compass' | 'ghost' | 'start' | null>(null), [peak, setPeak] = useState<Peak | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<string | null>(null), [ghostId, setGhostId] = useState<string | null>(null);
+  const [selectedDiscovery, setSelectedDiscovery] = useState<Discovery | null>(null);
   const [audio, setAudio] = useState(true), [focus, setFocus] = useState<Coordinate | null>(null), [position, setPosition] = useState<Coordinate | null>(null);
   const [serviceMissing, setServiceMissing] = useState(false), [weightText, setWeightText] = useState(data.profile.weightKg?.toString() ?? '');
   const refresh = useCallback(() => setData(snapshot()), []);
@@ -102,6 +104,12 @@ function Trakk() {
     const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) throw new Error('Tillat posisjon for å finne deg på kartet.');
     const p = toFix(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })); setPosition(p); setFocus(p);
   });
+  const syncStreets = () => attempt(async () => {
+    const items = await fetchStreets();
+    const others = data.discoveries.filter(item => item.kind !== 'street');
+    getStore().setSetting('osmDiscoveries', [...others, ...items]);
+    Alert.alert('Gatekartet er klart', `${items.length} navngitte gater i Bergen. Lagrede turer teller også.`);
+  });
   const syncDiscoveries = () => attempt(async () => {
     const center = focus ?? position ?? PEAKS.find(p => p.id === 'floyen')!;
     const items = await fetchDiscoveries(center);
@@ -118,7 +126,7 @@ function Trakk() {
     <ScrollView key={tab} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
       {tab === 'explore' && <>
         <View style={s.between}><View><Text style={s.eyebrow}>{active ? 'UTE OG SETTER SPOR' : 'DITT NESTE LILLE EVENTYR'}</Text><Text style={[s.title, { marginTop: 9 }]}>{active ? 'God tur, du.' : 'Bare én sti til.'}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Finn stier med kompasset" onPress={() => setModal('compass')} style={{ backgroundColor: colors.pale, padding: 13, borderRadius: 20 }}><Icon name="compass" size={27} /></Pressable></View>
-        <View style={{ gap: 9 }}><TrailMap trips={data.trips} trails={data.trails} discoveries={data.discoveries} awards={data.awards} peaks={verifiedPeaks} current={metrics?.points} reference={ghost?.points} ghost={comparison?.position} position={metrics?.points.at(-1) ?? position} focus={focus} onPeak={setPeak} height={active ? 280 : 335} /><View style={s.between}><Text style={s.small}>Grønt er sporene dine. Mer å oppdage der ute.</Text><Pressable accessibilityRole="button" accessibilityLabel="Finn min posisjon" onPress={locate} disabled={busy} style={{ padding: 6 }}><Icon name="location" size={20} /></Pressable></View></View>
+        <View style={{ gap: 9 }}><TrailMap selectedDiscovery={selectedDiscovery} trips={data.trips} trails={data.trails} discoveries={data.discoveries} awards={data.awards} peaks={verifiedPeaks} current={metrics?.points} reference={ghost?.points} ghost={comparison?.position} position={metrics?.points.at(-1) ?? position} focus={focus} onPeak={setPeak} height={active ? 280 : 335} />{selectedDiscovery && <Pressable accessibilityRole="button" onPress={() => setSelectedDiscovery(null)}><Text style={s.small}>{selectedDiscovery.name} · markert i korall · Lukk ×</Text></Pressable>}<View style={s.between}><Text style={s.small}>Grønt er sporene dine. Mer å oppdage der ute.</Text><Pressable accessibilityRole="button" accessibilityLabel="Finn min posisjon" onPress={locate} disabled={busy} style={{ padding: 6 }}><Icon name="location" size={20} /></Pressable></View></View>
         {active && metrics ? <>
           <View style={{ backgroundColor: colors.ink, padding: 22, borderRadius: 24, gap: 22 }}><View style={s.between}><Text style={{ fontSize: 10, letterSpacing: 2, color: '#C2D3C3', fontWeight: '700' }}>● TUREN DIN · ALLE PAUSER TELLER</Text><Icon name="clock" color={colors.yellow} size={18} /></View><Text style={{ fontSize: 46, color: colors.paper, fontWeight: '600', letterSpacing: -1, fontVariant: ['tabular-nums'] }}>{durationLabel(metrics.elapsed)}</Text><View style={s.row}><Metric light value={kmLabel(metrics.meters)} label="kilometer" /><Metric light value={metrics.hasElevation ? `${Math.round(metrics.ascent)}` : '—'} label="høydemeter opp" /><Metric light value={metrics.speedKmh === null ? '—' : decimal(metrics.speedKmh)} label="km/t akkurat nå" /></View><View style={{ height: 1, backgroundColor: '#3A594B' }} /><Text style={{ fontSize: 12, color: '#C2D3C3' }}>Snitt {decimal(metrics.averageKmh)} km/t · Ned {metrics.hasElevation ? Math.round(metrics.descent) : '—'} hm</Text></View>
           {(!metrics.points.length || now - metrics.points.at(-1)!.timestamp > 20_000 || serviceMissing || data.error) && <View style={s.notice}><Text style={s.subheading}>{serviceMissing ? 'GPS-tjenesten har stoppet' : 'Sjekk GPS-signalet'}</Text><Text style={s.body}>{data.error ?? (serviceMissing ? 'Tidtakingen fortsetter, men nye GPS-punkter kommer ikke inn. Du kan starte GPS igjen uten å nullstille tiden. Oppholdet i sporet beholdes.' : 'Venter på en fersk, nøyaktig posisjon. Tiden fortsetter. Svakt signal kan gi et ufullstendig spor.')}</Text>{serviceMissing && <Button secondary title="Fortsett GPS-registreringen" disabled={busy} onPress={() => attempt(async () => { await resumeTracking(); setServiceMissing(false); })} />}</View>}
@@ -134,7 +142,7 @@ function Trakk() {
 
       {tab === 'passport' && <>
         <Text style={s.eyebrow}>SMÅ OPPDAGELSER. STORE MINNER.</Text><Text style={s.title}>Turpasset ditt.</Text><Text style={s.body}>Samle steder, ikke hastverk. Stemplene blir her, også når du tar en pause fra fjellet.</Text>
-        <Discoveries items={data.discoveries} trips={data.trips} awards={data.awards} busy={busy} onSync={syncDiscoveries} onMap={item => { setFocus(item); setTab('explore'); }} />
+        <Discoveries items={data.discoveries} trips={data.trips} awards={data.awards} busy={busy} onSync={syncDiscoveries} onSyncStreets={syncStreets} onMap={item => { setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
         <Text style={s.heading}>De syv byfjellene</Text>
         <View style={[s.card, { backgroundColor: colors.ink, padding: 22 }]}><Text style={{ color: '#C2D3C3', fontSize: 11, letterSpacing: 2 }}>BYFJELLENE · FØRSTE SAMLING</Text><Text style={{ fontSize: 45, color: colors.paper, fontWeight: '700' }}>{Object.keys(visits).length}<Text style={{ fontSize: 24, color: '#B6C8B9' }}> / 7</Text></Text><Text style={{ color: colors.paper, fontSize: 17 }}>Et helt lite fjellrike å oppdage.</Text></View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>{PEAKS.map((p, i) => <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`${p.name}, ${visits[p.id] ? 'besøkt' : 'ikke besøkt'}`} onPress={() => setPeak(verifiedPeaks.find(v => v.id === p.id) ?? p)} style={[s.card, { width: '48%', alignItems: 'center', paddingVertical: 22 }]}><Stamp visited={!!visits[p.id]} index={i} /><Text style={s.subheading}>{p.name}</Text><Text style={s.small}>{p.elevation} moh. · {visits[p.id] ? date(visits[p.id].timestamp) : 'Venter på ditt spor'}</Text></Pressable>)}</View>
