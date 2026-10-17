@@ -19,8 +19,11 @@ def screen():
     raw = adb('shell', 'am', 'instrument', '-w', 'no.trakk.hierarchy/no.trakk.hierarchy.Dump')
     match = re.search(r'INSTRUMENTATION_RESULT: hierarchy=([A-Za-z0-9+/=]+)', raw)
     if not match:
-        raise RuntimeError('Hierarchy capture failed: ' + raw)
-    xml = base64.b64decode(match[1]).decode()
+        adb('shell', 'rm', '-f', '/sdcard/trakk-ui.xml')
+        adb('shell', 'uiautomator', 'dump', '/sdcard/trakk-ui.xml', check=False)
+        xml = adb('shell', 'cat', '/sdcard/trakk-ui.xml')
+    else:
+        xml = base64.b64decode(match[1]).decode()
     Path('/tmp/trakk-ui.xml').write_text(xml)
     return ET.fromstring(xml)
 
