@@ -1,0 +1,40 @@
+{
+  "name": "trakk",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/metro-runtime": "~55.0.12",
+    "@maplibre/maplibre-react-native": "11.5.0",
+    "expo": "~55.0.31",
+    "expo-dev-client": "~55.0.40",
+    "expo-file-system": "~55.0.26",
+    "expo-location": "~55.1.14",
+    "expo-sharing": "~55.0.24",
+    "expo-speech": "~55.0.18",
+    "expo-sqlite": "~55.0.20",
+    "expo-status-bar": "~55.0.6",
+    "expo-system-ui": "~55.0.22",
+    "expo-task-manager": "~55.0.20",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.10",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-svg": "15.15.3"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^24.19.2",
+    "@types/react": "~19.2.0",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "export": "expo export --platform all --max-workers 2"
+  },
+  "private": true
+}
