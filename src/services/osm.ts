@@ -1,3 +1,4 @@
+import { parseStreets } from '../domain/streets';
 import type { Coordinate } from '../domain/types';
 import { parseOsm } from '../domain/discoveries';
 /** User-initiated, bounded Overpass read; results are retained locally. */
@@ -22,5 +23,24 @@ node[natural~"^(spring|water)$"]${area};
     const data = JSON.parse(text);
     if (data.remark) throw new Error('Karttjenesten fikk ikke fullført søket. Prøv igjen senere.');
     return parseOsm(data, Date.now());
+  } finally { clearTimeout(timer); }
+}
+
+/** Download named streets throughout Bergen, so the search radius cannot cut off an end. */
+export async function fetchStreets() {
+  const query = `[out:json][timeout:60];
+rel[boundary=administrative][admin_level=7][name=Bergen];map_to_area->.bergen;
+way(area.bergen)[highway~"^(residential|living_street|pedestrian|unclassified|service|tertiary|secondary|primary)$"][name];out geom;`;
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 75_000);
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(query)}`, signal: controller.signal });
+    if (!response.ok) throw new Error('Gatekartet kunne ikke hentes. Prøv igjen senere.');
+    const text = await response.text();
+    if (text.length > 25_000_000) throw new Error('Gatekartet var for stort. Prøv igjen senere.');
+    const data = JSON.parse(text);
+    if (data.remark) throw new Error('Karttjenesten fikk ikke fullført hele gatekartet. Prøv igjen senere.');
+    const streets = parseStreets(data, Date.now());
+    if (!streets.length) throw new Error('Fant ingen komplette gater i Bergen. Prøv igjen senere.');
+    return streets;
   } finally { clearTimeout(timer); }
 }

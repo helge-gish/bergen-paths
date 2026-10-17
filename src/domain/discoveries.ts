@@ -1,16 +1,19 @@
+import { streetProgress } from './streets';
 import type { Coordinate, Trip } from './types';
 import { cleanPoints, distance, MAX_GAP_MS, project } from './geo';
-export type DiscoveryKind = 'trail' | 'peak' | 'viewpoint' | 'hut' | 'landmark' | 'water' | 'picnic';
+export type DiscoveryKind = 'street' | 'trail' | 'peak' | 'viewpoint' | 'hut' | 'landmark' | 'water' | 'picnic';
 export type Discovery = Coordinate & {
   id: string;
   name: string;
   kind: DiscoveryKind;
   geometry: Coordinate[];
+  streetPaths?: Coordinate[][];
+  streetEnds?: Coordinate[];
   sourceUrl: string;
   fetchedAt: number;
 };
 export type Progress = { fraction: number; collected: boolean; firstVisit: number | null };
-export const kindLabels: Record<DiscoveryKind, string> = { trail: 'Stier', peak: 'Topper', viewpoint: 'Utsiktspunkter', hut: 'Hytter og ly', landmark: 'Landemerker', water: 'Vann og kilder', picnic: 'Rasteplasser' };
+export const kindLabels: Record<DiscoveryKind, string> = { street: 'Gater', trail: 'Stier', peak: 'Topper', viewpoint: 'Utsiktspunkter', hut: 'Hytter og ly', landmark: 'Landemerker', water: 'Vann og kilder', picnic: 'Rasteplasser' };
 function sampleLine(points: Coordinate[], spacing = 20): Coordinate[] {
   const result: Coordinate[] = points.length ? [points[0]] : [];
   let traveled = 0, next = spacing;
@@ -43,6 +46,7 @@ export function collectionProgress(items: Discovery[], trips: Trip[]): Record<st
     }
   }
   for (const item of items) {
+    if (item.kind === 'street') { result[item.id] = streetProgress(item, trips); continue; }
     if (item.kind !== 'trail') {
       let firstVisit: number | null = null;
       for (const { points } of tracks) {
@@ -91,7 +95,7 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     const latitude = e.lat ?? e.center?.lat ?? geometry[0]?.latitude;
     const longitude = e.lon ?? e.center?.lon ?? geometry[0]?.longitude;
     if (latitude === undefined || longitude === undefined || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
-    const fallback: Record<DiscoveryKind, string> = { trail: 'Sti uten navn', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
+    const fallback: Record<DiscoveryKind, string> = { street: 'Gate uten navn', trail: 'Sti uten navn', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
     items.push({ id: `${e.type}/${e.id}`, name: (t['name:nb'] ?? t.name ?? fallback[kind]).slice(0, 100), kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt });
   }
   return items;

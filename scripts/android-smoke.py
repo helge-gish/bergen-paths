@@ -115,7 +115,33 @@ try:
     tap('Avslutt og lagre tur')
     tap('Avslutt og lagre')
     alive()
-    print('PASS: start, GPS updates, relaunch active trip, finish')
+    print('PASS: start, GPS updates, relaunch active trip, finish', flush=True)
+    if os.environ.get('TRAKK_SMOKE_STREETS') == '1':
+        time.sleep(2)
+        tap('Lukk')
+        tap('Turpass')
+        tap('Hent / oppdater Bergens gater')
+        deadline = time.time() + 100
+        while time.time() < deadline:
+            xml = screen()
+            text = ET.tostring(xml, encoding='unicode')
+            if 'Gatekartet er klart' in text:
+                print('PASS: real Bergen street download: ' + text, flush=True)
+                break
+            if 'Det gikk ikke helt' in text:
+                raise RuntimeError('Street download failed: ' + text)
+            time.sleep(3)
+        else:
+            raise RuntimeError('Timed out waiting for Bergen street download')
+        tap('OK')
+        tap('Gater')
+        x, y = find('Vis på kartet →')
+        adb('shell', 'input', 'tap', str(x), str(y))
+        time.sleep(5)
+        alive()
+        find('markert i korall', contains=True)
+        print('PASS: street collection list and selected street map', flush=True)
+
 finally:
     Path('/tmp/trakk-crash.log').write_text(adb('logcat', '-b', 'crash', '-d', check=False))
     Path('/tmp/trakk-js.log').write_text(adb('logcat', '-d', '-s', 'ReactNativeJS:V', 'AndroidRuntime:E', check=False))
