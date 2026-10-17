@@ -31,9 +31,24 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - name: Install Android build tools
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'build-tools;35.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          mkdir -p "$ANDROID_USER_HOME/cache"
+          export ANDROID_HOME="${ANDROID_HOME:-$RUNNER_TEMP/android-sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip -o /tmp/android-tools.zip
+          unzip -q /tmp/android-tools.zip -d "$RUNNER_TEMP/android-tools"
+          export PATH="$RUNNER_TEMP/android-tools/cmdline-tools/bin:$PATH"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /tmp/licenses.log 2>&1 || true
+          if ! sdkmanager --sdk_root="$ANDROID_HOME" 'platforms;android-36' 'build-tools;36.0.0' 'build-tools;35.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' > /tmp/sdk-install.log 2>&1; then
+            tail -c 12000 /tmp/sdk-install.log > /tmp/sdk-error.md
+            gh release create trakk-build-diagnostic --draft --title 'Tråkk build diagnostic' --notes-file /tmp/sdk-error.md
+            exit 1
+          fi
       - run: npm ci --no-audit --no-fund
       - run: npm test && npm run typecheck
       - run: python3 scripts/build-android.py
