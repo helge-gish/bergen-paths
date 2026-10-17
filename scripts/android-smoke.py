@@ -2,6 +2,8 @@
 """Exercise a release APK on a connected emulator, without external services."""
 import re
 import os
+import base64
+import tempfile
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -14,10 +16,37 @@ def adb(*args, check=True):
                           stderr=subprocess.STDOUT, timeout=45, check=check).stdout
 
 def screen():
-    adb('shell', 'uiautomator', 'dump', '/sdcard/trakk-ui.xml', check=False)
-    raw = adb('shell', 'cat', '/sdcard/trakk-ui.xml')
-    Path('/tmp/trakk-ui.xml').write_text(raw)
-    return ET.fromstring(raw)
+    raw = adb('shell', 'am', 'instrument', '-w', 'no.trakk.hierarchy/no.trakk.hierarchy.Dump')
+    match = re.search(r'INSTRUMENTATION_RESULT: hierarchy=([A-Za-z0-9+/=]+)', raw)
+    if not match:
+        raise RuntimeError('Hierarchy capture failed: ' + raw)
+    xml = base64.b64decode(match[1]).decode()
+    Path('/tmp/trakk-ui.xml').write_text(xml)
+    return ET.fromstring(xml)
+
+def install_hierarchy_helper():
+    # UiAutomator's dump command waits for one second of UI idleness. The live
+    # trip clock prevents that; capture accessibility nodes without the idle wait.
+    sdk = Path(os.environ['ANDROID_HOME'])
+    java = Path(os.environ['JAVA_HOME']) / 'bin'
+    tools = sdk / 'build-tools/36.0.0'
+    source = Path(__file__).parent / 'android-hierarchy'
+    with tempfile.TemporaryDirectory(prefix='trakk-hierarchy-') as tmp:
+        out = Path(tmp)
+        (out / 'classes').mkdir()
+        (out / 'dex').mkdir()
+        def run(args):
+            subprocess.run([str(a) for a in args], check=True, timeout=60)
+        run([java / 'javac', '-source', '8', '-target', '8', '-cp', sdk / 'platforms/android-36/android.jar', '-d', out / 'classes', source / 'Dump.java'])
+        run([tools / 'd8', '--lib', sdk / 'platforms/android-36/android.jar', '--min-api', '24', '--output', out / 'dex', out / 'classes/no/trakk/hierarchy/Dump.class'])
+        apk = out / 'hierarchy.apk'
+        run([tools / 'aapt', 'package', '-f', '-M', source / 'AndroidManifest.xml', '-I', sdk / 'platforms/android-36/android.jar', '-F', apk])
+        from zipfile import ZipFile
+        with ZipFile(apk, 'a') as archive:
+            archive.write(out / 'dex/classes.dex', 'classes.dex')
+        run([java / 'keytool', '-genkeypair', '-keystore', out / 'smoke.jks', '-storepass', 'android', '-keypass', 'android', '-alias', 'smoke', '-dname', 'CN=TrakkTest', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '1', '-noprompt'])
+        run([tools / 'apksigner', 'sign', '--ks', out / 'smoke.jks', '--ks-pass', 'pass:android', apk])
+        adb('install', '-r', str(apk))
 
 def find(label, contains=False):
     for _ in range(10):
@@ -47,6 +76,7 @@ def launch():
     alive()
 
 try:
+    install_hierarchy_helper()
     adb('install', '-r', 'android/app/build/outputs/apk/release/app-release.apk')
     first_run = os.environ.get('TRAKK_SMOKE_FIRST_RUN') == '1'
     permissions = ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'POST_NOTIFICATIONS']
