@@ -47,7 +47,15 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Status i skymiljøet:** Ingen APK er produsert ennå. Byggingen kom til native avhengighetsoppløsning, men nedlastingen av `react-android-0.83.10-release.aar` ble omdirigert fra Maven til `repo.reactnative.dev`, som proxyen avviste med HTTP 403. Domenet er lagt til i konfigurasjonsutkastet. Lagre nettverksendringen i miljøinnstillingene, kontroller at tilgangen er aktiv og kjør byggeskriptet igjen. Build-Tools 35.0.0 ble også installert for en native avhengighet.
+**Android-testversjon:** [Tråkk 0.1.1](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.1.1). Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
+
+Automatisk prøve på tilkoblet Android-emulator (APK-en må finnes under `android/app/build/outputs/apk/release/`):
+
+```sh
+python3 scripts/android-smoke.py
+```
+
+Prøven starter en tur, sender GPS-punkter, kontrollerer forgrunnstjenesten, låser skjermen, gjenåpner en aktiv tur og avslutter den. `TRAKK_SMOKE_FIRST_RUN=1` prøver også overgangen tilbake fra Androids bakgrunnstillatelser. Prøven er kun for en emulator; den installerer en testpakke og endrer tillatelser.
 
 For en allerede installert development build:
 
