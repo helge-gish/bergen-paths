@@ -16,7 +16,7 @@ node[natural~"^(spring|water)$"]${area};
 );out center geom;`;
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 40_000);
   try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(query)}`, signal: controller.signal });
+    const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Trakk/0.2.0 (https://github.com/helge-gish/bergen-paths)' }, body: `data=${encodeURIComponent(query)}`, signal: controller.signal });
     if (!response.ok) throw new Error(response.status === 429 || response.status === 504 ? 'Karttjenesten er opptatt. Prøv igjen litt senere.' : `Kartdata kunne ikke hentes (HTTP ${response.status}).`);
     const text = await response.text();
     if (text.length > 15_000_000) throw new Error('Kartsvaret var for stort. Prøv et mindre tett område.');
@@ -31,16 +31,26 @@ export async function fetchStreets() {
   const query = `[out:json][timeout:60];
 rel[boundary=administrative][admin_level=7][name=Bergen];map_to_area->.bergen;
 way(area.bergen)[highway~"^(residential|living_street|pedestrian|unclassified|service|tertiary|secondary|primary)$"][name];out geom;`;
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 75_000);
-  try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(query)}`, signal: controller.signal });
-    if (!response.ok) throw new Error('Gatekartet kunne ikke hentes. Prøv igjen senere.');
-    const text = await response.text();
-    if (text.length > 25_000_000) throw new Error('Gatekartet var for stort. Prøv igjen senere.');
-    const data = JSON.parse(text);
-    if (data.remark) throw new Error('Karttjenesten fikk ikke fullført hele gatekartet. Prøv igjen senere.');
-    const streets = parseStreets(data, Date.now());
-    if (!streets.length) throw new Error('Fant ingen komplette gater i Bergen. Prøv igjen senere.');
-    return streets;
-  } finally { clearTimeout(timer); }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 75_000);
+    try {
+      const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Trakk/0.2.0 (https://github.com/helge-gish/bergen-paths)' }, body: `data=${encodeURIComponent(query)}`, signal: controller.signal });
+      if (!response.ok) {
+        console.warn(`Bergen gatekart: HTTP ${response.status}, forsøk ${attempt + 1}`);
+        if ([429, 502, 503, 504].includes(response.status) && attempt < 2) { await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 5000)); continue; }
+        throw new Error(`Gatekartet kunne ikke hentes (HTTP ${response.status}). Prøv igjen senere.`);
+      }
+      const text = await response.text();
+      if (text.length > 25_000_000) throw new Error('Gatekartet var for stort. Prøv igjen senere.');
+      const data = JSON.parse(text);
+      if (data.remark) throw new Error('Karttjenesten fikk ikke fullført hele gatekartet. Prøv igjen senere.');
+      const streets = parseStreets(data, Date.now());
+      if (!streets.length) throw new Error('Fant ingen komplette gater i Bergen. Prøv igjen senere.');
+      return streets;
+    } catch (error) {
+      if (controller.signal.aborted && attempt < 2) continue;
+      throw error;
+    } finally { clearTimeout(timer); }
+  }
+  throw new Error('Karttjenesten svarer ikke. Prøv igjen senere.');
 }

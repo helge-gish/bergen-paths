@@ -121,7 +121,7 @@ try:
         tap('Lukk')
         tap('Turpass')
         tap('Hent / oppdater Bergens gater')
-        deadline = time.time() + 100
+        deadline = time.time() + 250
         while time.time() < deadline:
             xml = screen()
             text = ET.tostring(xml, encoding='unicode')

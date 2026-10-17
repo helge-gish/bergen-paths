@@ -9,7 +9,8 @@
 - Lar deg navngi hele eller deler av et lagret turspor. Egne stier vises på kartet og i et kompass med luftlinjeavstand.
 - Viser en skygge av en tidligere tur, med den opprinnelige tidslinjen og pausene. Valgfrie norske stemmemeldinger gir tidsavvik omtrent hvert minutt når sammenligningen er pålitelig.
 - Oppdager vedvarende ruteavvik og gjeninntreden på referanseruten. Avstikkere og GPS-hull gjør hele turens tidsresultat usammenlignbart; det gis ingen snarvei-rekord.
-- Har et turpass for OSM-stier, topper, utsiktspunkter, hytter/ly, landemerker, kilder og rasteplasser. Stidekning kan samles over flere turer. Oppnådde OSM-stempler beholdes lokalt.
+- Samler navngitte Bergen-gater ved minst 95 % lengdedekning og alle ender i én sammenhengende, lagret gåtur. Hele gaten med forgreninger vises på kartet. Se [reglene for gatesamling](docs/street-collection.md).
+- Har et turpass for OSM-stier, topper, utsiktspunkter, hytter/ly, landemerker, kilder og rasteplasser. Stidekning kan samles over flere turer. Oppnådde stempler lagres lokalt; gatestempler vurderes på nytt ved kartoppdatering.
 - Henter kartobjekter fra Overpass ved en brukerhandling, innen 3 km fra valgt kartmål (Fløyen som standard). Gamle turer vurderes også mot nylig hentede objekter.
 - Lagrer turlogg og valgfri vekt lokalt, og eksporterer turer og samling som en JSON-fil uten vekten.
 
@@ -47,7 +48,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.1.1](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.1.1). Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
+**Android-testversjon:** [Tråkk 0.2.0](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.2.0). Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 
 Automatisk prøve på tilkoblet Android-emulator (APK-en må finnes under `android/app/build/outputs/apk/release/`):
 
@@ -55,7 +56,7 @@ Automatisk prøve på tilkoblet Android-emulator (APK-en må finnes under `andro
 python3 scripts/android-smoke.py
 ```
 
-Prøven starter en tur, sender GPS-punkter, kontrollerer forgrunnstjenesten, låser skjermen, gjenåpner en aktiv tur og avslutter den. `TRAKK_SMOKE_FIRST_RUN=1` prøver også overgangen tilbake fra Androids bakgrunnstillatelser. Prøven er kun for en emulator; den installerer en testpakke og endrer tillatelser.
+Prøven starter en tur, sender GPS-punkter, kontrollerer forgrunnstjenesten, låser skjermen, gjenåpner en aktiv tur og avslutter den. `TRAKK_SMOKE_FIRST_RUN=1` prøver også overgangen tilbake fra Androids bakgrunnstillatelser. `TRAKK_SMOKE_STREETS=1` kontrollerer også faktisk nedlasting av Bergens gatekart, listen og valgt gate på kartet. Prøven er kun for en emulator; den installerer en testpakke og endrer tillatelser.
 
 For en allerede installert development build:
 
