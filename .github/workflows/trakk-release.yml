@@ -1,0 +1,57 @@
+name: Publish Tråkk Android test APK
+
+on:
+  push:
+    branches: [trakk-release-0.1.0]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: trakk-release-0.1.0
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ANDROID_USER_HOME: ${{ github.workspace }}/.android-user
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+      XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+      npm_config_cache: ${{ github.workspace }}/.npm-cache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 452f0ac6e46e2137bf469e96b66f5f798afec099
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android build tools
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'build-tools;35.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
+      - run: npm ci --no-audit --no-fund
+      - run: npm test && npm run typecheck
+      - run: python3 scripts/build-android.py
+      - name: Prepare APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk trakk-0.1.0-arm64.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify trakk-0.1.0-arm64.apk
+          sha256sum trakk-0.1.0-arm64.apk > trakk-0.1.0-arm64.apk.sha256
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > /tmp/release-notes.md <<'EOF'
+          Tråkk 0.1.0 – Android-testversjon for arm64-v8a (Android 7 eller nyere).
+
+          Last ned APK-en nedenfor. JavaScript er inkludert; Metro er ikke nødvendig.
+
+          Bygget fra trakk-prototype, commit 452f0ac6e46e2137bf469e96b66f5f798afec099, med scripts/build-android.py. Signert med prosjektets debug-testnøkkel.
+
+          GPS med låst skjerm, bakgrunnstale, batteriforbruk og kartvisning må fortsatt testes på fysisk telefon før appen brukes som pålitelig turverktøy.
+          EOF
+          gh release create trakk-0.1.0 trakk-0.1.0-arm64.apk trakk-0.1.0-arm64.apk.sha256 --target 452f0ac6e46e2137bf469e96b66f5f798afec099 --title 'Tråkk 0.1.0 – Android-testversjon' --notes-file /tmp/release-notes.md --prerelease
