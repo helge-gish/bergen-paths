@@ -40,7 +40,7 @@ export function TrailMap({ fitRoute = false, fitReference = false, selectedDisco
       <GeoJSONSource id="discoveries" data={targets}>
         <Layer id="discovery-paths" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': ['case', ['get', 'selected'], colors.coral, ['get', 'collected'], '#426D3A', '#A9B6A0'], 'line-width': ['case', ['get', 'selected'], 5, 2], 'line-opacity': 0.85 }} />
         <Layer id="discovery-dots" type="circle" filter={['==', ['geometry-type'], 'Point']} paint={{ 'circle-radius': 6, 'circle-color': ['case', ['get', 'collected'], colors.ink, colors.yellow], 'circle-stroke-color': colors.paper, 'circle-stroke-width': 2 }} />
-        <Layer id="discovery-labels" type="symbol" minzoom={14} filter={['==', ['geometry-type'], 'Point']} layout={{ 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.3] }} paint={{ 'text-color': colors.ink, 'text-halo-color': colors.paper, 'text-halo-width': 1.5 }} />
+        <Layer id="discovery-labels" type="symbol" minzoom={14} filter={['==', ['geometry-type'], 'Point']} layout={{ 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.3] }} paint={{ 'text-color': colors.ink, 'text-halo-color': colors.paper, 'text-halo-width': 1.5 }} />
       </GeoJSONSource>
       <GeoJSONSource id="walked" data={history}><Layer id="walked-line" type="line" paint={{ 'line-color': '#6B8D62', 'line-width': 4, 'line-opacity': 0.65 }} layout={{ 'line-cap': 'round', 'line-join': 'round' }} /></GeoJSONSource>
       <GeoJSONSource id="reference" data={old}><Layer id="reference-line" type="line" paint={{ 'line-color': colors.coral, 'line-width': 3, 'line-dasharray': [2, 2] }} /></GeoJSONSource>
