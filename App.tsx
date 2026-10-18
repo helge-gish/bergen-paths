@@ -1,3 +1,6 @@
+import { recordMedals, sameCompletedRoute } from './src/domain/records';
+import { RecordMedals } from './src/ui/RecordMedals';
+import { useNearbyArea } from './src/ui/useNearbyArea';
 import { StretchResults } from './src/ui/StretchResults';
 import { stretchResults, stretchDelta } from './src/domain/stretchRuns';
 import { StartGuide } from './src/ui/StartGuide';
@@ -44,12 +47,12 @@ const decimal = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits
 function snapshot() {
   const store = getStore(), trips = store.trips(), discoveries = store.setting<Discovery[]>('osmDiscoveries', []), awards = store.setting<Record<string, number>>('osmAwards', {});
   const active = store.active();
-  return { active, segmentUndo: active ? store.segmentUndo(active.id) : null, segmentWindow: active ? store.segmentWindow(active.id) : null, trips, trails: store.trails(), discoveries, awards, homeArea: store.setting<HomeArea | null>('homeArea', null), goals: store.setting<Goal[]>('goals', []), catalog: store.setting<Goal[]>('goalCatalog', []), avatarColor: store.setting('avatarColor', '#E8A164'), syncError: store.setting<string | null>('collectionSyncError', null), profile: store.profile(), error: store.setting<string | null>('trackingError', null), audioError: store.setting<string | null>('audioError', null) };
+  return { active, segmentUndo: active ? store.segmentUndo(active.id) : null, segmentWindow: active ? store.segmentWindow(active.id) : null, trips, trails: store.trails(), discoveries, awards, goals: store.setting<Goal[]>('goals', []), catalog: store.setting<Goal[]>('goalCatalog', []), avatarColor: store.setting('avatarColor', '#E8A164'), syncError: store.setting<string | null>('collectionSyncError', null), profile: store.profile(), error: store.setting<string | null>('trackingError', null), audioError: store.setting<string | null>('audioError', null) };
 }
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return <Modal animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SafeAreaView style={s.screen}><View style={[s.between, { padding: 22 }]}><Text style={[s.heading, { flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Lukk" onPress={onClose} style={{ padding: 10 }}><Icon name="close" /></Pressable></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>{children}</ScrollView></SafeAreaView></Modal>;
 }
-function TripDetails({ stretches, trip, reference, weight, onClose, onChange, onGhost, onDelete, allowSegments, rewards, items, homeArea, justFinished }: { stretches: ReturnType<typeof stretchResults>; items: Discovery[]; homeArea: HomeArea | null; justFinished: boolean; rewards: (visited: ReturnType<typeof useCollectionProgress>) => React.ReactNode; trip: Trip; reference: Trip | null; weight: number | null; onClose: () => void; onChange: () => void; onGhost: () => void; onDelete: () => void; allowSegments: boolean }) {
+function TripDetails({ medals, stretches, trip, reference, weight, onClose, onChange, onGhost, onDelete, allowSegments, rewards, items, homeArea, justFinished }: { medals: ReturnType<typeof recordMedals>; stretches: ReturnType<typeof stretchResults>; items: Discovery[]; homeArea: HomeArea | null; justFinished: boolean; rewards: (visited: ReturnType<typeof useCollectionProgress>) => React.ReactNode; trip: Trip; reference: Trip | null; weight: number | null; onClose: () => void; onChange: () => void; onGhost: () => void; onDelete: () => void; allowSegments: boolean }) {
   const [name, setName] = useState(trip.name), [trailName, setTrailName] = useState('');
   const ownTrip = useMemo(() => [trip], [trip]);
   const visited = useCollectionProgress(items, ownTrip);
@@ -94,13 +97,14 @@ function TripDetails({ stretches, trip, reference, weight, onClose, onChange, on
     <TrailMap fitRoute current={metrics.points} reference={reference?.points} focus={metrics.points[0]} height={250} />
     <View style={s.row}><Metric value={durationLabel(metrics.elapsed)} label="total tid · med alle pauser" /><Metric value={kmLabel(metrics.meters)} label="kilometer" /></View>
     <View style={s.row}><Metric value={metrics.hasElevation ? `${Math.round(metrics.ascent)}` : '—'} label="høydemeter opp" /><Metric value={metrics.hasElevation ? `${Math.round(metrics.descent)}` : '—'} label="høydemeter ned" /><Metric value={decimal(metrics.averageKmh)} label="km/t · hele turen" /></View>
+    <RecordMedals medals={medals} />
     <StretchResults results={stretches} />
     {rewards(visited)}
     <Pressable accessibilityRole="button" accessibilityLabel="Slett tur" onPress={confirmDelete} style={{ paddingVertical: 12 }}><Text style={{ color: colors.coral, fontWeight: '700' }}>Slett tur</Text></Pressable>
     <View style={s.card}><ElevationChart values={metrics.points.filter(p => p.altitudeAccuracy !== null && p.altitudeAccuracy >= 0 && p.altitudeAccuracy <= 15).map(p => p.altitude)} /></View>
     {metrics.gapsMs > 0 && <View style={s.notice}><Text style={s.small}>Sporet har GPS-opphold. Tiden er komplett, men distanse og høydemeter kan være for lave. Oppholdene tegnes ikke som rette stier.</Text></View>}
     <View style={s.card}><Text style={s.subheading}>Litt mer om turen</Text><Text style={s.body}>Tempo: {metrics.paceSeconds === null ? '—' : `${Math.floor(Math.round(metrics.paceSeconds) / 60)}:${String(Math.round(metrics.paceSeconds) % 60).padStart(2, '0')} min/km`}{'\n'}Stigning per time: {metrics.hasElevation && metrics.elapsed > 0 ? `${Math.round(metrics.ascent / (metrics.elapsed / 3_600_000))} hm/t` : '—'}{'\n'}Grov energi: {energy ? `${energy.low}–${energy.high} kcal` : 'ikke nok data'}</Text><Text style={s.small}>Energi er et grovt anslag med hvile inkludert, ikke en måling. Terreng, sekk, kondisjon og individuelle forskjeller gir stor usikkerhet. Oppgi vekt under Deg for å aktivere anslaget.</Text></View>
-    {match && <View style={s.card}><Icon name="ghost" /><Text style={s.subheading}>{match.label}</Text>{match.deviated && <Text style={s.body}>Dette var ikke nøyaktig samme tur. Vi kårer ingen tidsrekord mot den gamle ruten.</Text>}{allowSegments && !isGhostTrip(trip) && match.newSegments.map((part, i) => <Button key={part.startedAt} secondary title={`Navngi sporparti ${i + 1}`} onPress={() => { setFromMinute(((part.startedAt - trip.startedAt) / 60_000).toFixed(2)); setToMinute(part.endedAt ? ((part.endedAt - trip.startedAt) / 60_000).toFixed(2) : ''); }} />)}</View>}
+    {match && <View style={s.card}><Icon name="ghost" /><Text style={s.subheading}>Sammenlignet med skyggen</Text><Text style={s.body}>{reference!.name}</Text><Text style={s.small}>{sameCompletedRoute(trip, reference!) ? `Du fullførte samme rute. Total tid med pauser: ${stretchDelta(metrics.elapsed / 1000, (reference!.endedAt! - reference!.startedAt) / 1000)} enn skyggen. En personlig rekord må også slå din tidligere beste tid på ruten.` : 'Hele ruten kunne ikke bekreftes lik fra start til slutt. Avvik, ulikt start-/sluttpunkt eller GPS-opphold kan være årsaken. Derfor sammenlignes ikke totaltiden; fullførte strekk vurderes hver for seg.'}</Text>{allowSegments && !isGhostTrip(trip) && match.newSegments.map((part, i) => <Button key={part.startedAt} secondary title={`Navngi sporparti ${i + 1}`} onPress={() => { setFromMinute(((part.startedAt - trip.startedAt) / 60_000).toFixed(2)); setToMinute(part.endedAt ? ((part.endedAt - trip.startedAt) / 60_000).toFixed(2) : ''); }} />)}</View>}
     <Button icon="ghost" title="Bruk denne turen som skygge" onPress={onGhost} disabled={metrics.points.length < 2} />
     {allowSegments && !isGhostTrip(trip) && <View style={s.card}><Text style={s.eyebrow}>GI STREKKET ET NAVN</Text><Text style={s.subheading}>Et spor som er ditt.</Text><Text style={s.body}>Lagre hele tursporet, eller velg et tidsrom fra turen. Navnet blir synlig i ditt kart og kompass.</Text><TextInput accessibilityLabel="Navn på strekket" placeholder="F.eks. Stien langs elven" placeholderTextColor={colors.muted} value={trailName} onChangeText={setTrailName} maxLength={80} style={s.input} /><View style={s.row}><View style={{ flex: 1, gap: 5 }}><Text style={s.small}>Fra minutt</Text><TextInput accessibilityLabel="Startminutt for strekket" keyboardType="decimal-pad" style={s.input} value={fromMinute} onChangeText={setFromMinute} /></View><View style={{ flex: 1, gap: 5 }}><Text style={s.small}>Til minutt (tomt = slutt)</Text><TextInput accessibilityLabel="Sluttminutt for strekket" keyboardType="decimal-pad" style={s.input} value={toMinute} onChangeText={setToMinute} placeholder="Slutten" /></View></View><Button secondary title="Lagre strekket mitt" onPress={saveTrail} /></View>}
   </Sheet>;
@@ -143,7 +147,9 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const [segmentName, setSegmentName] = useState(''), [segmentNotice, setSegmentNoticeRaw] = useState<string | null>(null);
   const [segmentNoticeUntil, setSegmentNoticeUntil] = useState(0);
   const setSegmentNotice = useCallback((value: string | null) => { setSegmentNoticeRaw(value); setSegmentNoticeUntil(Date.now() + 10000); }, []);
-  const [audio, setAudio] = useState(true), [focus, setFocus] = useState<Coordinate | null>(data.homeArea ?? data.trips[0]?.points[0] ?? null), [position, setPosition] = useState<Coordinate | null>(null);
+  const nearby = useNearbyArea();
+  const position = nearby.area;
+  const [audio, setAudio] = useState(true), [focus, setFocus] = useState<Coordinate | null>(null);
   const [serviceMissing, setServiceMissing] = useState(false), [weightText, setWeightText] = useState(data.profile.weightKg?.toString() ?? '');
   const refresh = useCallback(() => setData(snapshot()), []);
   const active = data.active;
@@ -204,11 +210,11 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     let cancelled = false;
     setNamesPending(true);
     setStartNames(ghost ? [`På nytt: ${ghost.name.replace(/^På nytt: /, '')}`.slice(0, 80), defaultTripName(startTime.current)] : [defaultTripName(startTime.current)]);
-    void startTripNames({ time: startTime.current, position: namePosition, items: data.discoveries, area: data.homeArea, reference: ghost }, () => cancelled).then(names => {
+    void startTripNames({ time: startTime.current, position: namePosition, items: data.discoveries, area: null, reference: ghost }, () => cancelled).then(names => {
       if (names && !cancelled) { setStartNames(names); setNamesPending(false); }
     }).catch(() => { if (!cancelled) { setStartNames([defaultTripName(startTime.current)]); setNamesPending(false); } });
     return () => { cancelled = true; };
-  }, [modal, namePosition, data.discoveries, data.homeArea, ghost]);
+  }, [modal, namePosition, data.discoveries, ghost]);
   const selectedTrail = data.trails.find(t => t.id === selectedTrailId);
   const openTrail = (trail: Trail) => { setSelectedTrailId(trail.id); setModal('trail'); };
   const repeatWithGhost = (reference: Trip) => {
@@ -240,30 +246,31 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const totals = useMemo(() => data.trips.reduce((sum, t) => { const m = tripMetrics(t); return { meters: sum.meters + m.meters, ascent: sum.ascent + m.ascent, elapsed: sum.elapsed + m.elapsed }; }, { meters: 0, ascent: 0, elapsed: 0 }), [data.trips]);
   const detail = data.trips.find(t => t.id === selectedTrip);
   const detailStretches = useMemo(() => detail ? stretchResults(detail, data.trails, data.trips, references.find(t => t.id === detail.ghostId) ?? null) : [], [detail, data.trails, data.trips, references]);
+  const detailMedals = useMemo(() => detail ? recordMedals(detail, detailStretches, data.trips) : [], [detail, detailStretches, data.trips]);
   const attempt = async (action: () => Promise<void>, message = 'Lagrer endringer …') => { if (busy) return; setBusyMessage(message); setBusy(true); try { await action(); } catch (e) { Alert.alert('Det gikk ikke helt', e instanceof Error ? e.message : String(e)); } finally { refresh(); setBusy(false); } };
-  const locate = () => { if (active?.points.length) { setRecenter(n => n + 1); return; } void attempt(async () => {
-    const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) throw new Error('Tillat posisjon for å finne deg på kartet.');
-    const p = toFix(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })); setPosition(p); setFocus(p);
-  }, 'Finner posisjonen din …'); };
-  const here = async (): Promise<HomeArea> => {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) throw new Error('Tillat posisjon, eller søk etter et sted.');
-    const p = toFix(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }));
-    setPosition(p); setFocus(p); return { latitude: p.latitude, longitude: p.longitude, name: 'Mitt område', radius: 3000 };
-  };
+  const here = nearby.locate;
+  const locate = () => { if (active?.points.length) { setRecenter(n => n + 1); return; } void attempt(async () => { setFocus(await here()); setRecenter(n => n + 1); }, 'Finner posisjonen din …'); };
   const syncDiscoveries = () => attempt(async () => {
-    const center = focus ?? position ?? data.homeArea ?? await here();
-    const streetError = await loadArea(getStore(), center, 3000);
+    const center = await here();
+    const streetError = await loadArea(getStore(), center, center.radius);
     await syncCollections(getStore());
     Alert.alert('Samlingen er oppdatert', streetError ? `Stier og steder er hentet. Gatekartet venter: ${streetError}` : 'Alle lagrede turer sjekkes mot kartdataene. Du trenger ikke velge kategori før turen.');
   }, 'Henter kartdata for området …');
   const loadGoals = () => attempt(async () => {
-    if (!data.homeArea) { setModal(null); setTab('profile'); Alert.alert('Velg et hjemmeområde', 'Søk etter et sted eller bruk din posisjon under Deg.'); return; }
-    const streetError = await loadArea(getStore(), data.homeArea, data.homeArea.radius);
-    const suggestions = areaGoals(data.homeArea, getStore().setting<Discovery[]>('osmDiscoveries', []));
+    const area = await here();
+    const streetError = await loadArea(getStore(), area, area.radius);
+    // Freeze a place label with the goal; it must not keep saying "here" after travel.
+    let labelTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const places = await Promise.race([Location.reverseGeocodeAsync(area), new Promise<null>(resolve => { labelTimer = setTimeout(() => resolve(null), 3000); })]);
+      const place = places?.[0];
+      area.name = place?.district || place?.city || place?.subregion || `område valgt ${date(Date.now())}`;
+    } catch { area.name = `område valgt ${date(Date.now())}`; }
+    finally { clearTimeout(labelTimer); }
+    const suggestions = areaGoals(area, getStore().setting<Discovery[]>('osmDiscoveries', []));
     getStore().setSetting('goalCatalog', [...data.catalog.filter(g => g.curated), ...suggestions]);
     if (streetError) Alert.alert('Steder hentet, gatekart venter', streetError);
-    else if (!suggestions.length) Alert.alert('Ingen mål funnet', 'Dette området mangler kartlagte turmål. Prøv et annet område.');
+    else if (!suggestions.length) Alert.alert('Ingen mål funnet', 'Dette området mangler kartlagte turmål. Prøv en større radius eller hent mål når du er et annet sted.');
   }, 'Henter kartdata og lager målforslag …');
   const loadBergenGoal = () => attempt(async () => {
     // Query only the seven peaks, near their documented locations; no global name matching.
@@ -327,7 +334,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
         <Button accessibilityLabel="Åpne samlingen min" secondary title={`Samlingen min · ${findCount} funn`} icon="check" onPress={() => setModal('collection')} />
         <Button accessibilityLabel="Åpne mine mål" secondary title={`Mine mål · ${data.goals.length} aktive`} icon="mountain" onPress={() => setModal('goals')} />
         <Avatar trips={data.trips} collected={findCount} color={data.avatarColor} onColor={color => { getStore().setSetting('avatarColor', color); setData(previous => ({ ...previous, avatarColor: color })); }} />
-        <AreaPicker area={data.homeArea} onHere={here} onSave={area => { getStore().setSetting('homeArea', area); setFocus(area); setData(previous => ({ ...previous, homeArea: area })); }} />
+        <AreaPicker area={nearby.area} radius={nearby.radius} pending={nearby.pending} status={nearby.status} onRadius={nearby.setRadius} onLocate={() => void attempt(async () => { await here(); }, 'Finner posisjonen din …')} />
         <View style={s.card}><Text style={s.subheading}>Et grovt energianslag</Text><Text style={s.body}>Vekt kan brukes til et omtrentlig energiintervall etter turen. Det inkluderer pauser. Alder og høyde alene gjør ikke anslaget presist, så vi ber ikke om dem nå.</Text><Text style={s.small}>Vekt i kg · valgfritt, bare lagret på mobilen</Text><TextInput accessibilityLabel="Vekt i kilogram, valgfritt" keyboardType="decimal-pad" style={s.input} value={weightText} onChangeText={setWeightText} placeholder="F.eks. 75" /><Button secondary title="Lagre innstilling" onPress={() => { const n = weightText.trim() ? Number(weightText.replace(',', '.')) : null; if (n !== null && (!Number.isFinite(n) || n < 25 || n > 300)) { Alert.alert('Sjekk vekten', 'Oppgi mellom 25 og 300 kg, eller la feltet være tomt.'); return; } getStore().setSetting('profile', { weightKg: n }); refresh(); Alert.alert('Lagret', n === null ? 'Energianslaget er slått av.' : 'Vekten er lagret lokalt.'); }} /></View>
         <View style={s.card}><VoicePicker /></View>
         <View style={s.card}><Text style={s.subheading}>Hele turen teller.</Text><Text style={s.body}>Ingen autopause. Ingen fratrekk for matpakken. Tiden går fra du starter til du avslutter. Distanse og høyde filtreres for GPS-støy; tiden gjør ikke det.</Text></View>
@@ -341,12 +348,12 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   {modal === 'collection' && <Sheet title="Samlingen min" onClose={() => setModal(null)}>
     <Discoveries onRename={renameDiscovery} items={data.discoveries} progress={progress} checking={collection.pending} checked={collection.processed} error={collection.error} onRetry={collection.retry} syncError={data.syncError} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setModal(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
   </Sheet>}
-  {modal === 'goals' && <Sheet title="Mine mål" onClose={() => setModal(null)}><Goals homeArea={data.homeArea} goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => { setModal(null); setTab('profile'); }} /></Sheet>}
+  {modal === 'goals' && <Sheet title="Mine mål" onClose={() => setModal(null)}><Goals homeArea={nearby.area} radius={nearby.radius} goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => { setModal(null); setTab('profile'); }} /></Sheet>}
   {modal === 'compass' && <Sheet title="Hva ligger den veien?" onClose={() => setModal(null)}><Compass trails={data.trails} onOpen={openTrail} /></Sheet>}
   {modal === 'ghost' && <Sheet title="Velg din skygge" onClose={() => setModal('start')}><Text style={s.body}>Velg et lagret strekk eller en tidligere tur og start nær samme sted. Skyggen følger den gamle tidslinjen, også gjennom pausene.</Text><Button secondary title="Gå uten skygge" onPress={() => { setGhostId(null); setModal('start'); }} />{!references.length && <Empty title="Først setter du et spor" icon="ghost">Etter den første turen kan du gå sammen med skyggen din.</Empty>}{references.filter(t => cleanPoints(t.points).length > 1).map(t => <Pressable accessibilityRole="button" key={t.id} style={s.card} onPress={() => repeatWithGhost(t)}><Text style={s.subheading}>{t.name}</Text><Text style={s.small}>{date(t.startedAt)} · {durationLabel((t.endedAt ?? t.startedAt) - t.startedAt)}</Text></Pressable>)}</Sheet>}
   {modal === 'trail' && selectedTrail && <SavedTrailDetails canRename={!active || !isGhostTrip(active)} onChange={refresh} trail={selectedTrail} onClose={() => setModal(null)} onGhost={() => repeatWithGhost(trailReference(selectedTrail))} onTrip={() => { setModal(null); setSelectedTrip(selectedTrail.tripId); }} />}
   {modal === 'start' && <Sheet title="Ut og sett spor." onClose={() => setModal(null)}><Image source={require('./assets/trakk-icon.png')} style={{ width: 64, height: 64, borderRadius: 18 }} /><Text style={s.title}>Alt er en del av turen.</Text><TextInput accessibilityLabel="Navn på den nye turen" placeholder={startNames[0]} placeholderTextColor={colors.muted} value={startName} onChangeText={setStartName} maxLength={80} style={s.input} /><TripNameSuggestions names={startNames} selected={startName || startNames[0]} pending={namesPending || namePositionPending} onChoose={setStartName} /><Text style={s.small}>Velg et forslag eller skriv selv. Lar du feltet stå tomt, lager vi et navn fra turen når du avslutter.</Text><Text style={s.body}>Klokken går til du avslutter turen. Alle kategorier og personlige mål teller automatisk.</Text><Button secondary icon="ghost" title={ghost ? `Endre skygge: ${ghost.name}` : "Ta med en skygge (valgfritt)"} onPress={() => setModal('ghost')} />{ghost && <><StartGuide key={ghost.id} reference={ghost} onReady={setStartReady} /><Button secondary title="Gå uten skygge" onPress={() => setGhostId(null)} /></>}<View style={s.card}><Text style={s.subheading}>GPS med skjermen låst</Text><Text style={s.body}>Tillat nøyaktig posisjon og «Tillat hele tiden» når Android spør. Tillat også varsler for å se den aktive registreringen i varselfeltet.</Text><Text style={s.small}>Telefonens batterisparing og tvangslukking kan stoppe registreringen. Før lengre turer bør du prøve en kort tur med låst skjerm.</Text></View><View style={s.card}><Text style={s.subheading}>{ghost ? `Skygge: ${ghost.name}` : 'Meldinger underveis'}</Text><View style={s.between}><Text style={[s.body, { flex: 1 }]}>Fortell om strekk og skygge med lyd</Text><Switch accessibilityLabel="Tale underveis" value={audio} onValueChange={setAudio} trackColor={{ true: colors.ink }} /></View><VoicePicker /></View><Button title={busy ? 'Starter GPS …' : ghost && !startReady ? 'Gå til startpunktet først' : 'Start turen min'} icon="arrow" disabled={busy || (!!ghost && !startReady)} onPress={() => attempt(async () => { await startTracking(ghostId, audio, startName.trim() || undefined, startNames[0]); setModal(null); setTab('explore'); setServiceMissing(false); })} /></Sheet>}
-  {detail && <TripDetails stretches={detailStretches} items={data.discoveries} homeArea={data.homeArea} justFinished={detail.id === finishedTripId} rewards={visited => <TripRewards visited={visited} onRename={renameDiscovery} trip={detail} trips={data.trips} items={data.discoveries} progress={progress} pending={collection.pending} syncPending={syncing || !!data.syncError} error={collection.error} goals={data.goals} onMap={item => { setSelectedTrip(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />} allowSegments={!active || !isGhostTrip(active)} key={detail.id} trip={detail} reference={references.find(t => t.id === detail.ghostId) ?? null} weight={data.profile.weightKg} onDelete={() => { if (ghostId === detail.id) setGhostId(null); setSelectedTrip(null); refresh(); }} onClose={() => setSelectedTrip(null)} onChange={refresh} onGhost={() => repeatWithGhost(detail)} />}
+  {detail && <TripDetails medals={detailMedals} stretches={detailStretches} items={data.discoveries} homeArea={null} justFinished={detail.id === finishedTripId} rewards={visited => <TripRewards visited={visited} onRename={renameDiscovery} trip={detail} trips={data.trips} items={data.discoveries} progress={progress} pending={collection.pending} syncPending={syncing || !!data.syncError} error={collection.error} goals={data.goals} onMap={item => { setSelectedTrip(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />} allowSegments={!active || !isGhostTrip(active)} key={detail.id} trip={detail} reference={references.find(t => t.id === detail.ghostId) ?? null} weight={data.profile.weightKg} onDelete={() => { if (ghostId === detail.id) setGhostId(null); setSelectedTrip(null); refresh(); }} onClose={() => setSelectedTrip(null)} onChange={refresh} onGhost={() => repeatWithGhost(detail)} />}
   </View>;
 }
 class Boundary extends React.Component<{ children: React.ReactNode }, { error: boolean }> {
