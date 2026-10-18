@@ -10,7 +10,12 @@ export function Discoveries({ items, progress: readyProgress, busy, onSync, onMa
   const collected = Object.values(progress).filter(p => p.collected).length;
   const visible = items.filter(p => filter === 'all' || p.kind === filter).sort((a, b) => Number(progress[b.id]?.collected) - Number(progress[a.id]?.collected) || a.name.localeCompare(b.name, 'nb'));
   return <View style={{ gap: 18 }}>
-    <View style={[s.card, { backgroundColor: colors.ink }]}><Text style={{ color: '#C2D3C3', fontSize: 10, letterSpacing: 2 }}>DIN SAMLING · OPENSTREETMAP</Text><Text style={{ color: colors.paper, fontSize: 44, fontWeight: '700' }}>{collected}<Text style={{ fontSize: 21, color: '#C2D3C3' }}> / {items.length}</Text></Text><Text style={{ color: colors.paper, fontSize: 16 }}>Gater samlet. Stier gått. Steder oppdaget.</Text></View>
+    <View style={[s.card, { backgroundColor: colors.ink }]}>
+      <Text style={{ color: '#C2D3C3', fontSize: 10, letterSpacing: 2 }}>FUNN PÅ TURENE DINE</Text>
+      <Text style={{ color: colors.paper, fontSize: 36, fontWeight: '700' }}>{readyProgress ? `${collected.toLocaleString('nb-NO')} samlet` : 'Sjekker turene …'}</Text>
+      {readyProgress && <Text style={{ color: colors.paper, fontSize: 16 }}>{items.filter(i => i.kind === 'street' && progress[i.id]?.collected).length} gater · {items.filter(i => i.kind === 'trail' && progress[i.id]?.collected).length} stier · {items.filter(i => !['street', 'trail'].includes(i.kind) && progress[i.id]?.collected).length} steder</Text>}
+      <Text style={{ color: '#C2D3C3', fontSize: 14 }}>{items.length.toLocaleString('nb-NO')} gater, stier og steder er hentet fra kartet i områdene dine. Du velger selv hva du vil utforske.</Text>
+    </View>
     {!readyProgress && <Text style={s.small}>Sjekker turene mot samlingen … Du kan bruke appen mens dette pågår.</Text>}
     <Text style={s.body}>Alle kategorier samles fra lagrede turer. Du kan også hente kartdata rundt valgt sted, hjemmeområdet eller posisjonen din før du går.</Text>
     <Button title={busy ? 'Henter fra OpenStreetMap …' : items.length ? 'Oppdater samlingen' : 'Hent kartdata i nærheten'} icon="map" secondary onPress={onSync} disabled={busy} />

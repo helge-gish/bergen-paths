@@ -71,7 +71,7 @@ def seed_large_area():
         db.execute('INSERT INTO trips VALUES (?, ?, ?, ?, NULL, 0, 0)',('stress-trip','Stor samling testtur',start,pts[-1]['timestamp']))
         db.executemany('INSERT INTO points VALUES (?, ?, ?)', [('stress-trip',p['timestamp'],json.dumps(p)) for p in pts])
         items=[]
-        for i in range(6000):
+        for i in range(12500):
             lat=60.365+(i//100)*.0008;lon=5.30+(i%100)*.0008
             geometry=[dict(latitude=lat+j*.0001,longitude=lon+math.sin(j/4)*.00015) for j in range(20)]
             kind='street' if i%6==0 else 'trail'
@@ -89,7 +89,7 @@ def seed_large_area():
         db.commit();db.execute('PRAGMA wal_checkpoint(TRUNCATE)');db.close()
         adb('shell','rm','-f',path+'-wal',path+'-shm')
         adb('push',str(file),'/data/local/tmp/stress.db');adb('shell','cat /data/local/tmp/stress.db > '+path)
-    print('Seeded 6,000 discoveries, 120,000 geometry points, 1,800 GPS fixes and two large goals in 5 km home area',flush=True)
+    print('Seeded 12,500 discoveries, 250,000 geometry points, 1,800 GPS fixes and two large goals in 5 km home area',flush=True)
 
 
 def navigation_check():
@@ -120,6 +120,8 @@ try:
     adb('install','-r','android/app/build/outputs/apk/release/app-release.apk')
     adb('logcat','-c');launch();navigation_check()
     tab('Deg');tab('Utforsk');assert_page('Hvor går turen?');pan_check()
+    tab('Turpass');find('HJEMMEOMRÅDET DITT');find('Bergen');find('Endre hjemmeområde')
+    find('FUNN PÅ TURENE DINE')
     tab('Deg');find('Ditt hjemmeområde · valgfritt');tap('Radius 5 km')
     for r in [1,3,5]:
         bounds=node_bounds('Radius '+str(r)+' km')
@@ -128,6 +130,13 @@ try:
     tap('Lagre hjemmeområde')
     assert_page('Hjemmeområdet er lagret. Finn mål i Turpass.')
     navigation_check()
+    # Accessibility font scale must not push a radius choice off screen.
+    adb('shell','settings','put','system','font_scale','1.3')
+    adb('shell','am','force-stop',PACKAGE);launch();tab('Deg');find('Radius 5 km')
+    for r in [1,3,5]:
+        bounds=node_bounds('Radius '+str(r)+' km')
+        assert bounds and 0 <= bounds[0] < bounds[2] <= width, ('large-font radius clipped',r,bounds)
+    adb('shell','settings','put','system','font_scale','1.0')
     adb('shell','am','force-stop',PACKAGE);launch();navigation_check()
     tab('Utforsk');tap('Start en tur');assert_page('Alt er en del av turen.');tap('Lukk');tab('Turlogg');assert_page('Stor samling testtur')
     print('PASS: populated update, 5 km save, map/page gestures, modal and repeated navigation survive relaunch',flush=True)

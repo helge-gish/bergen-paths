@@ -31,13 +31,13 @@ export function AreaPicker({ area, onSave, onHere }: { area: HomeArea | null; on
     {!!message && <Text style={s.small}>{message}</Text>}
   </View>;
 }
-export function Goals({ goals, catalog, trips, busy, onToggle, onLoad, onBergen, onArea }: { goals: Goal[]; catalog: Goal[]; trips: Trip[]; busy: boolean; onToggle: (goal: Goal) => void; onLoad: () => void; onBergen: () => void; onArea: () => void }) {
+export function Goals({ homeArea, goals, catalog, trips, busy, onToggle, onLoad, onBergen, onArea }: { homeArea: HomeArea | null; goals: Goal[]; catalog: Goal[]; trips: Trip[]; busy: boolean; onToggle: (goal: Goal) => void; onLoad: () => void; onBergen: () => void; onArea: () => void }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const entries = useMemo(() => [...goals, ...catalog.filter(g => !goals.some(a => a.id === g.id))].map(g => ({ goal: g, active: goals.some(a => a.id === g.id) })), [goals, catalog, trips]);
   return <View style={{ gap: 16 }}>
     <Text style={s.heading}>Målbibliotek</Text>
     <Text style={s.body}>Velg personlige mål. Alle turer samler stempler uansett hvilke mål du har aktivert. Tidligere turer teller også.</Text>
-    <Button secondary title="Velg hjemmeområde" onPress={onArea} />
+    <View style={s.card}><Text style={s.eyebrow}>HJEMMEOMRÅDET DITT</Text><Text style={s.subheading}>{homeArea ? homeArea.name : 'Ikke valgt ennå'}</Text>{homeArea && <Text style={s.body}>{homeArea.radius / 1000} km radius · brukes til målforslag. Turene dine teller også utenfor området.</Text>}<Button secondary title={homeArea ? 'Endre hjemmeområde' : 'Velg hjemmeområde'} onPress={onArea} /></View>
     <Button secondary title={busy ? 'Henter mål …' : 'Lag målforslag for hjemmeområdet'} disabled={busy} onPress={onLoad} />
     <Button secondary title="Hent målet: De syv byfjellene i Bergen" disabled={busy} onPress={onBergen} />
     {entries.map(({ goal, active }) => <GoalCard key={goal.id} goal={goal} active={active} trips={trips} expanded={expanded === goal.id} onToggle={() => onToggle(goal)} onExpand={() => setExpanded(expanded === goal.id ? null : goal.id)} />)}

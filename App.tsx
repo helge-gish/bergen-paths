@@ -230,7 +230,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
         <Text style={s.title}>Turpasset ditt.</Text>
         <Text style={s.body}>Bare start og gå. Stier, topper, hytter, gater og andre steder samles automatisk etter lagring, også på skyggeturer. Kategoriene under filtrerer bare visningen.</Text>
         <Text style={s.small}>{syncing ? 'Henter kartdata langs lagrede turer …' : data.syncError ? `Noen kartdata venter: ${data.syncError} Turene er lagret og sjekkes igjen når appen har nett.` : 'Kartdata langs turene hentes mens appen er åpen. Manglende data prøves igjen senere.'}</Text>
-        <Goals goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => setTab('profile')} />
+        <Goals homeArea={data.homeArea} goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => setTab('profile')} />
         <Discoveries items={data.discoveries} progress={progress} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
       </>}
 
