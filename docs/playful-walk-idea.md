@@ -4,9 +4,9 @@ Notert 18. oktober 2026. Kun konsept; skal ikke implementeres nå.
 
 Tråkk kan på sikt kombinere turregistrering og sosial aktivitet med utforsking og samling inspirert av Pokémon Go. En valgfri «Leketur» passer både «jeg er barnslig» og «jeg går med et lite barn». Vanlig turregistrering og alle vanlige achievements fortsetter å telle.
 
-## Ruging og oppdagelser underveis
+## Funn i sekken og oppdagelser underveis
 
-- Et egg eller en tilsvarende gjenstand utvikler seg med gått distanse og klekkes etter overkommelige etapper. Dette gir også en vanlig nærtur små høydepunkter.
+- Eggideen er forkastet fordi den blir for lik Pokémon. Utforsk heller spesielle digitale steiner man finner enkelte steder og putter i sekken. En mulig skisse er at steinen gradvis viser liv og personlighet mens man går, som en liten turkamerat. Dette er fortsatt åpent idéarbeid.
 - Steder og achievements kan utløse møter med egne skapninger eller figurer, med interaksjon, små utfordringer, samarbeid eller lekne kamper.
 - Korte oppgaver som «finn noe rundt» og «gå til neste sving» kan motivere barnet videre uten at skjermen må følges hele tiden.
 - Samlingen kan vokse over flere turer med skapninger, utstyr, avatarbelønninger og små historier. Foresatte bør kunne tilpasse lengde og vanskelighetsgrad.
@@ -25,6 +25,6 @@ Koblingen må ha dokumentert navneopphav; likt navn alene er ikke nok. OSM kan b
 
 ## Før eventuell utvikling
 
-Prøv først et lite konsept med ett egg og én fjellfigur. Avklar aldersnivå, turvarighet, belønninger og hvilken type utfordring som faktisk gjør turen hyggeligere. Unngå at rask gange eller kontinuerlig skjermbruk blir nødvendig for framgang.
+Prøv først et lite konsept med ett sekkefunn og én fjellfigur. Avklar aldersnivå, turvarighet, belønninger og hvilken type utfordring som faktisk gjør turen hyggeligere. Unngå at rask gange eller kontinuerlig skjermbruk blir nødvendig for framgang.
 
 Dette er et framtidig, valgfritt lag over turen. Det skal ikke gjøre start av en vanlig tur mer komplisert. Skyggemodus skal fortsatt ha tydelige kontroller uten klipping og navngiving av segmenter.

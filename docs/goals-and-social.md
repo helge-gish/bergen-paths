@@ -39,3 +39,12 @@ Acceptance for the two-phone pilot:
 ## Longer-term game direction
 
 Preserve reliable tracking, full elapsed time, route comparison and personal stats. Add collection journeys, geographic goal packs, avatar equipment, friend activity and optional challenges. Progress rewards explored places and accumulated walking rather than notification pressure. OpenStreetMap supplies the world geometry; the app supplies people, progress, sharing and game rules. Social sharing is not implemented in 0.3.0.
+
+
+## 0.3.1 corrections
+
+Collection and goal evaluation yield between bounded work slices instead of running synchronously during rendering. Startup and collection/network activity have explicit status text. Saving a home area or avatar colour does not reload the full collection. Map overlays are limited to the current viewport, at most 500 discoveries and 30,000 vertices, with an explicit zoom-in hint; selected targets stay visible. This affects drawing only, not collection evidence. The Android MapLibre 11.5.0 default pan interception fix is applied by postinstall and the Android build script.
+
+Named footways and steps join the whole-street query. Tagged sidewalks and crossings do not receive separate trail awards. On first launch after upgrading, legacy path data without highway metadata is retired and re-fetched, old derived fragment awards are removed, and active goals based on the obsolete subdivision are marked for replacement. Personal GPS tracks and saved trails are never removed by this cache upgrade. Genuine OSM paths still use OSM segment identities; semantic grouping of named hiking routes remains future work. Imperfect OSM tagging can still affect classification.
+
+The home area and radius are displayed in Turpass, radius buttons wrap at large text sizes, and collection counts distinguish earned streets, path segments and places from the number of downloaded objects. The home area remains optional and does not limit where trips count.
