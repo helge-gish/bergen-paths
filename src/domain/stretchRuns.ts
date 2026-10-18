@@ -67,13 +67,17 @@ export function stretchResults(trip: Trip, trails: Trail[], history: Trip[], gho
     // Later-created stretches do not rewrite trips that predate their source walk.
     const source = history.find(t => t.id === trail.tripId);
     if (source && trip.startedAt < source.startedAt) return [];
-    const previous = history.filter(t => t.id !== trip.id && t.startedAt < trip.startedAt).flatMap(t => cachedRuns(t, trail)).sort((a, b) => a.endedAt - b.endedAt);
+    const previous = history.filter(t => t.id !== trip.id && t.endedAt !== null && t.endedAt <= trip.startedAt).flatMap(t => cachedRuns(t, trail)).sort((a, b) => a.endedAt - b.endedAt);
     const ghostRun = ghost ? cachedRuns(ghost, trail)[0] : null;
-    return cachedRuns(trip, trail).map(run => ({ ...run, name: trail.name,
+    return cachedRuns(trip, trail).map(run => {
+      const result = { ...run, name: trail.name,
       previousSeconds: previous.at(-1)?.seconds ?? null,
       bestSeconds: previous.length ? Math.min(...previous.map(r => r.seconds)) : null,
       ghostSeconds: ghostRun?.seconds ?? null,
-    }));
+      };
+      previous.push(run);
+      return result;
+    });
   }).sort((a, b) => a.endedAt - b.endedAt);
 }
 export function stretchDelta(seconds: number, baseline: number) {

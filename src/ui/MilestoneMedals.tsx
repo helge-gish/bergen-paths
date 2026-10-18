@@ -3,7 +3,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import type { Achievement } from '../domain/achievements';
 import { colors, styles as s } from './theme';
 
-function Medal({ kind }: { kind: string }) {
+export function Medal({ kind }: { kind: string }) {
   const ribbon = kind === 'distance' ? colors.ink : kind === 'ascent' ? colors.blue : colors.coral;
   const symbol = kind === 'ascent'
     ? 'M20 43 29 27l7 11 5-7 8 12H20Z M25 34l4 3 4-3'
