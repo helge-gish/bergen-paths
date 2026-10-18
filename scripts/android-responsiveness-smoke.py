@@ -59,11 +59,11 @@ def pan_check(required=True):
 def seed_large_area():
     adb('shell','am','force-stop',PACKAGE)
     adb('root'); adb('wait-for-device')
-    path='/data/data/'+PACKAGE+'/databases/trakk.db'
+    path=adb('shell','find','/data/user/0/'+PACKAGE,'-name','trakk.db').strip().splitlines()[0]
     with tempfile.TemporaryDirectory() as folder:
         file=Path(folder)/'trakk.db'
         for suffix in ['', '-wal', '-shm']:
-            adb('pull',path+suffix,str(file)+suffix,check=False)
+            adb('pull',path+suffix,str(file)+suffix,check=suffix == '')
         db=sqlite3.connect(file)
         db.execute('DELETE FROM trails');db.execute('DELETE FROM points');db.execute('DELETE FROM trips')
         now=int(time.time()*1000);start=now-20000000
