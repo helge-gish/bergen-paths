@@ -150,6 +150,8 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const nearby = useNearbyArea();
   const position = nearby.area;
   const [audio, setAudio] = useState(true), [focus, setFocus] = useState<Coordinate | null>(null);
+  // Follow GPS for nearby data without snapping a freely panned map back every fix.
+  useEffect(() => { if (position) setFocus(previous => previous ?? position); }, [position]);
   const [serviceMissing, setServiceMissing] = useState(false), [weightText, setWeightText] = useState(data.profile.weightKg?.toString() ?? '');
   const refresh = useCallback(() => setData(snapshot()), []);
   const active = data.active;
