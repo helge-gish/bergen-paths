@@ -1,3 +1,4 @@
+import type { Workout } from './workout';
 export type Coordinate = { latitude: number; longitude: number };
 export type Fix = Coordinate & {
   timestamp: number;
@@ -8,6 +9,7 @@ export type Fix = Coordinate & {
 };
 export type Trip = {
   mode?: 'normal' | 'ghost';
+  workout?: Workout | null;
   id: string;
   name: string;
   startedAt: number;

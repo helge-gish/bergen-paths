@@ -43,3 +43,6 @@ yarn-error.*
 # Python build tooling
 __pycache__/
 *.pyc
+
+# Local Expo module build output
+/modules/*/android/build/
