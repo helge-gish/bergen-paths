@@ -125,7 +125,8 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   }, [active?.id]);
   useEffect(() => {
     const check = () => { refresh(); if (getStore().active()) trackingRunning().then(r => setServiceMissing(!r)).catch(() => setServiceMissing(true)); else setServiceMissing(false); };
-    check(); const sub = AppState.addEventListener('change', state => { if (state === 'active') check(); }); return () => sub.remove();
+    if (getStore().active()) trackingRunning().then(r => setServiceMissing(!r)).catch(() => setServiceMissing(true));
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') check(); }); return () => sub.remove();
   }, [active?.id, refresh]);
   const metrics = useMemo(() => active ? tripMetrics(active, now) : null, [active, now]);
   const references = useMemo(() => [...data.trips, ...data.trails.map(trailReference)], [data.trips, data.trails]);
@@ -193,7 +194,8 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     getStore().setSetting('goalCatalog', [...data.catalog.filter(g => !g.curated), goal]);
   }, 'Henter de syv fjelltoppene …');
   const toggleGoal = (goal: Goal) => {
-    getStore().setSetting('goals', data.goals.some(g => g.id === goal.id) ? data.goals.filter(g => g.id !== goal.id) : [...data.goals, goal]); refresh();
+    const goals = data.goals.some(g => g.id === goal.id) ? data.goals.filter(g => g.id !== goal.id) : [...data.goals, goal];
+    getStore().setSetting('goals', goals); setData(previous => ({ ...previous, goals }));
   };
   const finish = () => Alert.alert('Avslutte turen?', 'Hele tiden fra start til slutt blir lagret, inkludert pausene.', [{ text: 'Fortsett turen', style: 'cancel' }, { text: 'Avslutt og lagre', onPress: () => attempt(async () => { const id = await finishTracking(); setGhostId(null); setSelectedTrip(id); setTab('history'); }) }]);
 
@@ -244,8 +246,8 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
       {tab === 'profile' && <>
         <Text style={s.eyebrow}>LITT OM DEG OG TURENE DINE</Text><Text style={s.title}>Ditt eget tempo.</Text>
         <View style={[s.card, s.row]}><Metric value={`${Math.floor(totals.elapsed / 3_600_000)} t`} label="ute på tur" /><Metric value={`${data.trails.length}`} label="navngitte stier" /><Metric value={`${Object.keys(data.awards).length}`} label="stempler" /></View>
-        <Avatar trips={data.trips} collected={Object.keys(data.awards).length} color={data.avatarColor} onColor={color => { getStore().setSetting('avatarColor', color); refresh(); }} />
-        <AreaPicker area={data.homeArea} onHere={here} onSave={area => { getStore().setSetting('homeArea', area); setFocus(area); refresh(); }} />
+        <Avatar trips={data.trips} collected={Object.keys(data.awards).length} color={data.avatarColor} onColor={color => { getStore().setSetting('avatarColor', color); setData(previous => ({ ...previous, avatarColor: color })); }} />
+        <AreaPicker area={data.homeArea} onHere={here} onSave={area => { getStore().setSetting('homeArea', area); setFocus(area); setData(previous => ({ ...previous, homeArea: area })); }} />
         <View style={s.card}><Text style={s.subheading}>Et grovt energianslag</Text><Text style={s.body}>Vekt kan brukes til et omtrentlig energiintervall etter turen. Det inkluderer pauser. Alder og høyde alene gjør ikke anslaget presist, så vi ber ikke om dem nå.</Text><Text style={s.small}>Vekt i kg · valgfritt, bare lagret på mobilen</Text><TextInput accessibilityLabel="Vekt i kilogram, valgfritt" keyboardType="decimal-pad" style={s.input} value={weightText} onChangeText={setWeightText} placeholder="F.eks. 75" /><Button secondary title="Lagre innstilling" onPress={() => { const n = weightText.trim() ? Number(weightText.replace(',', '.')) : null; if (n !== null && (!Number.isFinite(n) || n < 25 || n > 300)) { Alert.alert('Sjekk vekten', 'Oppgi mellom 25 og 300 kg, eller la feltet være tomt.'); return; } getStore().setSetting('profile', { weightKg: n }); refresh(); Alert.alert('Lagret', n === null ? 'Energianslaget er slått av.' : 'Vekten er lagret lokalt.'); }} /></View>
         <View style={s.card}><Text style={s.subheading}>Hele turen teller.</Text><Text style={s.body}>Ingen autopause. Ingen fratrekk for matpakken. Tiden går fra du starter til du avslutter. Distanse og høyde filtreres for GPS-støy; tiden gjør ikke det.</Text></View>
         <View style={s.card}><Text style={s.subheading}>Dine data, på din mobil</Text><Text style={s.body}>Turer, stinavn og vekt lagres lokalt. Kartleverandøren mottar forespørsler for områdene du ser på. Venner, delte skygger og frivillig liveposisjon er planlagt. Denne versjonen har ikke kontoer eller nettbasert deling.</Text><Text style={s.small}>Avinstallering eller sletting av appdata kan fjerne turloggen. Ingen skysikkerhetskopi er satt opp. Du kan eksportere turer og samling som en JSON-fil; vekten følger ikke med.</Text><Button secondary title="Eksporter turloggen som JSON" onPress={() => attempt(async () => { await exportLog(data.trips, data.trails, data.discoveries, data.awards); })} /></View>

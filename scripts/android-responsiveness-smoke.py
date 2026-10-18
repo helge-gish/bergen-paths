@@ -18,6 +18,12 @@ def assert_page(label, timeout=12):
     while time.monotonic()-started < timeout:
         if node_bounds(label): return time.monotonic()-started
         time.sleep(.3)
+    print(adb('shell','dumpsys','cpuinfo',check=False)[-6000:],flush=True)
+    # A final tap at the actual accessibility bounds distinguishes a hit-target
+    # problem from a blocked JS thread.
+    tap('Deg')
+    time.sleep(2)
+    print('Diagnostic Deg tap:',bool(node_bounds('Ditt eget tempo.')),flush=True)
     raise AssertionError('UI did not respond: '+label)
 
 
@@ -75,11 +81,11 @@ def seed_large_area():
             lat=60.365+(i//100)*.0008;lon=5.30+(i%100)*.0008
             geometry=[dict(latitude=lat+j*.0001,longitude=lon+math.sin(j/4)*.00015) for j in range(20)]
             kind='street' if i%6==0 else 'trail'
-            item=dict(id=f'stress/{i}',name=f'Test {i}',kind=kind,latitude=lat,longitude=lon,geometry=geometry,sourceUrl='',fetchedAt=now)
+            item=dict(id=f'stress/{i}',name=f'Test {i}',kind=kind,latitude=lat,longitude=lon,geometry=geometry,sourceUrl='',fetchedAt=now,osmHighway='path' if kind == 'trail' else 'residential')
             if kind=='street': item.update(streetPaths=[geometry],streetEnds=[geometry[0],geometry[-1]])
             items.append(item)
         goals=[dict(id='stress-'+kind,title='Testmål '+kind,description='Syntetisk 5 km belastningstest',targets=[i for i in items if i['kind']==kind],createdAt=now) for kind in ['street','trail']]
-        settings=dict(osmDiscoveries=items,osmAwards={},homeArea=dict(name='Bergen',latitude=60.39,longitude=5.34,radius=5000),goals=goals,goalCatalog=goals)
+        settings=dict(mapClassificationVersion=2,osmDiscoveries=items,osmAwards={},homeArea=dict(name='Bergen',latitude=60.39,longitude=5.34,radius=5000),goals=goals,goalCatalog=goals)
         cache=dict(points={},regions={},streets={'1':now})
         for p in pts:
             key=f"{min(8999, int((p['latitude']+90)//.02))}:{min(8999, int((p['longitude']+180)//.04))}"
@@ -98,7 +104,9 @@ def navigation_check():
     w,h=map(int,re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1])
     for index,label in [(3,'Ditt eget tempo.'),(1,'Målbibliotek'),(2,'Stor samling testtur'),(0,'Hvor går turen?')]*2:
         started=time.monotonic()
-        adb('shell','input','tap',str(int(w*(index+.5)/4)),str(h-42))
+        bounds=node_bounds(['Utforsk','Turpass','Turlogg','Deg'][index])
+        x,y=((bounds[0]+bounds[2])//2,(bounds[1]+bounds[3])//2) if bounds else (int(w*(index+.5)/4),h-56)
+        adb('shell','input','tap',str(x),str(y))
         elapsed=assert_page(label)
         print(f'PASS: tab {index} reacted in {time.monotonic()-started:.2f}s (includes adb/accessibility round trips)',flush=True)
 

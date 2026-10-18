@@ -45,3 +45,16 @@ test('OSM parsing preserves identity and source, skips private access and invali
   assert.equal(result.length, 2); assert.equal(result[0].id, 'node/1'); assert.equal(result[0].sourceUrl, 'https://www.openstreetmap.org/node/1');
   assert.equal(result[1].geometry.length, 2); assert.equal(result[1].kind, 'trail');
 });
+
+test('named pedestrian streets and sidewalks do not become duplicate trail awards', () => {
+  const way = (id: number, tags: Record<string,string>) => ({ type: 'way', id, tags, geometry: [{ lat: 60.39, lon: 5.34 }, { lat: 60.391, lon: 5.34 }] });
+  const result = parseOsm({ elements: [
+    way(10, { highway: 'footway', name: 'Gutenbergsveien' }),
+    way(11, { highway: 'steps', name: 'Gutenbergsveien' }),
+    way(12, { highway: 'footway', footway: 'sidewalk' }),
+    way(13, { highway: 'footway', footway: 'crossing' }),
+    way(14, { highway: 'path', name: 'Skogsstien' }),
+  ] }, 1);
+  assert.deepEqual(result.map(i => i.id), ['way/14']);
+  assert.equal(result[0].osmHighway, 'path');
+});

@@ -11,6 +11,7 @@ export type Discovery = Coordinate & {
   streetEnds?: Coordinate[];
   sourceUrl: string;
   fetchedAt: number;
+  osmHighway?: string;
 };
 export type Progress = { fraction: number; collected: boolean; firstVisit: number | null };
 export const kindLabels: Record<DiscoveryKind, string> = { street: 'Gater', trail: 'Stier', peak: 'Topper', viewpoint: 'Utsiktspunkter', hut: 'Hytter og ly', landmark: 'Landemerker', water: 'Vann og kilder', picnic: 'Rasteplasser' };
@@ -111,7 +112,13 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     const t = e.tags ?? {};
     if (t.access === 'private' || t.access === 'no' || t.foot === 'no' || t.foot === 'private') continue;
     let kind: DiscoveryKind | null = null;
-    if (['path', 'footway', 'steps'].includes(t.highway)) kind = 'trail';
+    // Named pedestrian ways belong to the whole-street query, not one award
+    // per OSM fragment. Sidewalks/crossings never become separate trail awards.
+    if (['path', 'footway', 'steps'].includes(t.highway)) {
+      if (['sidewalk', 'crossing'].includes(t.footway)) continue;
+      if (t.highway !== 'path' && (t.name ?? t['name:nb'])?.trim()) continue;
+      kind = 'trail';
+    }
     else if (t.natural === 'peak') kind = 'peak';
     else if (t.tourism === 'viewpoint') kind = 'viewpoint';
     else if (['alpine_hut', 'wilderness_hut'].includes(t.tourism) || t.amenity === 'shelter') kind = 'hut';
@@ -127,7 +134,7 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     const longitude = e.lon ?? e.center?.lon ?? geometry[0]?.longitude;
     if (latitude === undefined || longitude === undefined || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
     const fallback: Record<DiscoveryKind, string> = { street: 'Gate uten navn', trail: 'Sti uten navn', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
-    items.push({ id: `${e.type}/${e.id}`, name: (t['name:nb'] ?? t.name ?? fallback[kind]).slice(0, 100), kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt });
+    items.push({ id: `${e.type}/${e.id}`, name: (t['name:nb'] ?? t.name ?? fallback[kind]).slice(0, 100), kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway });
   }
   return items;
 }

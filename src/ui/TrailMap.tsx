@@ -6,6 +6,7 @@ import type { Coordinate, Fix, Peak, Trail, Trip } from '../domain/types';
 import { cleanPoints, coordinateBounds, segments } from '../domain/geo';
 import { colors, styles as s } from './theme';
 import { Icon } from './components';
+import { mapSelection, type MapBounds } from '../domain/mapSelection';
 import type { Discovery } from '../domain/discoveries';
 const EMPTY_POINTS: Fix[] = [];
 type Props = { fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
@@ -14,16 +15,18 @@ function lines(paths: Fix[][]): FeatureCollection<LineString> {
 }
 export function TrailMap({ fitRoute = false, fitReference = false, selectedDiscovery, trips = [], trails = [], discoveries = [], awards = {}, peaks = [], current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
   const camera = useRef<CameraRef>(null);
+  const [viewport, setViewport] = useState<MapBounds | null>(null);
+  const displayed = useMemo(() => mapSelection(discoveries, viewport ?? (focus ? [focus.longitude - .025, focus.latitude - .012, focus.longitude + .025, focus.latitude + .012] : [-180, -85, 180, 85]), selectedDiscovery), [discoveries, viewport, focus, selectedDiscovery]);
   const [failed, setFailed] = useState(false), [ready, setReady] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const history = useMemo(() => lines([...trips.map(t => t.points), ...trails.map(t => t.points)]), [trips, trails]);
   const live = useMemo(() => lines([current]), [current]);
   const old = useMemo(() => lines([reference]), [reference]);
-  const targets = useMemo((): FeatureCollection => ({ type: 'FeatureCollection', features: discoveries.flatMap<Feature>(item => {
+  const targets = useMemo((): FeatureCollection => ({ type: 'FeatureCollection', features: displayed.items.flatMap<Feature>(item => {
     const properties = { name: item.name, selected: item.id === selectedDiscovery?.id, collected: awards[item.id] !== undefined };
     if (item.kind === 'trail' || item.kind === 'street') return (item.streetPaths ?? [item.geometry]).filter(path => path.length > 1).map((path, i) => ({ type: 'Feature' as const, id: `${item.id}/${i}`, properties, geometry: { type: 'LineString' as const, coordinates: path.map(p => [p.longitude, p.latitude]) } }));
     return [{ type: 'Feature' as const, id: item.id, properties, geometry: { type: 'Point' as const, coordinates: [item.longitude, item.latitude] } }];
-  }) }), [discoveries, awards, selectedDiscovery]);
+  }) }), [displayed, awards, selectedDiscovery]);
   const discoveryBounds = useMemo(() => selectedDiscovery
     ? coordinateBounds((selectedDiscovery.streetPaths ?? [selectedDiscovery.geometry]).flat()) : null, [selectedDiscovery]);
   const routeBounds = useMemo(() => fitRoute ? coordinateBounds([...cleanPoints(current), ...cleanPoints(reference)]) : null,
@@ -35,7 +38,7 @@ export function TrailMap({ fitRoute = false, fitReference = false, selectedDisco
   }, [bounds, ready, size]);
   useEffect(() => { if (focus && !selectedDiscovery && !fitRoute && !fitReference) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute, fitReference]);
   return <View testID="trail-map" onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
-    <Map dragPan={true} style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
+    <Map dragPan={true} onRegionDidChange={event => setViewport(previous => previous?.every((value, i) => value === event.nativeEvent.bounds[i]) ? previous : event.nativeEvent.bounds)} style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
       <Camera ref={camera} initialViewState={{ center: focus ? [focus.longitude, focus.latitude] : [0, 20], zoom: focus ? 14 : 1.5 }} />
       <GeoJSONSource id="discoveries" data={targets}>
         <Layer id="discovery-paths" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': ['case', ['get', 'selected'], colors.coral, ['get', 'collected'], '#426D3A', '#A9B6A0'], 'line-width': ['case', ['get', 'selected'], 5, 2], 'line-opacity': 0.85 }} />
@@ -50,6 +53,7 @@ export function TrailMap({ fitRoute = false, fitReference = false, selectedDisco
       {ghost && <Marker lngLat={[ghost.longitude, ghost.latitude]}><View style={{ padding: 8, backgroundColor: colors.coral, borderRadius: 25, borderWidth: 2, borderColor: 'white' }}><Icon name="ghost" color="white" size={19} /></View></Marker>}
       {position && <Marker lngLat={[position.longitude, position.latitude]}><View style={{ width: 19, height: 19, borderRadius: 20, backgroundColor: colors.ink, borderWidth: 4, borderColor: 'white' }} /></Marker>}
     </Map>
+    {displayed.limited && <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, right: 8, padding: 8, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Viser et utvalg. Zoom inn for flere detaljer.</Text></View>}
     {failed && <View style={{ position: 'absolute', top: 10, left: 10, right: 10, padding: 10, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Kartbakgrunnen trenger nett. GPS-sporet lagres fortsatt under en aktiv tur.</Text></View>}
   </View>;
 }

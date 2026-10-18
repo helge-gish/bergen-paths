@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { HomeArea } from '../domain/areas';
+import type { Discovery } from '../domain/discoveries';
+const NO_TARGETS: Discovery[] = [];
 import type { Trip } from '../domain/types';
 import { type Goal } from '../domain/goals';
 import { useCollectionProgress } from './useCollectionProgress';
@@ -46,13 +48,13 @@ export function Goals({ homeArea, goals, catalog, trips, busy, onToggle, onLoad,
 }
 
 function GoalCard({ goal, active, trips, expanded, onToggle, onExpand }: { goal: Goal; active: boolean; trips: Trip[]; expanded: boolean; onToggle: () => void; onExpand: () => void }) {
-  const progress = useCollectionProgress(goal.targets, trips);
+  const progress = useCollectionProgress(goal.needsRefresh ? NO_TARGETS : goal.targets, trips);
   const collected = progress ? goal.targets.filter(t => progress[t.id]?.collected).length : null;
   return <View style={s.card}>
     <Text style={s.eyebrow}>{active ? collected !== null && goal.targets.length > 0 && collected === goal.targets.length ? 'MÅL OPPNÅDD' : 'DITT MÅL' : 'FORSLAG'}</Text>
     <Text style={s.subheading}>{goal.title}</Text>
-    <Text style={s.heading}>{collected === null ? 'Sjekker turene …' : `${collected} / ${goal.targets.length}`}</Text>
-    <Text style={s.body}>{goal.description}</Text>
+    <Text style={s.heading}>{goal.needsRefresh ? 'Kartgrunnlaget er endret' : collected === null ? 'Sjekker turene …' : `${collected} / ${goal.targets.length}`}</Text>
+    <Text style={s.body}>{goal.needsRefresh ? 'Dette målet brukte den gamle sti-inndelingen. Hent nye målforslag og aktiver en oppdatert utgave. Turene dine er beholdt.' : goal.description}</Text>
     <Button secondary title={active ? 'Deaktiver mål' : 'Aktiver som mitt mål'} onPress={onToggle} />
     <Pressable accessibilityRole="button" onPress={onExpand}><Text style={s.small}>{expanded ? 'Skjul innhold' : 'Se hva målet inneholder'}</Text></Pressable>
     {expanded && <Text style={s.small}>{goal.targets.map(t => t.name).join(' · ')}</Text>}

@@ -3,7 +3,7 @@ import type { Coordinate, Fix, Trip } from './types';
 import { distance, project } from './geo';
 
 const key = (p: Coordinate) => `${p.latitude.toFixed(7)},${p.longitude.toFixed(7)}`;
-const allowed = new Set(['residential', 'living_street', 'pedestrian', 'unclassified', 'service', 'tertiary', 'secondary', 'primary']);
+const allowed = new Set(['residential', 'living_street', 'pedestrian', 'footway', 'steps', 'unclassified', 'service', 'tertiary', 'secondary', 'primary']);
 /** Whole OSM ways, grouped by street name. Separate branches remain separate lines. */
 export function parseStreets(data: unknown, fetchedAt: number, scope?: string): Discovery[] {
   if (!data || typeof data !== 'object' || !('elements' in data) || !Array.isArray(data.elements)) throw new Error('Uventet svar fra gatekartet.');
@@ -11,6 +11,7 @@ export function parseStreets(data: unknown, fetchedAt: number, scope?: string): 
   for (const e of data.elements) {
     if (!e || e.type !== 'way' || !Number.isSafeInteger(e.id) || !allowed.has(e.tags?.highway)) continue;
     const t = e.tags;
+    if (['sidewalk', 'crossing'].includes(t.footway)) continue;
     if (['private', 'no'].includes(t.access) || ['private', 'no'].includes(t.foot) || t.area === 'yes' || typeof t.name !== 'string' || !t.name.trim()) continue;
     if (!Array.isArray(e.geometry) || e.geometry.length < 2 || e.geometry.some((p: { lat: number; lon: number }) => !p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180)) continue;
     const name = t.name.trim().normalize('NFC'), id = name.toLocaleLowerCase('nb');
