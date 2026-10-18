@@ -180,7 +180,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
         if (!permission.granted || cancelled) return;
         const recent = await Location.getLastKnownPositionAsync({ maxAge: 60000, requiredAccuracy: 35 });
         const location = recent ?? await Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced, mayShowUserSettingsDialog: false }),
           new Promise<null>(resolve => { timeout = setTimeout(() => resolve(null), 8000); }),
         ]);
         if (location && !cancelled && location.coords.accuracy !== null && location.coords.accuracy >= 0 && location.coords.accuracy <= 35) setNamePosition(toFix(location));
