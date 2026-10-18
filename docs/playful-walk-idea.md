@@ -40,3 +40,11 @@ Brukeren ønsker **utvidet virkelighet (AR)** både for å finne strekk i nærhe
 - Kart og kompass beholdes som alternativer. Vanlig turregistrering, skygge og innsamling fungerer uten at kameraet er åpent.
 
 En første framtidig prototype kan bestå av én indikator for et lagret strekk og én original figur som kan plasseres på en oppdaget flate. Kamera og eventuelle eksterne AR-tjenester skal vurderes når prototypen faktisk bestilles.
+
+## Personaer som levende skygger og treningskamerater
+
+Brukernotat: En figur kan dukke opp og tilby «Følg meg og slå meg til sted X for bonus!». Figuren kan også lede eller jage brukeren gjennom en valgt treningsøkt, for eksempel 4 × 4 minutter eller andre øktformer.
+
+Mulige roller er en turvenn som venter og viser vei, en rival som følger et avtalt tempo, og en trener som leder drag og pauser. Brukeren velger om utfordringen skal startes og hvilken økt eller vanskelighetsgrad som passer. Klokke, lyd og skygge på kartet kan drive økten uten kontinuerlig bruk av kameraet; AR brukes til møter og korte interaksjoner.
+
+Dette kan bygge videre på skygge og strekk: målpunkt, valgt tempo, progresjon, fullføring og bonus. Treningsvarianten trenger en egen øktmodell for oppvarming, drag, pauser og avslutning. Intensitet og tempo må kunne tilpasses brukeren og terrenget. 4 × 4 er et eksempel brukeren vil kunne velge, ikke en fast anbefaling til alle eller til barnemodus. Fortsatt kun idé; ikke implementert.
