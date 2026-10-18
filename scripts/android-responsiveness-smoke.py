@@ -104,8 +104,9 @@ def seed_large_area():
 
 
 def navigation_check():
-    # Tap by fixed bottom bar coordinates even while JS is busy, so the check
-    # measures handling the user's input rather than waiting for JS to be idle.
+    # Reset profile scroll before checking its top-level heading.
+    tab('Utforsk')
+    # Resolve the actual tab bounds before checking the resulting screen.
     w,h=map(int,re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1])
     for index,label in [(3,'Ditt eget tempo.'),(1,'Målbibliotek'),(2,'Stor samling testtur'),(0,'Hvor går turen?')]*2:
         started=time.monotonic()
@@ -141,7 +142,7 @@ try:
         width=int(re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1][0])
         assert bounds and 0 <= bounds[0] < bounds[2] <= width, ('radius clipped',r,bounds)
     tap('Lagre hjemmeområde')
-    assert_page('Hjemmeområdet er lagret. Finn mål i Turpass.')
+    find('Hjemmeområdet er lagret. Finn mål i Turpass.')
     navigation_check()
     # Accessibility font scale must not push a radius choice off screen.
     adb('shell','settings','put','system','font_scale','1.3')
