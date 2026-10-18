@@ -51,3 +51,17 @@ test('named footway fragments form one whole street; walking five percent cannot
   assert.ok(partial.fraction < .06);
   assert.equal(parseStreets({ elements: [way(300, full, { highway: 'footway', footway: 'sidewalk' })] }, 1).length, 0);
 });
+
+test('walking on the sidewalk counts toward the street rather than a separate trail', () => {
+  const sidewalk = full.map(f => ({ ...f, longitude: f.longitude + .0001 }));
+  assert.equal(streetProgress(street, [trip(sidewalk)]).collected, true);
+});
+
+test('independent named stair flights group as stairs; a street with a stair section stays one street', () => {
+  const stairs = parseStreets({ elements: [way(1,[p(0),p(5)],{highway:'steps',name:'Testtrappen'}),way(2,[p(5),p(10)],{highway:'steps',name:'Testtrappen'})] },1,'area');
+  assert.equal(stairs.length,1); assert.equal(stairs[0].kind,'steps');
+  assert.equal(streetProgress(stairs[0],[trip(full)]).collected,true);
+  assert.equal(streetProgress(stairs[0],[trip(full.slice(0,3))]).collected,false);
+  const mixed = parseStreets({ elements: [way(1,[p(0),p(5)],{highway:'residential'}),way(2,[p(5),p(10)],{highway:'steps'})] },1,'area');
+  assert.equal(mixed.length,1);assert.equal(mixed[0].kind,'street');
+});

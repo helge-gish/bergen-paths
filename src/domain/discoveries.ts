@@ -1,7 +1,7 @@
 import { streetProgressSteps } from './streets';
 import type { Coordinate, Trip } from './types';
 import { cleanPoints, distance, MAX_GAP_MS, project } from './geo';
-export type DiscoveryKind = 'street' | 'trail' | 'peak' | 'viewpoint' | 'hut' | 'landmark' | 'water' | 'picnic';
+export type DiscoveryKind = 'street' | 'trail' | 'steps' | 'peak' | 'viewpoint' | 'hut' | 'landmark' | 'water' | 'picnic';
 export type Discovery = Coordinate & {
   id: string;
   name: string;
@@ -14,7 +14,7 @@ export type Discovery = Coordinate & {
   osmHighway?: string;
 };
 export type Progress = { fraction: number; collected: boolean; firstVisit: number | null };
-export const kindLabels: Record<DiscoveryKind, string> = { street: 'Gater', trail: 'Stier', peak: 'Topper', viewpoint: 'Utsiktspunkter', hut: 'Hytter og ly', landmark: 'Landemerker', water: 'Vann og kilder', picnic: 'Rasteplasser' };
+export const kindLabels: Record<DiscoveryKind, string> = { street: 'Gater', trail: 'Stier', steps: 'Trapper', peak: 'Topper', viewpoint: 'Utsiktspunkter', hut: 'Hytter og ly', landmark: 'Landemerker', water: 'Vann og kilder', picnic: 'Rasteplasser' };
 function sampleLine(points: Coordinate[], spacing = 20): Coordinate[] {
   const result: Coordinate[] = points.length ? [points[0]] : [];
   let traveled = 0, next = spacing;
@@ -72,7 +72,7 @@ function* collectionProgressSteps(items: Discovery[], trips: Trip[]): Generator<
   }
   for (const item of items) {
     yield;
-    if (item.kind === 'street') { result[item.id] = yield* streetProgressSteps(item, ordered, true); continue; }
+    if (item.kind === 'street' || item.kind === 'steps') { result[item.id] = yield* streetProgressSteps(item, ordered, true); continue; }
     if (item.kind !== 'trail') {
       let firstVisit: number | null = null;
       for (const { points } of tracks) {
@@ -117,7 +117,7 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     if (['path', 'footway', 'steps'].includes(t.highway)) {
       if (['sidewalk', 'crossing'].includes(t.footway)) continue;
       if (t.highway !== 'path' && (t.name ?? t['name:nb'])?.trim()) continue;
-      kind = 'trail';
+      kind = t.highway === 'steps' ? 'steps' : 'trail';
     }
     else if (t.natural === 'peak') kind = 'peak';
     else if (t.tourism === 'viewpoint') kind = 'viewpoint';
@@ -127,14 +127,14 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     else if (t.tourism === 'picnic_site' || t.leisure === 'picnic_table') kind = 'picnic';
     if (!kind) continue;
     const geometry = (e.geometry ?? []).slice(0, 10_000).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180).map(p => ({ latitude: p.lat, longitude: p.lon }));
-    if (kind === 'trail' && geometry.length < 2) continue;
+    if ((kind === 'trail' || kind === 'steps') && geometry.length < 2) continue;
     // Area centroids can be in lakes/buildings, unreachable from paths. Collect at mapped nodes only for these categories.
     if (kind === 'water' && e.type !== 'node') continue;
     const latitude = e.lat ?? e.center?.lat ?? geometry[0]?.latitude;
     const longitude = e.lon ?? e.center?.lon ?? geometry[0]?.longitude;
     if (latitude === undefined || longitude === undefined || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
-    const fallback: Record<DiscoveryKind, string> = { street: 'Gate uten navn', trail: 'Sti uten navn', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
-    items.push({ id: `${e.type}/${e.id}`, name: (t['name:nb'] ?? t.name ?? fallback[kind]).slice(0, 100), kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway });
+    const fallback: Record<DiscoveryKind, string> = { street: 'Gate uten navn', trail: 'Sti uten navn', steps: 'Trapp', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
+    items.push({ id: `${e.type}/${e.id}`, name: (t['name:nb'] ?? t.name ?? fallback[kind]).slice(0, 100), kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway, ...(kind === 'steps' ? { streetPaths: [geometry], streetEnds: [geometry[0], geometry.at(-1)!] } : {}) });
   }
   return items;
 }

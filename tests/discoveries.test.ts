@@ -58,3 +58,10 @@ test('named pedestrian streets and sidewalks do not become duplicate trail award
   assert.deepEqual(result.map(i => i.id), ['way/14']);
   assert.equal(result[0].osmHighway, 'path');
 });
+
+test('an unnamed stair flight is a stair target and requires full traversal', () => {
+  const items = parseOsm({ elements: [{type:'way',id:77,tags:{highway:'steps'},geometry:[{lat:point(0).latitude,lon:point(0).longitude},{lat:point(10).latitude,lon:point(10).longitude}]}] },1);
+  assert.equal(items[0].kind,'steps');
+  assert.equal(collectionProgress(items,[trip([point(0),point(1)])])[items[0].id].collected,false);
+  assert.equal(collectionProgress(items,[trip(Array.from({length:11},(_,i)=>point(i)))])[items[0].id].collected,true);
+});

@@ -7,7 +7,7 @@ export type Goal = { id: string; title: string; description: string; targets: Di
 // Stable definition IDs, independent of labels, ordering and activation date. Future rankings must share this exact definition.
 function fingerprint(value: string) { let hash = 2166136261; for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619); return (hash >>> 0).toString(16); }
 export function areaGoals(area: HomeArea, items: Discovery[], now = Date.now()): Goal[] {
-  return (['street', 'peak', 'viewpoint', 'hut', 'landmark', 'trail'] as const).flatMap(kind => {
+  return (['street', 'steps', 'peak', 'viewpoint', 'hut', 'landmark', 'trail'] as const).flatMap(kind => {
     const targets = items.filter(i => i.kind === kind && inArea(i, area)).sort((a, b) => a.id.localeCompare(b.id));
     if (!targets.length) return [];
     const definition = JSON.stringify(targets.map(i => [i.id, i.latitude, i.longitude, i.streetPaths ?? i.geometry]));

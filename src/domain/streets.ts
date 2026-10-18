@@ -7,7 +7,7 @@ const allowed = new Set(['residential', 'living_street', 'pedestrian', 'footway'
 /** Whole OSM ways, grouped by street name. Separate branches remain separate lines. */
 export function parseStreets(data: unknown, fetchedAt: number, scope?: string): Discovery[] {
   if (!data || typeof data !== 'object' || !('elements' in data) || !Array.isArray(data.elements)) throw new Error('Uventet svar fra gatekartet.');
-  const groups = new Map<string, { name: string; paths: Coordinate[][]; id: number }>();
+  const groups = new Map<string, { name: string; paths: Coordinate[][]; id: number; onlySteps: boolean }>();
   for (const e of data.elements) {
     if (!e || e.type !== 'way' || !Number.isSafeInteger(e.id) || !allowed.has(e.tags?.highway)) continue;
     const t = e.tags;
@@ -15,7 +15,8 @@ export function parseStreets(data: unknown, fetchedAt: number, scope?: string): 
     if (['private', 'no'].includes(t.access) || ['private', 'no'].includes(t.foot) || t.area === 'yes' || typeof t.name !== 'string' || !t.name.trim()) continue;
     if (!Array.isArray(e.geometry) || e.geometry.length < 2 || e.geometry.some((p: { lat: number; lon: number }) => !p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180)) continue;
     const name = t.name.trim().normalize('NFC'), id = name.toLocaleLowerCase('nb');
-    const group: { name: string; paths: Coordinate[][]; id: number } = groups.get(id) ?? { name, paths: [], id: e.id };
+    const group: { name: string; paths: Coordinate[][]; id: number; onlySteps: boolean } = groups.get(id) ?? { name, paths: [], id: e.id, onlySteps: true };
+    group.onlySteps &&= t.highway === 'steps';
     group.paths.push(e.geometry.map((p: { lat: number; lon: number }) => ({ latitude: p.lat, longitude: p.lon })));
     groups.set(id, group);
   }
@@ -52,7 +53,7 @@ export function parseStreets(data: unknown, fetchedAt: number, scope?: string): 
       while (stack.length) { const n = stack.pop()!; if (seen.has(n)) continue; seen.add(n); component.push(n); stack.push(...neighbors.get(n)!); }
       if (!component.some(n => neighbors.get(n)!.size === 1)) ends.push(coords.get(k)!);
     }
-    return [{ id: `street/${scope ? `${scope}/` : ''}${encodeURIComponent(id)}`, name: g.name, kind: 'street' as const, ...paths[0][0], geometry: paths[0], streetPaths: paths, streetEnds: ends, sourceUrl: `https://www.openstreetmap.org/way/${g.id}`, fetchedAt }];
+    return [{ id: `${g.onlySteps ? 'steps' : 'street'}/${scope ? `${scope}/` : ''}${encodeURIComponent(id)}`, name: g.name, kind: g.onlySteps ? 'steps' as const : 'street' as const, ...paths[0][0], geometry: paths[0], streetPaths: paths, streetEnds: ends, sourceUrl: `https://www.openstreetmap.org/way/${g.id}`, fetchedAt }];
   });
 }
 export function streetLength(item: Discovery): number {

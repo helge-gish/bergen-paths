@@ -24,7 +24,7 @@ export function TrailMap({ fitRoute = false, fitReference = false, selectedDisco
   const old = useMemo(() => lines([reference]), [reference]);
   const targets = useMemo((): FeatureCollection => ({ type: 'FeatureCollection', features: displayed.items.flatMap<Feature>(item => {
     const properties = { name: item.name, selected: item.id === selectedDiscovery?.id, collected: awards[item.id] !== undefined };
-    if (item.kind === 'trail' || item.kind === 'street') return (item.streetPaths ?? [item.geometry]).filter(path => path.length > 1).map((path, i) => ({ type: 'Feature' as const, id: `${item.id}/${i}`, properties, geometry: { type: 'LineString' as const, coordinates: path.map(p => [p.longitude, p.latitude]) } }));
+    if (item.kind === 'trail' || item.kind === 'street' || item.kind === 'steps') return (item.streetPaths ?? [item.geometry]).filter(path => path.length > 1).map((path, i) => ({ type: 'Feature' as const, id: `${item.id}/${i}`, properties, geometry: { type: 'LineString' as const, coordinates: path.map(p => [p.longitude, p.latitude]) } }));
     return [{ type: 'Feature' as const, id: item.id, properties, geometry: { type: 'Point' as const, coordinates: [item.longitude, item.latitude] } }];
   }) }), [displayed, awards, selectedDiscovery]);
   const discoveryBounds = useMemo(() => selectedDiscovery
