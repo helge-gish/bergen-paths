@@ -6,7 +6,9 @@ Gater grupperes etter normalisert navn og område. Duplikate kanter fjernes. For
 
 Én avsluttet tur må dekke minst 95 % av den lengdevektede traseen og besøke alle ender innen 15 m (eller ankre i lukkede komponenter). Samples har høyst 8 m avstand. GPS-kanter må følge gatens retning innen 45 grader og passere innen 15 m. Rene kryssinger teller ikke. Endepunkter sjekkes mot selve GPS-kanten, også mellom to GPS-posisjoner.
 
-Ved terminale ender får fortausgange et begrenset slingringsmonn langs gaten: maksimalt 12 m og aldri mer enn 10 % av gatens lengde per ende. Bare endenære samples kan få dette; GPS-kanten må fortsatt følge retningen, ligge innen 15 m og komme innen 15 m av endepunktet. Dette hindrer at naturlige fortaussvinger krever gange ut i kjørebanen. Det gir ingen dekning av hull inne på gaten. Korte gater beskyttes av den proporsjonale grensen.
+To korte, motstående koblinger ved samme T-kryss behandles som én gateende: hver må være høyst 25 m, avstanden mellom endene høyst 30 m, og hovedløpet minst tre ganger så langt som koblingene samlet. Vanlige forgreninger og trappeløp beholdes. Kildens geometri endres ikke.
+
+Ved terminale ender får fortausgange et begrenset slingringsmonn langs gaten: maksimalt 12 m og aldri mer enn 20 % av gatens lengde per ende. Bare endenære samples kan få dette; GPS-kanten må fortsatt følge retningen, ligge innen 15 m og komme innen 15 m av endepunktet. Dette hindrer at naturlige fortaussvinger krever gange ut i kjørebanen. Det gir ingen dekning av hull inne på gaten. Korte gater beskyttes av den proporsjonale grensen.
 
 GPS-nøyaktighet dårligere enn 15 m, tidsavbrudd over 20 sekunder, sprang over 50 m og fart over 3,3 m/s bryter GPS-kanten. Allerede bekreftet dekning på samme tur beholdes. Ingen linje trekkes over avbruddet, og dekning kombineres ikke på tvers av turer for gater/trapper. Tidligere turer sjekkes også. Gateutmerkelser beregnes på nytt ved oppstart og kartoppdatering. Ufullstendig endebekreftelse forklares separat fra prosenten i samlingen.
 

@@ -59,6 +59,40 @@ export function parseStreets(data: unknown, fetchedAt: number, scope?: string): 
 export function streetLength(item: Discovery): number {
   return (item.streetPaths ?? [item.geometry]).reduce((sum, path) => sum + path.slice(1).reduce((n, p, i) => n + distance(path[i], p), 0), 0);
 }
+/** Some mapped street ends fan into two tiny, opposing connectors inside one
+ * junction. Treat that junction as one end, without discarding real branches,
+ * disconnected sections, loops or stair flights. Source geometry is unchanged. */
+export function streetTraversal(item: Discovery): { paths: Coordinate[][]; ends: Coordinate[] } {
+  const paths = item.streetPaths ?? [item.geometry], ends = item.streetEnds ?? [];
+  if (item.kind !== 'street' || paths.length < 3) return { paths, ends };
+  const junctions = new Map<string, number[]>();
+  paths.forEach((path, index) => {
+    if (path.length < 2) return;
+    for (const p of [path[0], path.at(-1)!]) { const k = key(p), list = junctions.get(k) ?? []; list.push(index); junctions.set(k, list); }
+  });
+  const lengths = paths.map(path => path.slice(1).reduce((n, p, i) => n + distance(path[i], p), 0));
+  const removed = new Set<number>();
+  const junctionEnds: Coordinate[] = [], removedEnds = new Set<string>();
+  for (const [joint, indices] of junctions) {
+    if (indices.length !== 3 || new Set(indices).size !== 3) continue;
+    const arms = indices.map(index => {
+      const path = paths[index], start = key(path[0]) === joint ? path[0] : path.at(-1)!;
+      const end = key(path[0]) === joint ? path.at(-1)! : path[0];
+      return { index, start, end, terminal: junctions.get(key(end))?.length === 1, length: lengths[index] };
+    });
+    const short = arms.filter(a => a.terminal && a.length <= 25);
+    if (short.length !== 2) continue;
+    const trunk = arms.find(a => !short.includes(a))!;
+    if (trunk.length < 3 * (short[0].length + short[1].length) || distance(short[0].end, short[1].end) > 30) continue;
+    const vector = (arm: typeof trunk) => [(arm.end.longitude - arm.start.longitude) * Math.cos(arm.start.latitude * Math.PI / 180), arm.end.latitude - arm.start.latitude];
+    const [a, b] = short.map(vector), c = vector(trunk);
+    const alignment = (u: number[], v: number[]) => (u[0] * v[0] + u[1] * v[1]) / Math.hypot(...u) / Math.hypot(...v);
+    if (alignment(a, b) > -.5 || Math.abs(alignment(a, c)) > .85 || Math.abs(alignment(b, c)) > .85) continue;
+    short.forEach(arm => { removed.add(arm.index); removedEnds.add(key(arm.end)); });
+    junctionEnds.push(trunk.start);
+  }
+  return removed.size ? { paths: paths.filter((_, i) => !removed.has(i)), ends: [...ends.filter(p => !removedEnds.has(key(p))), ...junctionEnds] } : { paths, ends };
+}
 type Sample = { p: Coordinate; a: Coordinate; b: Coordinate; weight: number; endCaps?: Coordinate[] };
 export function streetProgress(item: Discovery, trips: Trip[]): Progress {
   const work = streetProgressSteps(item, trips);
@@ -69,13 +103,14 @@ export function streetProgress(item: Discovery, trips: Trip[]): Progress {
 /** Cooperative checkpoints let the UI process touches even for a long street. */
 export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = false): Generator<void, Progress> {
   let work = 0;
-  const coordinates = (item.streetPaths ?? [item.geometry]).flat();
+  const { paths, ends: streetEnds } = streetTraversal(item);
+  const coordinates = paths.flat();
   if (!coordinates.length) return { fraction: 0, collected: false, firstVisit: null };
   let south = Infinity, north = -Infinity, west = Infinity, east = -Infinity;
   for (const p of coordinates) { south = Math.min(south, p.latitude); north = Math.max(north, p.latitude); west = Math.min(west, p.longitude); east = Math.max(east, p.longitude); }
   const lonMargin = 0.0005 / Math.max(0.01, Math.cos((south + north) / 2 * Math.PI / 180));
   const samples: Sample[] = [];
-  for (const path of item.streetPaths ?? [item.geometry]) for (let i = 1; i < path.length; i++) {
+  for (const path of paths) for (let i = 1; i < path.length; i++) {
     const a = path[i - 1], b = path[i], length = distance(a, b), n = Math.ceil(length / 8);
     for (let j = 0; j < n; j++) { if (++work % 256 === 0) yield; const f = (j + 0.5) / n; samples.push({ p: { latitude: a.latitude + (b.latitude - a.latitude) * f, longitude: a.longitude + (b.longitude - a.longitude) * f }, a, b, weight: length / n }); }
   }
@@ -88,10 +123,10 @@ export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = f
   // The street centreline runs into the middle of a junction; a pedestrian
   // normally turns on its sidewalk. Allow a bounded terminal cap, never an
   // extension into interior gaps. The proportional cap protects short streets.
-  const endAllowance = Math.min(12, total * .1);
+  const endAllowance = Math.min(12, total * .2);
   for (const sample of samples) {
     if (++work % 256 === 0) yield;
-    sample.endCaps = (item.streetEnds ?? []).filter(end => distance(sample.p, end) <= endAllowance);
+    sample.endCaps = streetEnds.filter(end => distance(sample.p, end) <= endAllowance);
   }
   for (const trip of (ordered ? trips : trips.filter(t => t.endedAt !== null).sort((a, b) => a.startedAt - b.startedAt))) {
     let previous: Fix | null = null;
@@ -122,9 +157,9 @@ export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = f
         const atEnd = !onEdge && f >= -endAllowance / length && f <= 1 + endAllowance / length && s.endCaps?.some(end => project(end, a, b).distance <= 15);
         if (alignment >= Math.SQRT1_2 && (onEdge || atEnd) && project(s.p, a, b).distance <= 15) { matched = true; if (!covered.has(i)) { covered.add(i); coveredMeters += s.weight; } }
       });
-      if (matched) (item.streetEnds ?? []).forEach((p, i) => { if (project(p, a, b).distance <= 15) ends.add(i); });
+      if (matched) streetEnds.forEach((p, i) => { if (project(p, a, b).distance <= 15) ends.add(i); });
       const fraction = coveredMeters / total;
-      const streetCheck = { coveredMeters, totalMeters: total, endsVisited: ends.size, endsTotal: (item.streetEnds ?? []).length };
+      const streetCheck = { coveredMeters, totalMeters: total, endsVisited: ends.size, endsTotal: streetEnds.length };
       if (fraction >= best.fraction) best = { fraction, collected: false, firstVisit: null, streetCheck };
       if (fraction >= 0.95 && ends.size === streetCheck.endsTotal) return { fraction, collected: true, firstVisit: b.timestamp, earnedTripId: trip.id, streetCheck };
     }

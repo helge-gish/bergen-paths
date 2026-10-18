@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseStreets, streetLength, streetProgress } from '../src/domain/streets';
+import { parseStreets, streetLength, streetProgress, streetTraversal } from '../src/domain/streets';
 import type { Fix, Trip } from '../src/domain/types';
 const p = (i: number): Fix => ({ latitude: 60.39 + i * 0.0001, longitude: 5.34, timestamp: 1000 + i * 10000, accuracy: 5, speed: 1, altitude: null, altitudeAccuracy: null });
 const way = (id: number, points: Fix[], tags = {}) => ({ type: 'way', id, tags: { highway: 'residential', name: 'Testgaten', ...tags }, geometry: points.map(p => ({ lat: p.latitude, lon: p.longitude })) });
@@ -109,4 +109,31 @@ test('end tolerance cannot turn a small middle portion or perpendicular crossing
   const short = parseStreets({ elements: [way(1, [p(0), p(2)])] }, 1)[0];
   assert.equal(streetProgress(short, [trip([p(.9), p(1.1)])]).collected, false);
   assert.equal(streetProgress(short, [trip(full.map((f, i) => ({ ...f, latitude: p(1).latitude, longitude: 5.339 + i * .0002 })))]).collected, false);
+});
+
+
+const local = (x: number, y: number) => ({ latitude: 60.39 + y / 111195, longitude: 5.34 + x / (111195 * Math.cos(60.39 * Math.PI / 180)) });
+const streetShape = (paths: ReturnType<typeof local>[][], ends: ReturnType<typeof local>[]) => ({ ...street, geometry: paths[0], streetPaths: paths, streetEnds: ends });
+test('a tiny opposing fan at a junction is one street end, not a demand to walk into the cross street', () => {
+  const paths = [[local(0,0),local(120,0)],[local(120,0),local(120,8)],[local(120,0),local(120,-20)]];
+  const s = streetShape(paths, [local(0,0),local(120,8),local(120,-20)]);
+  assert.equal(streetTraversal(s).paths.length, 1); assert.equal(streetTraversal(s).ends.length, 2);
+  const points = Array.from({length: 21}, (_,i) => ({ ...p(i), ...local(8+i*5.5,-6) }));
+  assert.equal(streetProgress(s,[trip(points)]).collected,true);
+  assert.equal(streetProgress(s,[trip(points.slice(0,5))]).collected,false);
+  assert.equal(s.streetPaths.length,3);
+});
+test('actual forks, longer branches and stair flights keep all their required parts', () => {
+  const fork = streetShape([[local(0,0),local(120,0)],[local(120,0),local(130,10)],[local(120,0),local(130,-10)]],[local(0,0),local(130,10),local(130,-10)]);
+  assert.equal(streetTraversal(fork).paths.length,3);
+  const longer = streetShape([[local(0,0),local(120,0)],[local(120,0),local(120,8)],[local(120,0),local(120,-35)]],[local(0,0),local(120,8),local(120,-35)]);
+  assert.equal(streetTraversal(longer).paths.length,3);
+  const steps = { ...fork, kind: 'steps' as const };
+  assert.equal(streetTraversal(steps).paths.length,3);
+});
+test('a short street accepts rounded sidewalk corners while still requiring traversal of its middle', () => {
+  const s=streetShape([[local(0,0),local(48,0)]],[local(0,0),local(48,0)]);
+  const points=Array.from({length:9},(_,i)=>({...p(i),...local(8+i*4,5)}));
+  assert.equal(streetProgress(s,[trip(points)]).collected,true);
+  assert.equal(streetProgress(s,[trip(points.slice(3,6))]).collected,false);
 });
