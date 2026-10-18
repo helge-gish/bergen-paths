@@ -17,7 +17,7 @@ try:
     adb('install', '-r', 'android/app/build/outputs/apk/release/app-release.apk')
     adb('logcat', '-c')
     launch()
-    tap('Turpass')
+    tap('Deg'); tap('Åpne mine mål')
     tap('Hent målet: De syv byfjellene i Bergen')
     deadline = time.time() + 250
     while time.time() < deadline:
@@ -25,7 +25,7 @@ try:
         xml = context['screen']()
         if any(n.get('text') == 'Det gikk ikke helt' for n in xml.iter('node')):
             raise RuntimeError('Real curated goal fetch failed: '+Path('/tmp/trakk-ui.xml').read_text())
-        tap('Utforsk'); tap('Turpass')
+        tap('Lukk'); tap('Åpne mine mål')
         try:
             x,y = find('Aktiver som mitt mål')
             adb('shell', 'input', 'tap', str(x), str(y))
@@ -34,13 +34,13 @@ try:
             alive()
     else:
         raise RuntimeError('Timed out loading the real seven-peak goal')
-    tap('Utforsk'); tap('Turpass')
+    tap('Lukk'); tap('Åpne mine mål')
     find('DITT MÅL')
     find('0 / 7')
     print('PASS: final APK loads all seven real OSM summits and activates the curated goal', flush=True)
     adb('shell', 'am', 'force-stop', PACKAGE)
     launch()
-    tap('Turpass')
+    tap('Deg'); tap('Åpne mine mål')
     find('DITT MÅL'); find('0 / 7')
     with open('/tmp/trakk-avatar.png', 'wb') as output:
         subprocess.run(['adb','exec-out','screencap','-p'], stdout=output, check=True, timeout=30)

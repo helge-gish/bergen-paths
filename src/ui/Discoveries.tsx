@@ -1,36 +1,36 @@
-import { streetLength } from '../domain/streets';
 import { useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { kindLabels, type Discovery, type DiscoveryKind, type Progress } from '../domain/discoveries';
 import { colors, styles as s } from './theme';
-import { Button, Icon } from './components';
+import { Button } from './components';
 const nameOrder = new Intl.Collator('nb', { numeric: true });
-export function Discoveries({ items, progress: readyProgress, busy, onSync, onMap }: { items: Discovery[]; progress: Record<string, Progress> | null; busy: boolean; onSync: () => void; onMap: (item: Discovery) => void }) {
+export function Discoveries({ items, progress, checking, checked, error, onRetry, syncError, busy, onSync, onMap }: { items: Discovery[]; progress: Record<string, Progress>; checking: boolean; checked: number; error: string | null; onRetry: () => void; syncError: string | null; busy: boolean; onSync: () => void; onMap: (item: Discovery) => void }) {
   const [filter, setFilter] = useState<DiscoveryKind | 'all'>('all'), [limit, setLimit] = useState(25);
-  const progress = readyProgress ?? {};
-  const collected = Object.values(progress).filter(p => p.collected).length;
-  // Reuse the collator: constructing locale rules for every comparison stalls
-  // Hermes when a home area contains thousands of names.
-  const visible = useMemo(() => items.filter(p => filter === 'all' || p.kind === filter).sort((a, b) => Number(!!readyProgress?.[b.id]?.collected) - Number(!!readyProgress?.[a.id]?.collected) || nameOrder.compare(a.name, b.name)), [items, filter, readyProgress]);
+  const [show, setShow] = useState<'collected' | 'started' | 'all'>('collected');
+  const [rules, setRules] = useState(false);
+  const counts = useMemo(() => Object.fromEntries(Object.keys(kindLabels).map(k => [k, items.filter(i => i.kind === k && progress[i.id]?.collected).length])), [items, progress]);
+  const total = Object.values(counts).reduce((n, value) => n + value, 0);
+  const visible = useMemo(() => items.filter(i => (filter === 'all' || i.kind === filter) && (show === 'all' || (show === 'collected' ? progress[i.id]?.collected : progress[i.id]?.fraction > 0 && !progress[i.id]?.collected))).sort((a, b) => (show === 'collected' ? (progress[b.id]?.firstVisit ?? 0) - (progress[a.id]?.firstVisit ?? 0) : 0) || nameOrder.compare(a.name, b.name)), [items, filter, show, progress]);
   return <View style={{ gap: 18 }}>
-    <View style={[s.card, { backgroundColor: colors.ink }]}>
-      <Text style={{ color: '#C2D3C3', fontSize: 10, letterSpacing: 2 }}>FUNN PÅ TURENE DINE</Text>
-      <Text style={{ color: colors.paper, fontSize: 36, fontWeight: '700' }}>{readyProgress ? `${collected.toLocaleString('nb-NO')} samlet` : 'Sjekker turene …'}</Text>
-      {readyProgress && <Text style={{ color: colors.paper, fontSize: 16 }}>{items.filter(i => i.kind === 'street' && progress[i.id]?.collected).length} gater · {items.filter(i => i.kind === 'trail' && progress[i.id]?.collected).length} stier · {items.filter(i => i.kind === 'steps' && progress[i.id]?.collected).length} trapper · {items.filter(i => !['street', 'trail', 'steps'].includes(i.kind) && progress[i.id]?.collected).length} steder</Text>}
-      <Text style={{ color: '#C2D3C3', fontSize: 14 }}>{items.length.toLocaleString('nb-NO')} gater, stier, trapper og steder er hentet fra kartet i områdene dine. Du velger selv hva du vil utforske.</Text>
-    </View>
-    {!readyProgress && <Text style={s.small}>Sjekker turene mot samlingen … Du kan bruke appen mens dette pågår.</Text>}
-    <Text style={s.body}>Alle kategorier samles fra lagrede turer. Du kan også hente kartdata rundt valgt sted, hjemmeområdet eller posisjonen din før du går.</Text>
-    <Button title={busy ? 'Henter fra OpenStreetMap …' : items.length ? 'Oppdater samlingen' : 'Hent kartdata i nærheten'} icon="map" secondary onPress={onSync} disabled={busy} />
-
-    <Text style={s.body}>Gå en gate ende til ende og samle den i Turpasset. Hele gaten med eventuelle forgreninger vises på kartet. Gater med samme navn innen samme gateområde telles samlet. Gaten kan strekke seg utenfor radiusen til hjemmeområdet. {items.filter(i => i.kind === 'street' && progress[i.id]?.collected).length} av {items.filter(i => i.kind === 'street').length} hentede gater samlet.</Text>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(['all', ...Object.keys(kindLabels)] as (DiscoveryKind | 'all')[]).map(kind => <Pressable key={kind} accessibilityRole="button" accessibilityState={{ selected: filter === kind }} onPress={() => { setFilter(kind); setLimit(25); }} style={[s.chip, { backgroundColor: filter === kind ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: filter === kind ? colors.paper : colors.ink }]}>{kind === 'all' ? 'Alle' : kindLabels[kind]}</Text></Pressable>)}</View>
-    {visible.slice(0, limit).map(item => {
-      const p = progress[item.id];
-      return <View key={item.id} style={s.card}><View style={s.row}><View style={{ backgroundColor: p?.collected ? colors.ink : colors.pale, padding: 12, borderRadius: 50 }}><Icon name={p?.collected ? 'check' : ['trail', 'street', 'steps'].includes(item.kind) ? 'map' : item.kind === 'peak' ? 'mountain' : 'location'} color={p?.collected ? colors.paper : colors.ink} /></View><View style={{ flex: 1, gap: 3 }}><Text style={s.subheading}>{item.name}</Text><Text style={s.small}>{kindLabels[item.kind]} · {p?.collected ? 'Samlet!' : ['trail', 'street', 'steps'].includes(item.kind) ? `${Math.round((p?.fraction ?? 0) * 100)} % av traseen gått` : 'Venter på ditt besøk'}</Text></View></View>{['trail', 'street', 'steps'].includes(item.kind) && <View style={{ height: 5, borderRadius: 5, backgroundColor: colors.pale }}><View style={{ height: 5, borderRadius: 5, backgroundColor: colors.ink, width: `${(p?.fraction ?? 0) * 100}%` }} /></View>}{item.kind === 'street' && <Text style={s.small}>{(streetLength(item) / 1000).toFixed(2)} km · {(item.streetEnds ?? []).length} ender / rundløypeankre · én sammenhengende tur</Text>}<View style={s.between}><Pressable accessibilityRole="button" onPress={() => onMap(item)} style={{ paddingVertical: 8 }}><Text style={s.chipText}>Vis på kartet →</Text></Pressable><Pressable accessibilityRole="link" onPress={() => void Linking.openURL(item.sourceUrl).catch(() => {})} style={{ paddingVertical: 8 }}><Text style={s.small}>OSM-kilde ↗</Text></Pressable></View></View>;
-    })}
+    <View style={[s.card, { backgroundColor: colors.ink }]}><Text style={{ color: colors.paper, fontSize: 30, fontWeight: '700' }}>{total.toLocaleString('nb-NO')} funn i samlingen</Text><Text style={{ color: colors.paper }}>{counts.street} gater · {counts.steps} trapper · {counts.trail} stier · {total - counts.street - counts.steps - counts.trail} steder</Text></View>
+    {checking && <Text accessibilityLiveRegion="polite" style={s.small}>Oppdaterer funn: {checked} av {items.length} sjekket. Tidligere funn vises mens vi jobber.</Text>}
+    {!!error && <View style={s.notice}><Text style={s.body}>Kunne ikke fullføre sjekken. Turene og tidligere funn er beholdt.</Text><Button secondary title="Prøv sjekken igjen" onPress={onRetry} /></View>}
+    {!!syncError && <Text style={s.small}>Noen kartdata mangler. Funn kan komme til når karttjenesten svarer igjen.</Text>}
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{([{ id: 'collected', label: 'Samlet' }, { id: 'started', label: 'Påbegynt' }, { id: 'all', label: 'Alt i kartet' }] as const).map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={`Vis ${option.label.toLowerCase()}`} accessibilityState={{ selected: show === option.id }} onPress={() => { setShow(option.id); setLimit(25); }} style={[s.chip, { backgroundColor: show === option.id ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: show === option.id ? colors.paper : colors.ink }]}>{option.label}</Text></Pressable>)}</View>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(['all', ...Object.keys(kindLabels)] as (DiscoveryKind | 'all')[]).map(kind => <Pressable key={kind} accessibilityRole="button" accessibilityState={{ selected: filter === kind }} onPress={() => { setFilter(kind); setLimit(25); }} style={[s.chip, { backgroundColor: filter === kind ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: filter === kind ? colors.paper : colors.ink }]}>{kind === 'all' ? 'Alle typer' : kindLabels[kind]}</Text></Pressable>)}</View>
+    <Text style={s.subheading}>{show === 'collected' ? 'Dine funn' : show === 'started' ? 'Påbegynte traseer' : 'Tilgjengelig i kartet'} · {visible.length}</Text>
+    {!visible.length && <Text style={s.body}>{checking ? 'Funnene vises her etter hvert som sjekken blir ferdig.' : show === 'collected' ? 'Ingen bekreftede funn i dette utvalget ennå. Se Påbegynt for traseer du har gått deler av.' : 'Ingen objekter i dette utvalget.'}</Text>}
+    {visible.slice(0, limit).map(item => { const p = progress[item.id]; return <View key={item.id} style={s.card}>
+      <Text style={s.subheading}>{p?.collected ? '✓ ' : ''}{item.name}</Text>
+      <Text style={s.small}>{kindLabels[item.kind]} · {p?.collected ? 'Samlet' : p ? ['trail','street','steps'].includes(item.kind) ? `${Math.round(p.fraction * 100)} % gått` : 'Ikke besøkt ennå' : 'Venter på sjekk'}</Text>
+      <Button secondary title={`Vis ${item.name} på kartet`} onPress={() => onMap(item)} />
+      <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(item.sourceUrl).catch(() => {})}><Text style={s.small}>OSM-kilde ↗</Text></Pressable>
+    </View>; })}
     {visible.length > limit && <Button secondary title={`Vis flere (${visible.length - limit} igjen)`} onPress={() => setLimit(limit + 25)} />}
-    <Text style={s.small}>Gater og trapper krever minst 95 % av hele den viste traseen og besøk ved alle ender i én sammenhengende, lagret gåtur. Nøyaktig GPS (15 m eller bedre) og uten opphold over 20 sekunder mellom punktene. Gater kartlagt som private eller uten fotadgang er utelatt. Stier samles ved minst 85 % beregnet dekning, også fordelt over flere turer. GPS kan forveksle nærliggende stier. Turmål krever to nøyaktige punkter over minst 10 sekunder innen 40 m. OSM-stier er kartsegmenter, ikke nødvendigvis hele turruter.</Text>
-    <Text style={s.small}>© OpenStreetMap-bidragsytere · ODbL. Kartdata er ufullstendige og endrer seg. En markør bekrefter ikke at en hytte er åpen eller at et område er tilgjengelig. Henting deler søkeområdet med Overpass; turloggen lastes ikke opp.</Text>
+    <Text style={s.small}>{items.length.toLocaleString('nb-NO')} kartobjekter er hentet. Dette er kartgrunnlaget, ikke antall funn.</Text>
+    <Button title={busy ? 'Henter kartdata …' : 'Hent / oppdater kartdata'} icon="map" secondary onPress={onSync} disabled={busy} />
+    <Pressable accessibilityRole="button" onPress={() => setRules(!rules)}><Text style={s.chipText}>{rules ? 'Skjul' : 'Hvordan teller'} funnene?</Text></Pressable>
+    {rules && <Text style={s.small}>Alle lagrede turer teller, også skyggeturer. Gater og trapper krever minst 95 % av hele traseen og besøk ved endene i én sammenhengende tur. Gange på fortau teller mot gaten. GPS må være nøyaktig og uten opphold over 20 sekunder. Stier krever 85 % beregnet dekning og kan samles over flere turer. Punktmål krever to nøyaktige posisjoner over minst 10 sekunder innen 40 m. OSM-stier er kartsegmenter, ikke nødvendigvis hele turruter. Kartdata og GPS kan være unøyaktige.</Text>}
+    <Text style={s.small}>© OpenStreetMap-bidragsytere · ODbL. Henting deler søkeområdet med Overpass; turloggen lastes ikke opp.</Text>
   </View>;
 }

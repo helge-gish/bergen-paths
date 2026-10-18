@@ -37,7 +37,11 @@ try:
         def setting(key, value):
             db.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)', (key, json.dumps(value)))
         setting('homeArea', dict(name='Voss', latitude=60.63, longitude=6.42, radius=3000))
-        setting('osmDiscoveries', [target])
+        streets=[]
+        for id, name, a, b in [('north','Testgate nord',0,60),('south','Testgate sør',60,120)]:
+            geometry=[dict(latitude=points[i]['latitude'],longitude=points[i]['longitude']) for i in [a,b]]
+            streets.append(dict(id='street/fixture/'+id,name=name,kind='street',**geometry[0],geometry=geometry,streetPaths=[geometry],streetEnds=geometry,sourceUrl='',fetchedAt=now))
+        setting('osmDiscoveries', [target]+streets)
         setting('goalCatalog', [goal])
         setting('goals', [])
         # Prevent a fixture test from depending on live OSM. Real network checks are separate.
@@ -53,13 +57,13 @@ try:
         adb('push', str(folder/'trakk.db'), '/data/local/tmp/trakk-test.db')
         adb('shell', 'cat /data/local/tmp/trakk-test.db > '+path)
     launch()
-    tap('Turpass')
+    tap('Deg'); tap('Åpne mine mål')
     find('Målbibliotek')
     tap('Aktiver som mitt mål')
     # Activation can place the status just above the viewport; reset scroll before asserting.
-    tap('Utforsk'); tap('Turpass')
+    tap('Lukk'); tap('Åpne mine mål')
     find('MÅL OPPNÅDD')
-    tap('Deg')
+    tap('Lukk')
     find('Nivå 2')
     with open('/tmp/trakk-avatar.png', 'wb') as output:
         subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=output, check=True, timeout=30)
@@ -67,7 +71,7 @@ try:
     find('Ditt hjemmeområde · valgfritt')
     find('Navn på hjemmeområdet')
     tap('Lagre hjemmeområde')
-    find('Hjemmeområdet er lagret. Finn mål i Turpass.')
+    find('Hjemmeområdet er lagret. Finn mål under Deg.')
     adb('shell', 'am', 'force-stop', PACKAGE)
     with tempfile.TemporaryDirectory() as temp:
         pull_database(Path(temp)); db=sqlite3.connect(Path(temp)/'trakk.db')
@@ -78,14 +82,23 @@ try:
         assert 'node/99900001' in setting('osmAwards')
         db.close()
     launch()
-    tap('Turpass')
+    tap('Deg'); tap('Åpne mine mål')
     find('MÅL OPPNÅDD')
     tap('Deaktiver mål')
-    tap('Deg')
+    tap('Lukk')
     find('Nivå 2')
     print('PASS: automatic retrospective awards outside Bergen, goals, home area and avatar persist; deactivation retains achievements', flush=True)
     tap('Turlogg')
     tap('Milepaeltest')
+    find('Dette fikk du på turen')
+    find('✓ Testgate nord'); find('✓ Testgate sør')
+    find('Nye milepæler')
+    with open('/tmp/trakk-rewards.png','wb') as output:
+        subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
+    tap('Lukk'); tap('Deg'); tap('Åpne samlingen min')
+    find('Dine funn · 3'); find('✓ Testgate nord'); find('✓ Testgate sør')
+    tap('Lukk'); tap('Turlogg'); tap('Milepaeltest')
+    print('PASS: per-trip named street awards and milestones; collection under Deg defaults to earned finds',flush=True)
     tap('Slett tur'); tap('Slett tur')
     tap('Deg')
     find('Nivå 1')

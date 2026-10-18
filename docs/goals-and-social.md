@@ -48,3 +48,12 @@ Collection and goal evaluation yield between bounded work slices instead of runn
 Named footways and steps join the whole-street query. A name consisting solely of stairs becomes one stair target; stairs belonging to a street stay part of that street. Unnamed stairs use their own full-traversal target. Walking along a nearby sidewalk counts toward street coverage with the same GPS tolerance. Tagged sidewalks and crossings do not receive separate trail awards. On first launch after upgrading, legacy path data without highway metadata and old street definitions are retired and re-fetched, old derived fragment awards are removed, and active goals based on the obsolete subdivision are marked for replacement. Personal GPS tracks and saved trails are never removed by this cache upgrade. Genuine OSM paths still use OSM segment identities; semantic grouping of named hiking routes remains future work. Imperfect OSM tagging can still affect classification.
 
 The home area and radius are displayed in Turpass, radius buttons wrap at large text sizes, and collection counts distinguish earned streets, stairs, path segments and places from the number of downloaded objects. The home area remains optional and does not limit where trips count.
+
+
+## 0.3.2: per-trip rewards and collection under Deg
+
+Navigation is Utforsk, Turlogg, Deg. The profile opens separate Samlingen min and Mine mål sheets. Collection defaults to earned, named finds, with Påbegynt and Alt i kartet as explicit alternatives. Rules and fetching are below the results.
+
+Trip details show newly earned targets, repeat visits/partial coverage, newly crossed distance/ascent/collection milestones and progress in active goals. Awards are attributed to the completing GPS track, even if map data arrives later; cumulative trails use their threshold-crossing time rather than their earliest partial visit. Deleting evidence recomputes attribution.
+
+Finished tracks and immutable map definitions keep their identity across status refreshes. Calculation is cooperative, reports partial progress, retains previous results, catches errors with retry, rejects distant geometry before detailed matching and reuses completed results while navigating. The Android large-area test now requires calculation to actually finish, then backgrounds/foregrounds the app to check that unchanged input does not restart it.
