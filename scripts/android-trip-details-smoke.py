@@ -59,6 +59,8 @@ try:
     tap('Slett tur')
     time.sleep(2)
     alive()
+    tap('Utforsk')
+    tap('Turlogg')
     find('Sporene dine.')
     adb('shell', 'am', 'force-stop', PACKAGE)
     with tempfile.TemporaryDirectory() as temp:
