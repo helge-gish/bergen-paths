@@ -59,7 +59,7 @@ try:
         adb('shell', 'rm', '-f', path + '-wal', path + '-shm'); adb('push', str(folder / 'trakk.db'), '/data/local/tmp/trakk-test.db'); adb('shell', 'cat /data/local/tmp/trakk-test.db > ' + path)
     launch(); tap('Avslutt og lagre tur'); tap('Avslutt og lagre')
     find('Tur til Testtoppen'); find('Forslag til turnavn')
-    tap('Bruk turnavn: Testtoppen og Testgaten')
+    tap('Bruk turnavn: Testtoppen og Testgaten'); time.sleep(1)
     screenshot('trakk-names.png')
     tap('Lukk'); tap('Utforsk'); tap('Start en tur')
     find('Forslag til turnavn'); tap('Navn på den nye turen')
