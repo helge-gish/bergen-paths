@@ -81,7 +81,7 @@ try:
         assert reference_id == 'trail:map-test-trail'
         db.close()
     launch()
-    find('DEG MOT DEG')
+    find('MED SKYGGE')
     assert not any('Lagre sti hit' in (n.get('text', '') + n.get('content-desc', '')) for n in context['screen']().iter('node')), 'Clipping controls leaked into ghost mode'
     find('Teststi')
     tap('Avslutt og lagre tur')

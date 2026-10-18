@@ -5,7 +5,7 @@ import { distance, project } from './geo';
 const key = (p: Coordinate) => `${p.latitude.toFixed(7)},${p.longitude.toFixed(7)}`;
 const allowed = new Set(['residential', 'living_street', 'pedestrian', 'unclassified', 'service', 'tertiary', 'secondary', 'primary']);
 /** Whole OSM ways, grouped by street name. Separate branches remain separate lines. */
-export function parseStreets(data: unknown, fetchedAt: number): Discovery[] {
+export function parseStreets(data: unknown, fetchedAt: number, scope?: string): Discovery[] {
   if (!data || typeof data !== 'object' || !('elements' in data) || !Array.isArray(data.elements)) throw new Error('Uventet svar fra gatekartet.');
   const groups = new Map<string, { name: string; paths: Coordinate[][]; id: number }>();
   for (const e of data.elements) {
@@ -51,7 +51,7 @@ export function parseStreets(data: unknown, fetchedAt: number): Discovery[] {
       while (stack.length) { const n = stack.pop()!; if (seen.has(n)) continue; seen.add(n); component.push(n); stack.push(...neighbors.get(n)!); }
       if (!component.some(n => neighbors.get(n)!.size === 1)) ends.push(coords.get(k)!);
     }
-    return [{ id: `street/${encodeURIComponent(id)}`, name: g.name, kind: 'street' as const, ...paths[0][0], geometry: paths[0], streetPaths: paths, streetEnds: ends, sourceUrl: `https://www.openstreetmap.org/way/${g.id}`, fetchedAt }];
+    return [{ id: `street/${scope ? `${scope}/` : ''}${encodeURIComponent(id)}`, name: g.name, kind: 'street' as const, ...paths[0][0], geometry: paths[0], streetPaths: paths, streetEnds: ends, sourceUrl: `https://www.openstreetmap.org/way/${g.id}`, fetchedAt }];
   });
 }
 export function streetLength(item: Discovery): number {
@@ -59,6 +59,11 @@ export function streetLength(item: Discovery): number {
 }
 type Sample = { p: Coordinate; a: Coordinate; b: Coordinate; weight: number };
 export function streetProgress(item: Discovery, trips: Trip[]): Progress {
+  const coordinates = (item.streetPaths ?? [item.geometry]).flat();
+  if (!coordinates.length) return { fraction: 0, collected: false, firstVisit: null };
+  let south = Infinity, north = -Infinity, west = Infinity, east = -Infinity;
+  for (const p of coordinates) { south = Math.min(south, p.latitude); north = Math.max(north, p.latitude); west = Math.min(west, p.longitude); east = Math.max(east, p.longitude); }
+  const lonMargin = 0.0005 / Math.max(0.01, Math.cos((south + north) / 2 * Math.PI / 180));
   const samples: Sample[] = [];
   for (const path of item.streetPaths ?? [item.geometry]) for (let i = 1; i < path.length; i++) {
     const a = path[i - 1], b = path[i], length = distance(a, b), n = Math.ceil(length / 8);
@@ -76,6 +81,7 @@ export function streetProgress(item: Discovery, trips: Trip[]): Progress {
     const reset = () => { covered = new Set(); ends = new Set(); };
     for (const b of [...trip.points].sort((a, b) => a.timestamp - b.timestamp)) {
       if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || !Number.isFinite(b.timestamp) || !Number.isFinite(b.accuracy) || b.accuracy < 0 || b.accuracy > 15 || b.timestamp < trip.startedAt || b.timestamp > trip.endedAt! || (b.speed !== null && b.speed > 3.3)) { previous = null; reset(); continue; }
+      if (b.latitude < south - 0.0005 || b.latitude > north + 0.0005 || b.longitude < west - lonMargin || b.longitude > east + lonMargin) { previous = null; reset(); continue; }
       const a = previous; previous = b;
       if (!a) continue;
       const length = distance(a, b), dt = b.timestamp - a.timestamp;
