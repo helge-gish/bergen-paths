@@ -1,3 +1,4 @@
+import { syncWorkoutCoach, workoutAvailable } from './workoutCoach';
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
@@ -30,6 +31,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
   try {
     const active = store.active();
     if (!active) return;
+    void syncWorkoutCoach(active).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     store.append(active.id, data.locations.map(toFix));
     store.setSetting('trackingError', null);
     const current = store.getTrip(active.id)!, ghost = active.ghostId ? store.getReference(active.ghostId) : null;
@@ -55,11 +57,12 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
       void speak(cue, current.id);
     } else if (ghost && now - store.setting(`eventSpoken:${current.id}`, 0) >= 15000) {
       const regular = voiceCue(ghostComparison(current, ghost, now, route!), now, current.lastCueAt, current.audioEnabled);
-      if (regular && store.claimCue(current.id, now)) void speak(regular, current.id);
+      if (regular && store.claimCue(current.id, now)) void speak(regular, current.id, 'ghost');
     }
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
-export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string) {
+export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | '4x4' = 'free') {
+  if (training === '4x4' && !workoutAvailable) throw new Error('4×4-betaen krever Android-appen.');
   if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg et annet strekk eller en tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
   const foreground = await Location.requestForegroundPermissionsAsync();
@@ -85,13 +88,15 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
     const gate = startGate(reference, initial, Date.now());
     if (!gate.ready) throw new Error(gate.message);
   }
-  const trip = store.begin(ghostId, audioEnabled, Date.now(), name);
+  const trip = store.begin(ghostId, audioEnabled, Date.now(), name, training);
   if (initial) store.append(trip.id, [{ ...initial, timestamp: trip.startedAt }]);
   if (suggestion) store.suggestName(trip.id, suggestion);
   store.setSetting('trackingError', null);
   store.setSetting('audioError', null);
   try {
     await Location.startLocationUpdatesAsync(LOCATION_TASK, trackingOptions);
+    if (training === '4x4') await Speech.stop();
+    await syncWorkoutCoach(trip).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     return trip;
   } catch (e) {
     // Keep any data already delivered, even when service startup reports a failure.
@@ -105,6 +110,7 @@ export async function finishTracking() {
   if (!trip) return null;
   // Persist the end timestamp first, so late deliveries never extend the recorded trip.
   store.finish(trip.id);
+  await syncWorkoutCoach(null).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke stoppes. Lukk appen for å stoppe lyden.'));
   try { if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) await Location.stopLocationUpdatesAsync(LOCATION_TASK); }
   catch { store.setSetting('trackingError', 'Turen er lagret, men GPS-tjenesten kunne ikke stoppes. Lukk appen for å stoppe tjenesten.'); }
   await Speech.stop();
@@ -116,5 +122,6 @@ export async function resumeTracking() {
   const permission = await Location.getBackgroundPermissionsAsync();
   if (!permission.granted) throw new Error('Gi Tråkk bakgrunnstilgang til posisjon i innstillingene først.');
   await Location.startLocationUpdatesAsync(LOCATION_TASK, trackingOptions);
+  await syncWorkoutCoach(getStore().active());
   getStore().setSetting('trackingError', null);
 }

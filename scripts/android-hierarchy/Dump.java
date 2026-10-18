@@ -42,6 +42,7 @@ public class Dump extends Instrumentation {
     if (!node.isVisibleToUser()) return;
     xml.startTag("", "node");
     xml.attribute("", "enabled", Boolean.toString(node.isEnabled()));
+    xml.attribute("", "checked", Boolean.toString(node.isChecked()));
     xml.attribute("", "resource-id", node.getViewIdResourceName() == null ? "" : node.getViewIdResourceName());
     xml.attribute("", "text", node.getText() == null ? "" : node.getText().toString());
     xml.attribute("", "content-desc", node.getContentDescription() == null ? "" : node.getContentDescription().toString());

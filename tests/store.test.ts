@@ -215,3 +215,32 @@ test('explicitly leaving ghost mode preserves time and fixes and enables future 
   assert.equal(active.ghostId,null);assert.equal(active.mode,'normal');
   assert.equal(store.setting('originalGhost:'+t.id,null),'old');raw.close();
 });
+
+test('4x4 is independent of route mode, durable across restart and leaving ghost; finish freezes trainer', () => {
+  const { store, db, raw } = database();
+  const reference = store.begin(null, false, 1000); store.finish(reference.id, 2000);
+  const trip = store.begin(reference.id, true, 3000, 'Treningsrunden', '4x4');
+  assert.equal(trip.mode, 'ghost'); assert.equal(trip.workout?.kind, '4x4');
+  store.updateWorkout(trip.id, 'pause', 63000);
+  const reopened = createStore(db);
+  assert.equal(reopened.active()?.workout?.elapsedMs, 60000);
+  assert.equal(reopened.active()?.workout?.runningSince, null);
+  reopened.leaveGhost(trip.id);
+  assert.equal(reopened.active()?.workout?.kind, '4x4');
+  reopened.updateWorkout(trip.id, 'resume', 100000);
+  reopened.updateWorkout(trip.id, 'mute', 101000);
+  assert.equal(reopened.active()?.workout?.audioEnabled, false);
+  assert.equal(reopened.active()?.audioEnabled, true);
+  reopened.finish(trip.id, 160000); reopened.finish(trip.id, 999999);
+  assert.equal(reopened.getTrip(trip.id)?.workout?.elapsedMs, 120000);
+  assert.equal(reopened.getTrip(trip.id)?.workout?.endedAt, 160000);
+  reopened.deleteTrip(trip.id);
+  assert.equal(reopened.setting(`workout:${trip.id}`, null), null);
+  raw.close();
+});
+test('free trips stay free and failed empty 4x4 starts leave no trainer settings', () => {
+  const { store, raw } = database(); const free = store.begin(null, true, 1000);
+  assert.equal(free.workout, null); store.finish(free.id, 2000);
+  const workout = store.begin(null, true, 3000, undefined, '4x4'); store.cancelEmpty(workout.id);
+  assert.equal(store.active(), null); assert.equal(store.setting(`workout:${workout.id}`, null), null); raw.close();
+});
