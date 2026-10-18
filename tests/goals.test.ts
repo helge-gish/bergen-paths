@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { areaGoals, goalProgress, bergenGoal } from '../src/domain/goals';
 import { tripTiles, mergeDiscoveries, inArea } from '../src/domain/areas';
+import { PEAKS } from '../src/domain/collections';
 import { achievements } from '../src/domain/achievements';
 import { parseStreets } from '../src/domain/streets';
 import { collectionProgress, type Discovery } from '../src/domain/discoveries';
@@ -61,4 +62,12 @@ test('distance and ascent totals unlock milestones across trips but exclude unfi
   assert.ok(result.milestones.find(m => m.id === 'distance-1')?.earned);
   assert.ok(result.milestones.find(m => m.id === 'ascent-100')?.earned);
   assert.equal(achievements([{ ...walk, endedAt: null }], 0).xp, 0);
+});
+
+test('the curated seven-peak goal resolves the local Fløyfjellet name for Fløyen', () => {
+  const items = PEAKS.map((peak, i) => ({ ...item, ...peak, id: `node/${i}`, kind: 'peak' as const, name: peak.id === 'floyen' ? 'Fløyfjellet' : peak.name }));
+  const goal = bergenGoal(items);
+  assert.equal(goal?.targets.length, 7);
+  assert.ok(goal?.targets.some(t => t.name === 'Fløyen (Fløyfjellet)'));
+  assert.equal(bergenGoal(items.filter(t => t.name !== 'Fløyfjellet')), null);
 });

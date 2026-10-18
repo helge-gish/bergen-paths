@@ -16,8 +16,10 @@ export function areaGoals(area: HomeArea, items: Discovery[], now = Date.now()):
 }
 export function bergenGoal(items: Discovery[], now = Date.now()): Goal | null {
   const targets = PEAKS.flatMap(peak => {
-    const target = items.find(i => i.kind === 'peak' && i.name.toLocaleLowerCase('nb') === peak.name.toLocaleLowerCase('nb') && distance(i, peak) < 1500);
-    return target ? [target] : [];
+    // OSM maps the actual Fløyen summit as Fløyfjellet; keep the documented local alias and geographic check.
+    const names = peak.id === 'floyen' ? [peak.name, 'Fløyfjellet'] : [peak.name];
+    const target = items.find(i => i.kind === 'peak' && names.some(name => i.name.toLocaleLowerCase('nb') === name.toLocaleLowerCase('nb')) && distance(i, peak) < 1500);
+    return target ? [{ ...target, name: target.name === peak.name ? peak.name : `${peak.name} (${target.name})` }] : [];
   });
   if (targets.length !== 7) return null;
   return { id: `bergen-seven-v1-${fingerprint(JSON.stringify(targets.map(i => [i.id, i.latitude, i.longitude])))}`, title: 'De syv byfjellene i Bergen', description: 'Ulriken, Fløyen, Rundemanen, Sandviksfjellet, Løvstakken, Damsgårdsfjellet og Lyderhorn. Besøk alle syv, fordelt på så mange turer du vil.', targets, createdAt: now, curated: true };
