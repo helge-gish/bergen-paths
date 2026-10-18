@@ -56,6 +56,8 @@ try:
     tap('Turpass')
     find('Målbibliotek')
     tap('Aktiver som mitt mål')
+    # Activation can place the status just above the viewport; reset scroll before asserting.
+    tap('Utforsk'); tap('Turpass')
     find('MÅL OPPNÅDD')
     tap('Deg')
     find('Nivå 2')
