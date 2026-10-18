@@ -38,7 +38,7 @@ export function Goals({ homeArea, goals, catalog, trips, busy, onToggle, onLoad,
   const entries = useMemo(() => [...goals, ...catalog.filter(g => !goals.some(a => a.id === g.id))].map(g => ({ goal: g, active: goals.some(a => a.id === g.id) })), [goals, catalog, trips]);
   return <View style={{ gap: 16 }}>
     <Text style={s.heading}>Målbibliotek</Text>
-    <Text style={s.body}>Velg personlige mål. Alle turer samler stempler uansett hvilke mål du har aktivert. Tidligere turer teller også.</Text>
+    <Text style={s.body}>Velg personlige mål. Du samler funn på alle turer, uansett hvilke mål du har aktivert. Tidligere turer teller også.</Text>
     <View style={s.card}><Text style={s.eyebrow}>HJEMMEOMRÅDET DITT</Text><Text style={s.subheading}>{homeArea ? homeArea.name : 'Ikke valgt ennå'}</Text>{homeArea && <Text style={s.body}>{homeArea.radius / 1000} km radius · brukes til målforslag. Turene dine teller også utenfor området.</Text>}<Button secondary title={homeArea ? 'Endre hjemmeområde' : 'Velg hjemmeområde'} onPress={onArea} /></View>
     <Button secondary title={busy ? 'Henter mål …' : 'Lag målforslag for hjemmeområdet'} disabled={busy} onPress={onLoad} />
     <Button secondary title="Hent målet: De syv byfjellene i Bergen" disabled={busy} onPress={onBergen} />

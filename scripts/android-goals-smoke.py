@@ -94,10 +94,11 @@ try:
     tap('Turlogg')
     tap('Milepaeltest')
     find('Dette fikk du på turen')
-    find('✓ Testgate nord'); find('✓ Testgate sør')
-    find('Nye milepæler')
+    find('Medaljer fra turen')
+    find('Medalje:', contains=True)
     with open('/tmp/trakk-rewards.png','wb') as output:
         subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
+    find('✓ Testgate nord'); find('✓ Testgate sør')
     tap('Lukk'); tap('Deg'); tap('Åpne samlingen min')
     find('Dine funn · 3'); find('✓ Testgate nord'); find('✓ Testgate sør')
     find('Uten navn · 2')
