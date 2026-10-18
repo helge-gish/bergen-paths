@@ -56,3 +56,27 @@ test('settings are local and can remove the optional weight', () => {
   store.setSetting('profile', { weightKg: 75 }); assert.equal(store.profile().weightKg, 75);
   store.setSetting('profile', { weightKg: null }); assert.equal(store.profile().weightKg, null); raw.close();
 });
+test('deleting a saved trip removes its points and trails, clears ghost references and rebuilds stamps', () => {
+  const { store, raw } = database(); const t = store.begin(null, false, 1000);
+  store.append(t.id, [point, { ...point, timestamp: 11000, latitude: 60.3901 }]); store.finish(t.id, 20000);
+  store.saveTrail(t.id, 'Min sti', 1000, 11000);
+  const other = store.begin(t.id, true, 30000);
+  store.setSetting('osmAwards', { 'street/test': 11000 }); store.setSetting('profile', { weightKg: 75 });
+  assert.equal(store.deleteTrip(t.id), true);
+  assert.equal(store.getTrip(t.id), null); assert.equal(store.trails().length, 0);
+  assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM points WHERE tripId = ?').get(t.id)?.n, 0);
+  assert.equal(store.active()?.id, other.id); assert.equal(store.active()?.ghostId, null);
+  assert.deepEqual(store.setting('osmAwards', {}), {}); assert.equal(store.profile().weightKg, 75);
+  assert.equal(store.deleteTrip(t.id), false); raw.close();
+});
+test('an active trip cannot be deleted and a failed deletion rolls back dependent changes', () => {
+  const { store, raw } = database(); const t = store.begin(null, false, 1000);
+  assert.throws(() => store.deleteTrip(t.id), /Avslutt turen/); assert.equal(store.active()?.id, t.id);
+  store.append(t.id, [point, { ...point, timestamp: 11000, latitude: 60.3901 }]); store.finish(t.id, 20000);
+  store.saveTrail(t.id, 'Behold meg', 1000, 11000);
+  const other = store.begin(t.id, false, 30000);
+  raw.exec("CREATE TRIGGER fail_delete BEFORE DELETE ON trips BEGIN SELECT RAISE(ABORT, 'test failure'); END");
+  assert.throws(() => store.deleteTrip(t.id), /test failure/);
+  assert.ok(store.getTrip(t.id)); assert.equal(store.trails().length, 1); assert.equal(store.active()?.ghostId, t.id);
+  assert.equal(store.active()?.id, other.id); raw.close();
+});

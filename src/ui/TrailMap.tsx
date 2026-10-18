@@ -3,17 +3,19 @@ import { Text, View } from 'react-native';
 import { Map, Camera, GeoJSONSource, Layer, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import type { Coordinate, Fix, Peak, Trail, Trip } from '../domain/types';
-import { cleanPoints, segments } from '../domain/geo';
+import { cleanPoints, coordinateBounds, segments } from '../domain/geo';
 import { colors, styles as s } from './theme';
 import { Icon } from './components';
 import type { Discovery } from '../domain/discoveries';
-type Props = { selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
+const EMPTY_POINTS: Fix[] = [];
+type Props = { fitRoute?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
-export function TrailMap({ selectedDiscovery, trips = [], trails = [], discoveries = [], awards = {}, peaks = [], current = [], reference = [], ghost, position, focus, onPeak, height = 330 }: Props) {
+export function TrailMap({ fitRoute = false, selectedDiscovery, trips = [], trails = [], discoveries = [], awards = {}, peaks = [], current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
   const camera = useRef<CameraRef>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(false), [ready, setReady] = useState(false);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const history = useMemo(() => lines([...trips.map(t => t.points), ...trails.map(t => t.points)]), [trips, trails]);
   const live = useMemo(() => lines([current]), [current]);
   const old = useMemo(() => lines([reference]), [reference]);
@@ -22,14 +24,16 @@ export function TrailMap({ selectedDiscovery, trips = [], trails = [], discoveri
     if (item.kind === 'trail' || item.kind === 'street') return (item.streetPaths ?? [item.geometry]).filter(path => path.length > 1).map((path, i) => ({ type: 'Feature' as const, id: `${item.id}/${i}`, properties, geometry: { type: 'LineString' as const, coordinates: path.map(p => [p.longitude, p.latitude]) } }));
     return [{ type: 'Feature' as const, id: item.id, properties, geometry: { type: 'Point' as const, coordinates: [item.longitude, item.latitude] } }];
   }) }), [discoveries, awards, selectedDiscovery]);
+  const bounds = useMemo(() => selectedDiscovery
+    ? coordinateBounds((selectedDiscovery.streetPaths ?? [selectedDiscovery.geometry]).flat())
+    : fitRoute ? coordinateBounds([...cleanPoints(current), ...cleanPoints(reference)]) : null,
+  [selectedDiscovery, fitRoute, current, reference]);
   useEffect(() => {
-    if (!selectedDiscovery) return;
-    const points = (selectedDiscovery.streetPaths ?? [selectedDiscovery.geometry]).flat();
-    if (points.length > 1) camera.current?.fitBounds([Math.min(...points.map(p => p.longitude)) - 0.0005, Math.min(...points.map(p => p.latitude)) - 0.0003, Math.max(...points.map(p => p.longitude)) + 0.0005, Math.max(...points.map(p => p.latitude)) + 0.0003], { duration: 700 });
-  }, [selectedDiscovery]);
-  useEffect(() => { if (focus && !selectedDiscovery) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery]);
-  return <View style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
-    <Map style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
+    if (ready && size.width > 0 && size.height > 0 && bounds) camera.current?.fitBounds(bounds, { padding: { top: 30, right: 30, bottom: 38, left: 30 }, duration: 0 });
+  }, [bounds, ready, size]);
+  useEffect(() => { if (focus && !selectedDiscovery && !fitRoute) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute]);
+  return <View onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
+    <Map style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
       <Camera ref={camera} initialViewState={{ center: focus ? [focus.longitude, focus.latitude] : [5.347, 60.393], zoom: focus ? 14 : 11.5 }} />
       <GeoJSONSource id="discoveries" data={targets}>
         <Layer id="discovery-paths" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': ['case', ['get', 'selected'], colors.coral, ['get', 'collected'], '#426D3A', '#A9B6A0'], 'line-width': ['case', ['get', 'selected'], 5, 2], 'line-opacity': 0.85 }} />

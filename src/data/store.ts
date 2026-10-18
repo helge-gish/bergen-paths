@@ -41,6 +41,20 @@ export function createStore(db: Database) {
       });
     },
     finish(tripId: string, now = Date.now()) { db.runSync('UPDATE trips SET endedAt = MAX(startedAt, ?) WHERE id = ? AND endedAt IS NULL', now, tripId); },
+    deleteTrip(tripId: string): boolean {
+      let deleted = false;
+      db.withTransactionSync(() => {
+        const trip = store.getTrip(tripId);
+        if (!trip) return;
+        if (trip.endedAt === null) throw new Error('Avslutt turen før du sletter den.');
+        db.runSync('DELETE FROM trails WHERE tripId = ?', tripId);
+        db.runSync('UPDATE trips SET ghostId = NULL WHERE ghostId = ?', tripId);
+        deleted = db.runSync('DELETE FROM trips WHERE id = ?', tripId).changes === 1;
+        // Rebuild collection stamps from the remaining history on the next snapshot.
+        store.setSetting('osmAwards', {});
+      });
+      return deleted;
+    },
     cancelEmpty(tripId: string) { db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId); },
     rename(tripId: string, name: string) { const value = name.trim().slice(0, 80); if (!value) throw new Error('Gi turen et navn først.'); db.runSync('UPDATE trips SET name = ? WHERE id = ?', value, tripId); },
     setAudio(tripId: string, enabled: boolean) { db.runSync('UPDATE trips SET audioEnabled = ? WHERE id = ?', enabled ? 1 : 0, tripId); },

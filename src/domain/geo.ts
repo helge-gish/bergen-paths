@@ -53,3 +53,16 @@ export function nearestOnTrail(point: Coordinate, points: Fix[]) {
   }
   return best;
 }
+
+/** Finite bounds with a minimum span for short or stationary recorded routes. */
+export function coordinateBounds(points: Coordinate[]): [number, number, number, number] | null {
+  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+  for (const p of points) {
+    if (!Number.isFinite(p.latitude) || !Number.isFinite(p.longitude) || Math.abs(p.latitude) > 90 || Math.abs(p.longitude) > 180) continue;
+    west = Math.min(west, p.longitude); east = Math.max(east, p.longitude);
+    south = Math.min(south, p.latitude); north = Math.max(north, p.latitude);
+  }
+  if (west === Infinity) return null;
+  const dx = Math.max(0, (0.0004 - (east - west)) / 2), dy = Math.max(0, (0.0002 - (north - south)) / 2);
+  return [Math.max(-180, west - dx), Math.max(-90, south - dy), Math.min(180, east + dx), Math.min(90, north + dy)];
+}
