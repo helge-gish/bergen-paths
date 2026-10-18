@@ -27,6 +27,7 @@ with tempfile.TemporaryDirectory() as temp:
   print(result,flush=True)
   assert 'PASS: final APK native clock' in result
  finally:
+  print(subprocess.check_output(['adb','logcat','-d','-s','TrakkCoach:I','TextToSpeech:V','TextToSpeechService:V','AndroidRuntime:E'],text=True)[-12000:],flush=True)
   run(['adb','shell','settings','put','secure','tts_default_synth',old])
   run(['adb','shell','input','keyevent','224'])
   run(['adb','shell','input','keyevent','82'])
