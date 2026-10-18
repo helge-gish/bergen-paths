@@ -1,3 +1,4 @@
+import { retainLocalName } from './discoveryNames';
 import type { Coordinate, Trip } from './types';
 import { cleanPoints, distance, project } from './geo';
 import type { Discovery } from './discoveries';
@@ -23,6 +24,6 @@ export function mergeDiscoveries(existing: Discovery[], incoming: Discovery[]) {
   // Retire old unscoped street IDs when their same OSM source is imported with an area ID.
   const replacements = new Set(incoming.filter(i => i.kind === 'street').map(i => i.sourceUrl));
   const merged = new Map(existing.filter(i => !(i.kind === 'street' && i.id.split('/').length === 2 && replacements.has(i.sourceUrl))).map(i => [i.id, i]));
-  for (const item of incoming) merged.set(item.id, item);
+  for (const item of incoming) merged.set(item.id, retainLocalName(merged.get(item.id), item));
   return [...merged.values()];
 }

@@ -15,7 +15,7 @@ test('named fragments become one street with true ends and no duplicate edges', 
 });
 test('end-to-end walking counts in either direction, with completion time', () => {
   const forward = streetProgress(street, [trip(full)]);
-  assert.equal(forward.collected, true); assert.equal(forward.firstVisit, p(10).timestamp);
+  assert.equal(forward.collected, true); assert.equal(forward.firstVisit, p(9).timestamp);
   assert.equal(streetProgress(street, [trip([...full].reverse().map((p, i) => ({ ...p, timestamp: 1000 + i * 10000 })))]).collected, true);
 });
 test('partial walks and multiple separate trips do not collect a whole street', () => {
@@ -64,4 +64,49 @@ test('independent named stair flights group as stairs; a street with a stair sec
   assert.equal(streetProgress(stairs[0],[trip(full.slice(0,3))]).collected,false);
   const mixed = parseStreets({ elements: [way(1,[p(0),p(5)],{highway:'residential'}),way(2,[p(5),p(10)],{highway:'steps'})] },1,'area');
   assert.equal(mixed.length,1);assert.equal(mixed[0].kind,'street');
+});
+
+test('a pause retains observed coverage without inventing a GPS edge across the pause', () => {
+  const points = [...full.slice(0, 6), ...full.slice(5).map(f => ({ ...f, timestamp: f.timestamp + 120000 }))];
+  assert.equal(streetProgress(street, [trip(points)]).collected, true);
+  const missing = [...full.slice(0, 3), ...full.slice(8).map(f => ({ ...f, timestamp: f.timestamp + 120000 }))];
+  const partial = streetProgress(street, [trip(missing)]);
+  assert.equal(partial.collected, false);
+  assert.ok(partial.fraction < .6);
+});
+
+test('one poor fix does not erase earlier walking when the same location is confirmed again', () => {
+  const points = [...full.slice(0, 6), { ...p(5), timestamp: p(5).timestamp + 1000, accuracy: 80 },
+    ...full.slice(5).map(f => ({ ...f, timestamp: f.timestamp + 3000 }))];
+  assert.equal(streetProgress(street, [trip(points)]).collected, true);
+});
+
+test('leaving and returning during one walk retains confirmed sections, but separate trips stay separate', () => {
+  const outside = { ...p(5), longitude: 5.35, timestamp: 70000 };
+  const points = [...full.slice(0, 6), outside, ...full.slice(5).map(f => ({ ...f, timestamp: f.timestamp + 100000 }))];
+  assert.equal(streetProgress(street, [trip(points)]).collected, true);
+});
+
+test('sidewalk endpoints use the same 15 metre tolerance as the rest of the street', () => {
+  const sidewalk = full.map(f => ({ ...f, longitude: f.longitude + .00024 }));
+  assert.equal(streetProgress(street, [trip(sidewalk)]).collected, true);
+});
+
+test('passing an endpoint between GPS fixes counts, without counting a perpendicular crossing', () => {
+  const sidewalk = Array.from({ length: 8 }, (_, i) => ({ ...p(-2 + i * 2), longitude: 5.34023 }));
+  assert.equal(streetProgress(street, [trip(sidewalk)]).collected, true);
+});
+
+test('turning on the sidewalk at junctions does not require walking into the carriageway', () => {
+  // About nine metres short of each centreline junction, six metres to the side.
+  const corners = Array.from({ length: 11 }, (_, i) => ({ ...p(.8 + i * .84), longitude: 5.3401 }));
+  assert.equal(streetProgress(street, [trip(corners)]).collected, true);
+  const tooShort = Array.from({ length: 8 }, (_, i) => p(1.5 + i));
+  assert.equal(streetProgress(street, [trip(tooShort)]).collected, false);
+});
+
+test('end tolerance cannot turn a small middle portion or perpendicular crossing into a whole short street', () => {
+  const short = parseStreets({ elements: [way(1, [p(0), p(2)])] }, 1)[0];
+  assert.equal(streetProgress(short, [trip([p(.9), p(1.1)])]).collected, false);
+  assert.equal(streetProgress(short, [trip(full.map((f, i) => ({ ...f, latitude: p(1).latitude, longitude: 5.339 + i * .0002 })))]).collected, false);
 });

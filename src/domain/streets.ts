@@ -59,7 +59,7 @@ export function parseStreets(data: unknown, fetchedAt: number, scope?: string): 
 export function streetLength(item: Discovery): number {
   return (item.streetPaths ?? [item.geometry]).reduce((sum, path) => sum + path.slice(1).reduce((n, p, i) => n + distance(path[i], p), 0), 0);
 }
-type Sample = { p: Coordinate; a: Coordinate; b: Coordinate; weight: number };
+type Sample = { p: Coordinate; a: Coordinate; b: Coordinate; weight: number; endCaps?: Coordinate[] };
 export function streetProgress(item: Discovery, trips: Trip[]): Progress {
   const work = streetProgressSteps(item, trips);
   let step = work.next();
@@ -83,38 +83,51 @@ export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = f
   const cell = (p: Coordinate) => [Math.floor(p.longitude / 0.001), Math.floor(p.latitude / 0.0005)];
   samples.forEach((s, i) => { const [x, y] = cell(s.p), k = `${x}:${y}`, list = grid.get(k) ?? []; list.push(i); grid.set(k, list); });
   const total = samples.reduce((n, s) => n + s.weight, 0);
-  let best = 0;
+  let best: Progress = { fraction: 0, collected: false, firstVisit: null };
   if (!total) return { fraction: 0, collected: false, firstVisit: null };
+  // The street centreline runs into the middle of a junction; a pedestrian
+  // normally turns on its sidewalk. Allow a bounded terminal cap, never an
+  // extension into interior gaps. The proportional cap protects short streets.
+  const endAllowance = Math.min(12, total * .1);
+  for (const sample of samples) {
+    if (++work % 256 === 0) yield;
+    sample.endCaps = (item.streetEnds ?? []).filter(end => distance(sample.p, end) <= endAllowance);
+  }
   for (const trip of (ordered ? trips : trips.filter(t => t.endedAt !== null).sort((a, b) => a.startedAt - b.startedAt))) {
     let previous: Fix | null = null;
-    let covered = new Set<number>(), ends = new Set<number>(), coveredMeters = 0;
-    const reset = () => { covered = new Set(); ends = new Set(); coveredMeters = 0; };
+    const covered = new Set<number>(), ends = new Set<number>();
+    let coveredMeters = 0;
+    // A rejected fix breaks only the GPS edge. Keep already observed coverage
+    // for this trip, without filling the unobserved gap or combining trips.
     for (const b of (ordered ? trip.points : [...trip.points].sort((a, b) => a.timestamp - b.timestamp))) {
       if (++work % 128 === 0) yield;
-      if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || !Number.isFinite(b.timestamp) || !Number.isFinite(b.accuracy) || b.accuracy < 0 || b.accuracy > 15 || b.timestamp < trip.startedAt || b.timestamp > trip.endedAt! || (b.speed !== null && b.speed > 3.3)) { previous = null; reset(); continue; }
-      if (b.latitude < south - 0.0005 || b.latitude > north + 0.0005 || b.longitude < west - lonMargin || b.longitude > east + lonMargin) { previous = null; reset(); continue; }
+      if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || !Number.isFinite(b.timestamp) || !Number.isFinite(b.accuracy) || b.accuracy < 0 || b.accuracy > 15 || b.timestamp < trip.startedAt || b.timestamp > trip.endedAt! || (b.speed !== null && b.speed > 3.3)) { previous = null; continue; }
+      if (b.latitude < south - 0.0005 || b.latitude > north + 0.0005 || b.longitude < west - lonMargin || b.longitude > east + lonMargin) { previous = null; continue; }
       const a = previous; previous = b;
       if (!a) continue;
       const length = distance(a, b), dt = b.timestamp - a.timestamp;
       if (dt <= 0) continue;
-      if (dt > 20_000 || length > 50 || length / (dt / 1000) > 3.3) { reset(); continue; }
+      if (dt > 20_000 || length > 50 || length / (dt / 1000) > 3.3) { continue; }
       if (length < 1) continue;
       const dx = (b.longitude - a.longitude) * Math.cos(a.latitude * Math.PI / 180), dy = b.latitude - a.latitude;
       const along = (p: Coordinate) => { const x = (p.longitude - a.longitude) * Math.cos(a.latitude * Math.PI / 180), y = p.latitude - a.latitude; return (x * dx + y * dy) / (dx * dx + dy * dy); };
       const [x1, y1] = cell(a), [x2, y2] = cell(b);
       const candidates: number[] = [];
       for (let x = Math.min(x1, x2) - 1; x <= Math.max(x1, x2) + 1; x++) for (let y = Math.min(y1, y2) - 1; y <= Math.max(y1, y2) + 1; y++) candidates.push(...grid.get(`${x}:${y}`) ?? []);
+      let matched = false;
       candidates.forEach(i => { const s = samples[i];
-        if (covered.has(i)) return;
         const sx = (s.b.longitude - s.a.longitude) * Math.cos(a.latitude * Math.PI / 180), sy = s.b.latitude - s.a.latitude;
         const alignment = Math.abs(dx * sx + dy * sy) / Math.hypot(dx, dy) / Math.hypot(sx, sy), f = along(s.p);
-        if (alignment >= Math.SQRT1_2 && f >= -2 / length && f <= 1 + 2 / length && project(s.p, a, b).distance <= 15) { covered.add(i); coveredMeters += s.weight; }
+        const onEdge = f >= -2 / length && f <= 1 + 2 / length;
+        const atEnd = !onEdge && f >= -endAllowance / length && f <= 1 + endAllowance / length && s.endCaps?.some(end => project(end, a, b).distance <= 15);
+        if (alignment >= Math.SQRT1_2 && (onEdge || atEnd) && project(s.p, a, b).distance <= 15) { matched = true; if (!covered.has(i)) { covered.add(i); coveredMeters += s.weight; } }
       });
-      (item.streetEnds ?? []).forEach((p, i) => { if (Math.min(distance(a, p), distance(b, p)) <= 12) ends.add(i); });
+      if (matched) (item.streetEnds ?? []).forEach((p, i) => { if (project(p, a, b).distance <= 15) ends.add(i); });
       const fraction = coveredMeters / total;
-      best = Math.max(best, fraction);
-      if (fraction >= 0.95 && ends.size === (item.streetEnds ?? []).length) return { fraction, collected: true, firstVisit: b.timestamp, earnedTripId: trip.id };
+      const streetCheck = { coveredMeters, totalMeters: total, endsVisited: ends.size, endsTotal: (item.streetEnds ?? []).length };
+      if (fraction >= best.fraction) best = { fraction, collected: false, firstVisit: null, streetCheck };
+      if (fraction >= 0.95 && ends.size === streetCheck.endsTotal) return { fraction, collected: true, firstVisit: b.timestamp, earnedTripId: trip.id, streetCheck };
     }
   }
-  return { fraction: best, collected: false, firstVisit: null };
+  return best;
 }

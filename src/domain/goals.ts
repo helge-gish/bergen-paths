@@ -1,3 +1,4 @@
+import { isUnnamedRoute } from './discoveryGroups';
 import { type Discovery, collectionProgress, kindLabels } from './discoveries';
 import { type HomeArea, inArea } from './areas';
 import type { Trip } from './types';
@@ -8,7 +9,7 @@ export type Goal = { id: string; title: string; description: string; targets: Di
 function fingerprint(value: string) { let hash = 2166136261; for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619); return (hash >>> 0).toString(16); }
 export function areaGoals(area: HomeArea, items: Discovery[], now = Date.now()): Goal[] {
   return (['street', 'steps', 'peak', 'viewpoint', 'hut', 'landmark', 'trail'] as const).flatMap(kind => {
-    const targets = items.filter(i => i.kind === kind && inArea(i, area)).sort((a, b) => a.id.localeCompare(b.id));
+    const targets = items.filter(i => i.kind === kind && !isUnnamedRoute(i) && inArea(i, area)).sort((a, b) => a.id.localeCompare(b.id));
     if (!targets.length) return [];
     const definition = JSON.stringify(targets.map(i => [i.id, i.latitude, i.longitude, i.streetPaths ?? i.geometry]));
     return [{ id: `area-v1-${kind}-${fingerprint(definition)}`, title: `${kindLabels[kind]} · ${area.name}`, description: `Alle ${targets.length} i dette kartutvalget · ${area.radius / 1000} km radius rundt ${area.latitude.toFixed(4)}, ${area.longitude.toFixed(4)}. Gater følges i hele det viste gateområdet.`, targets, createdAt: now }];
