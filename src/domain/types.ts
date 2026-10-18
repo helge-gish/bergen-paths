@@ -7,6 +7,7 @@ export type Fix = Coordinate & {
   speed: number | null;
 };
 export type Trip = {
+  mode?: 'normal' | 'ghost';
   id: string;
   name: string;
   startedAt: number;
@@ -25,3 +26,5 @@ export type Trail = {
 };
 export type Profile = { weightKg: number | null };
 export type Peak = Coordinate & { id: string; name: string; elevation: number; description: string };
+
+export function isGhostTrip(trip: Trip): boolean { return trip.mode ? trip.mode === 'ghost' : trip.ghostId !== null; }

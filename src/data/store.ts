@@ -1,3 +1,5 @@
+import { isGhostTrip } from '../domain/types';
+import { distance } from '../domain/geo';
 import type { Fix, Profile, Trail, Trip } from '../domain/types';
 import { trailReference } from '../domain/trailReference';
 import { cleanPoints } from '../domain/geo';
@@ -21,17 +23,21 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 PRAGMA user_version = 1;
 `;
 const id = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+export type SegmentWindow = { from: number; count: number; lastTrailId: string | null };
 type Row = Omit<Trip, 'points' | 'audioEnabled'> & { audioEnabled: number };
 export function createStore(db: Database) {
   db.execSync(SCHEMA);
-  const hydrate = (row: Row): Trip => ({ ...row, audioEnabled: !!row.audioEnabled, points: db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix) });
+  const hydrate = (row: Row): Trip => ({ ...row, mode: store.setting<'normal' | 'ghost'>(`mode:${row.id}`, row.ghostId ? 'ghost' : 'normal'), audioEnabled: !!row.audioEnabled, points: db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix) });
   const store = {
     active(): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE endedAt IS NULL'); return r ? hydrate(r) : null; },
     getTrip(tripId: string): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE id = ?', tripId); return r ? hydrate(r) : null; },
     trips(): Trip[] { return db.getAllSync<Row>('SELECT * FROM trips WHERE endedAt IS NOT NULL ORDER BY startedAt DESC').map(hydrate); },
     begin(ghostId: string | null, audioEnabled: boolean, now = Date.now()) {
       const tripId = id();
-      db.runSync('INSERT INTO trips VALUES (?, ?, ?, NULL, ?, ?, ?)', tripId, 'Tur i Byfjellene', now, ghostId, audioEnabled ? 1 : 0, now);
+      db.withTransactionSync(() => {
+        db.runSync('INSERT INTO trips VALUES (?, ?, ?, NULL, ?, ?, ?)', tripId, 'Tur i Byfjellene', now, ghostId, audioEnabled ? 1 : 0, now);
+        store.setSetting(`mode:${tripId}`, ghostId ? 'ghost' : 'normal');
+      });
       return store.getTrip(tripId)!;
     },
     append(tripId: string, points: Fix[]) {
@@ -48,19 +54,55 @@ export function createStore(db: Database) {
         const trip = store.getTrip(tripId);
         if (!trip) return;
         if (trip.endedAt === null) throw new Error('Avslutt turen før du sletter den.');
+        db.runSync("INSERT OR IGNORE INTO settings SELECT 'mode:' || id, ? FROM trips WHERE ghostId = ? OR ghostId IN (SELECT 'trail:' || id FROM trails WHERE tripId = ?)", JSON.stringify('ghost'), tripId, tripId);
         db.runSync("UPDATE trips SET ghostId = NULL WHERE ghostId = ? OR ghostId IN (SELECT 'trail:' || id FROM trails WHERE tripId = ?)", tripId, tripId);
         db.runSync('DELETE FROM trails WHERE tripId = ?', tripId);
         deleted = db.runSync('DELETE FROM trips WHERE id = ?', tripId).changes === 1;
+        db.runSync('DELETE FROM settings WHERE key IN (?, ?)', `segments:${tripId}`, `mode:${tripId}`);
         // Rebuild collection stamps from the remaining history on the next snapshot.
         store.setSetting('osmAwards', {});
       });
       return deleted;
     },
-    cancelEmpty(tripId: string) { db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId); },
+    cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?)', `segments:${tripId}`, `mode:${tripId}`); }); },
     rename(tripId: string, name: string) { const value = name.trim().slice(0, 80); if (!value) throw new Error('Gi turen et navn først.'); db.runSync('UPDATE trips SET name = ? WHERE id = ?', value, tripId); },
     setAudio(tripId: string, enabled: boolean) { db.runSync('UPDATE trips SET audioEnabled = ? WHERE id = ?', enabled ? 1 : 0, tripId); },
     claimCue(tripId: string, now: number) { return db.runSync('UPDATE trips SET lastCueAt = ? WHERE id = ? AND endedAt IS NULL AND audioEnabled = 1 AND lastCueAt <= ?', now, tripId, now - 60_000).changes === 1; },
     trails(): Trail[] { return db.getAllSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails ORDER BY createdAt DESC').map(r => ({ ...r, points: JSON.parse(r.points) })); },
+    segmentWindow(tripId: string): SegmentWindow {
+      const trip = db.getFirstSync<Row>('SELECT * FROM trips WHERE id = ?', tripId);
+      if (!trip) throw new Error('Turen finnes ikke lenger.');
+      return store.setting<SegmentWindow>(`segments:${tripId}`, { from: trip.startedAt, count: 0, lastTrailId: null });
+    },
+    setSegmentStart(tripId: string, now = Date.now()) {
+      const trip = store.getTrip(tripId);
+      if (!trip || trip.endedAt !== null || isGhostTrip(trip)) throw new Error('Stisegmenter kan bare klippes under en vanlig tur.');
+      const last = cleanPoints(trip.points.filter(p => p.timestamp <= now)).at(-1);
+      if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du setter startpunkt.');
+      store.setSetting(`segments:${tripId}`, { ...store.segmentWindow(tripId), from: last.timestamp });
+    },
+    clipSegment(tripId: string, now = Date.now()): Trail {
+      let saved: Trail | undefined;
+      db.withTransactionSync(() => {
+        const trip = store.getTrip(tripId);
+        if (!trip || trip.endedAt !== null || isGhostTrip(trip)) throw new Error('Stisegmenter kan bare klippes under en vanlig tur.');
+        const window = store.segmentWindow(tripId);
+        const points = cleanPoints(trip.points.filter(p => p.timestamp >= window.from && p.timestamp <= now));
+        const last = points.at(-1);
+        if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du lagrer stien.');
+        const meters = points.slice(1).reduce((n, p, i) => n + distance(points[i], p), 0);
+        if (points.length < 2 || meters < 10) throw new Error('Gå litt lenger før du lagrer neste stisegment.');
+        saved = { id: id(), tripId, name: `Sti ${window.count + 1} · ${new Date(now).toLocaleDateString('nb-NO')}`, createdAt: now, points };
+        db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', saved.id, tripId, saved.name, now, JSON.stringify(points));
+        store.setSetting(`segments:${tripId}`, { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id });
+      });
+      return saved!;
+    },
+    renameTrail(trailId: string, name: string) {
+      const value = name.trim().slice(0, 80);
+      if (!value) throw new Error('Gi stien et navn først.');
+      db.runSync('UPDATE trails SET name = ? WHERE id = ?', value, trailId);
+    },
     getReference(referenceId: string): Trip | null {
       if (!referenceId.startsWith('trail:')) return store.getTrip(referenceId);
       const trail = db.getFirstSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails WHERE id = ?', referenceId.slice(6));
@@ -68,6 +110,7 @@ export function createStore(db: Database) {
     },
     saveTrail(tripId: string, name: string, from: number, to: number): Trail {
       const trip = store.getTrip(tripId);
+      if (trip && isGhostTrip(trip)) throw new Error('En skyggetur kan ikke klippes til stisegmenter.');
       if (!trip || trip.endedAt === null) throw new Error('Avslutt turen før du lagrer en sti.');
       if (!name.trim()) throw new Error('Gi stien et navn.');
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < trip.startedAt || to > trip.endedAt || to <= from) throw new Error('Velg et gyldig tidsrom innenfor turen.');

@@ -96,3 +96,47 @@ test('saved trail is a persistent ghost with its own start and pauses, and delet
   assert.equal(reopened.getReference(ref), null); assert.equal(reopened.getTrip(active.id)?.ghostId, null);
   raw.close();
 });
+test('normal recording saves consecutive segments with a shared boundary and survives restart', () => {
+  const { store, db, raw } = database(); const trip = store.begin(null, false, 1000);
+  const points = Array.from({ length: 5 }, (_, i) => ({ ...point, timestamp: 1000 + i * 10000, latitude: point.latitude + i * .0001 }));
+  store.append(trip.id, points.slice(0, 3));
+  const first = store.clipSegment(trip.id, 21000);
+  const reopened = createStore(db);
+  reopened.append(trip.id, points.slice(3));
+  const second = reopened.clipSegment(trip.id, 41000);
+  assert.equal(first.points.length, 3); assert.equal(second.points.length, 3);
+  assert.deepEqual(first.points.at(-1), second.points[0]);
+  assert.equal(reopened.active()?.id, trip.id); assert.equal(reopened.active()?.points.length, 5);
+  assert.equal(reopened.segmentWindow(trip.id).from, 41000);
+  assert.equal(reopened.segmentWindow(trip.id).lastTrailId, second.id);
+  reopened.renameTrail(second.id, '  Skogsstien  '); assert.equal(reopened.trails().find(t => t.id === second.id)?.name, 'Skogsstien');
+  assert.throws(() => reopened.clipSegment(trip.id, 41000), /lenger/);
+  assert.equal(reopened.segmentWindow(trip.id).count, 2); raw.close();
+});
+test('setting a start skips transport and stale GPS or a failed insert cannot move the cut', () => {
+  const { store, raw } = database(); const trip = store.begin(null, false, 1000);
+  const points = Array.from({ length: 5 }, (_, i) => ({ ...point, timestamp: 1000 + i * 10000, latitude: point.latitude + i * .0001 }));
+  store.append(trip.id, points.slice(0, 3)); store.setSegmentStart(trip.id, 21000);
+  store.append(trip.id, points.slice(3));
+  assert.throws(() => store.clipSegment(trip.id, 100000), /ferskt/);
+  assert.equal(store.segmentWindow(trip.id).from, 21000);
+  raw.exec("CREATE TRIGGER fail_clip BEFORE INSERT ON trails BEGIN SELECT RAISE(ABORT, 'test clip failure'); END");
+  assert.throws(() => store.clipSegment(trip.id, 41000), /test clip failure/);
+  assert.equal(store.segmentWindow(trip.id).count, 0); assert.equal(store.segmentWindow(trip.id).from, 21000);
+  raw.exec('DROP TRIGGER fail_clip');
+  const trail = store.clipSegment(trip.id, 41000);
+  assert.equal(trail.points[0].timestamp, 21000); assert.equal(trail.points.at(-1)?.timestamp, 41000);
+  raw.close();
+});
+test('ghost mode forbids cuts even when its reference has been deleted', () => {
+  const { store, raw } = database(); const reference = store.begin(null, false, 1000); store.finish(reference.id, 2000);
+  const trip = store.begin(reference.id, false, 3000);
+  store.append(trip.id, [{ ...point, timestamp: 3000 }, { ...point, latitude: 60.3902, timestamp: 23000 }]);
+  store.deleteTrip(reference.id);
+  assert.equal(store.active()?.mode, 'ghost'); assert.equal(store.active()?.ghostId, null);
+  assert.throws(() => store.clipSegment(trip.id, 23000), /vanlig tur/);
+  assert.throws(() => store.setSegmentStart(trip.id, 23000), /vanlig tur/);
+  store.finish(trip.id, 24000);
+  assert.throws(() => store.saveTrail(trip.id, 'Ulovlig klipp', 3000, 23000), /skyggetur/);
+  assert.equal(store.trails().length, 0); raw.close();
+});

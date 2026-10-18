@@ -82,6 +82,7 @@ try:
         db.close()
     launch()
     find('DEG MOT DEG')
+    assert not any('Lagre sti hit' in (n.get('text', '') + n.get('content-desc', '')) for n in context['screen']().iter('node')), 'Clipping controls leaked into ghost mode'
     find('Teststi')
     tap('Avslutt og lagre tur')
     tap('Avslutt og lagre')
