@@ -124,7 +124,7 @@ try:
     else:
         adb('install','-r','android/app/build/outputs/apk/release/app-release.apk');launch()
     seed_large_area()
-    if old.exists():
+    if old.exists() and os.environ.get('TRAKK_SKIP_BASELINE') != '1':
         try:
             launch();navigation_check()
         except Exception as e: print('BASELINE large-area responsiveness failure:',e,flush=True)

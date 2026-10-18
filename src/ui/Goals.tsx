@@ -54,7 +54,7 @@ function GoalCard({ goal, active, trips, expanded, onToggle, onExpand }: { goal:
     <Text style={s.eyebrow}>{active ? collected !== null && goal.targets.length > 0 && collected === goal.targets.length ? 'MÅL OPPNÅDD' : 'DITT MÅL' : 'FORSLAG'}</Text>
     <Text style={s.subheading}>{goal.title}</Text>
     <Text style={s.heading}>{goal.needsRefresh ? 'Kartgrunnlaget er endret' : collected === null ? 'Sjekker turene …' : `${collected} / ${goal.targets.length}`}</Text>
-    <Text style={s.body}>{goal.needsRefresh ? 'Dette målet brukte den gamle sti-inndelingen. Hent nye målforslag og aktiver en oppdatert utgave. Turene dine er beholdt.' : goal.description}</Text>
+    <Text style={s.body}>{goal.needsRefresh ? 'Dette målet brukte den gamle inndelingen av stier og gater. Hent nye målforslag og aktiver en oppdatert utgave. Turene dine er beholdt.' : goal.description}</Text>
     <Button secondary title={active ? 'Deaktiver mål' : 'Aktiver som mitt mål'} onPress={onToggle} />
     <Pressable accessibilityRole="button" onPress={onExpand}><Text style={s.small}>{expanded ? 'Skjul innhold' : 'Se hva målet inneholder'}</Text></Pressable>
     {expanded && <Text style={s.small}>{goal.targets.map(t => t.name).join(' · ')}</Text>}

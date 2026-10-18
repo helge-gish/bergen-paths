@@ -5,10 +5,11 @@ import { refreshMapClassification } from '../src/services/mapClassification';
 
 test('classification upgrade retires derived fragment awards without editing personal tracks or saved trails', () => {
   const legacy = { id: 'way/1', kind: 'trail', name: 'Gutenbergsveien' };
+  const oldStreet = { id: 'street/old', kind: 'street', name: 'Old street without pedestrian parts' };
   const peak = { id: 'node/2', kind: 'peak', name: 'Toppen' };
   const goal = { id: 'old', targets: [legacy] };
   const settings = new Map<string, unknown>([
-    ['osmDiscoveries',[legacy,peak]], ['osmAwards',{'way/1':10,'node/2':20}],
+    ['osmDiscoveries',[legacy,oldStreet,peak]], ['osmAwards',{'way/1':10,'street/old':15,'node/2':20}],
     ['goals',[goal]], ['goalCatalog',[goal]], ['surveyCache',{points:{tile:123}}],
   ]);
   const store = { setting: (key: string, fallback: unknown) => settings.get(key) ?? fallback, setSetting: (key: string, value: unknown) => settings.set(key,value) } as unknown as Store;
