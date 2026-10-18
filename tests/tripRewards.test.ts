@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { collectionProgress, type Discovery } from '../src/domain/discoveries';
+import { nameDiscovery } from '../src/domain/discoveryNames';
 import { tripRewards } from '../src/domain/tripRewards';
 import type { Fix, Trip } from '../src/domain/types';
 const p = (i: number, time: number): Fix => ({ latitude: 60.39 + i * .0001, longitude: 5.34, timestamp: time, accuracy: 3, speed: 1, altitude: null, altitudeAccuracy: null });
@@ -46,4 +47,29 @@ test('distance milestones are attributed to the crossing walk, not every later w
   assert.equal(tripRewards(a,[a,b,c],[],{}).milestones.length,0);
   assert.ok(tripRewards(b,[a,b,c],[],{}).milestones.some(m=>m.id==='distance-1'));
   assert.equal(tripRewards(c,[a,b,c],[],{}).milestones.length,0);
+});
+
+
+test('unnamed routes remain recorded but do not earn collection milestones or crowd new finds', () => {
+  const a = walk('a', 0, 20, 1000);
+  const unnamed = Array.from({ length: 20 }, (_, i) => ({ ...path, id: `way/${i}`, name: 'Sti uten navn' }));
+  const progress = collectionProgress(unnamed, [a]);
+  assert.equal(Object.values(progress).filter(p => p.collected).length, 20);
+  const result = tripRewards(a, [a], unnamed, progress);
+  assert.equal(result.newFinds.length, 0);
+  assert.equal(result.xp, 0);
+  assert.equal(result.milestones.length, 0);
+});
+
+
+test('a local name promotes only walked routes and renaming cannot duplicate a find', () => {
+  const a = walk('a', 0, 20, 1000);
+  const unnamed = { ...path, name: 'Sti uten navn' };
+  const items = nameDiscovery([unnamed], path.id, 'Hagestien');
+  const progress = collectionProgress(items, [a]);
+  assert.equal(tripRewards(a, [a], items, progress).newFinds.length, 1);
+  const renamed = nameDiscovery(items, path.id, 'Den lille hagestien');
+  assert.equal(tripRewards(a, [a], renamed, progress).newFinds.length, 1);
+  const partial = walk('b', 0, 2, 1000);
+  assert.equal(tripRewards(partial, [partial], items, collectionProgress(items, [partial])).newFinds.length, 0);
 });

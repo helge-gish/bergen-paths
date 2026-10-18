@@ -41,7 +41,10 @@ try:
         for id, name, a, b in [('north','Testgate nord',0,60),('south','Testgate sør',60,120)]:
             geometry=[dict(latitude=points[i]['latitude'],longitude=points[i]['longitude']) for i in [a,b]]
             streets.append(dict(id='street/fixture/'+id,name=name,kind='street',**geometry[0],geometry=geometry,streetPaths=[geometry],streetEnds=geometry,sourceUrl='',fetchedAt=now))
-        setting('osmDiscoveries', [target]+streets)
+        geometry=[dict(latitude=points[i]['latitude'],longitude=points[i]['longitude']) for i in [0,20]]
+        anonymous=[dict(id='way/99900101',name='Sti uten navn',kind='trail',**geometry[0],geometry=geometry,sourceUrl='',fetchedAt=now),
+                   dict(id='way/99900102',name='Trapp',kind='steps',**geometry[0],geometry=geometry,streetPaths=[geometry],streetEnds=geometry,sourceUrl='',fetchedAt=now)]
+        setting('osmDiscoveries', [target]+streets+anonymous)
         setting('goalCatalog', [goal])
         setting('goals', [])
         # Prevent a fixture test from depending on live OSM. Real network checks are separate.
@@ -97,7 +100,23 @@ try:
         subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
     tap('Lukk'); tap('Deg'); tap('Åpne samlingen min')
     find('Dine funn · 3'); find('✓ Testgate nord'); find('✓ Testgate sør')
+    find('Stier og trapper uten navn · 2')
+    tap('Åpne stier og trapper uten navn')
+    tap('Gi et Tråkk-navn')
+    tap('Tråkk-navn'); adb('shell','input','text','Naerstien'); adb('shell','input','keyevent','4')
+    tap('Lagre Tråkk-navn')
+    tap('Lukk'); tap('Åpne samlingen min')
+    find('Dine funn · 4'); find('✓ Naerstien')
+    with open('/tmp/trakk-names.png','wb') as output:
+        subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
+    tap('Vis Naerstien på kartet')
+    find('Naerstien · markert i korall · Lukk ×')
+    adb('shell','am','force-stop',PACKAGE)
+    launch(); tap('Deg'); tap('Åpne samlingen min')
+    find('Dine funn · 4'); find('✓ Naerstien')
     tap('Lukk'); tap('Turlogg'); tap('Milepaeltest')
+    find('Nye funn · 4'); find('✓ Naerstien')
+    print('PASS: unnamed paths/stairs group separately; naming promotes one find, persists and opens its map',flush=True)
     print('PASS: per-trip named street awards and milestones; collection under Deg defaults to earned finds',flush=True)
     tap('Slett tur'); tap('Slett tur')
     tap('Deg')

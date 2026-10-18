@@ -57,3 +57,10 @@ Navigation is Utforsk, Turlogg, Deg. The profile opens separate Samlingen min an
 Trip details show newly earned targets, repeat visits/partial coverage, newly crossed distance/ascent/collection milestones and progress in active goals. Awards are attributed to the completing GPS track, even if map data arrives later; cumulative trails use their threshold-crossing time rather than their earliest partial visit. Deleting evidence recomputes attribution.
 
 Finished tracks and immutable map definitions keep their identity across status refreshes. Calculation is cooperative, reports partial progress, retains previous results, catches errors with retry, rejects distant geometry before detailed matching and reuses completed results while navigating. The Android large-area test now requires calculation to actually finish, then backgrounds/foregrounds the app to check that unchanged input does not restart it.
+
+
+### Lokale navn og senere felles kartlegging (0.3.3)
+
+Navnløse stier og trapper grupperes som ekstra spor. Brukeren kan gi dem et lokalt Tråkk-navn, slik at faktisk gjennomgåtte ruter får en navngitt plass i samlingen. Navn beholdes ved OSM-oppdatering, men endrer ikke kilden. Offisielle OSM-navn er låst og tar over dersom en navnløs rute får offisielt navn senere. Delte navn er ennå ikke implementert.
+
+Retning for sosial navngiving: første bruker foreslår et navn som kan tas i bruk. Andre må kunne foreslå rettelser, alternative lokale navn og rapportere misbruk; navnet låses ikke permanent til førstemann. OSM-navn og Tråkk-navn må ha tydelig kilde, historikk og en felles objektidentitet. Dette trenger server, synkronisering og moderering sammen med den sosiale delen. Ingen deling skjer i denne versjonen.

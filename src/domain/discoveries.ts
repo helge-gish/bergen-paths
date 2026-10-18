@@ -12,8 +12,11 @@ export type Discovery = Coordinate & {
   sourceUrl: string;
   fetchedAt: number;
   osmHighway?: string;
+  unnamed?: boolean;
+  localName?: string;
+  osmName?: string;
 };
-export type Progress = { fraction: number; collected: boolean; firstVisit: number | null; earnedTripId?: string };
+export type Progress = { fraction: number; collected: boolean; firstVisit: number | null; earnedTripId?: string; streetCheck?: { coveredMeters: number; totalMeters: number; endsVisited: number; endsTotal: number } };
 export const kindLabels: Record<DiscoveryKind, string> = { street: 'Gater', trail: 'Stier', steps: 'Trapper', peak: 'Topper', viewpoint: 'Utsiktspunkter', hut: 'Hytter og ly', landmark: 'Landemerker', water: 'Vann og kilder', picnic: 'Rasteplasser' };
 function sampleLine(points: Coordinate[], spacing = 20): Coordinate[] {
   const result: Coordinate[] = points.length ? [points[0]] : [];
@@ -162,7 +165,8 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     const longitude = e.lon ?? e.center?.lon ?? geometry[0]?.longitude;
     if (latitude === undefined || longitude === undefined || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
     const fallback: Record<DiscoveryKind, string> = { street: 'Gate uten navn', trail: 'Sti uten navn', steps: 'Trapp', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
-    items.push({ id: `${e.type}/${e.id}`, name: (t['name:nb'] ?? t.name ?? fallback[kind]).slice(0, 100), kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway, ...(kind === 'steps' ? { streetPaths: [geometry], streetEnds: [geometry[0], geometry.at(-1)!] } : {}) });
+    const mappedName = t['name:nb']?.trim() || t.name?.trim();
+    items.push({ id: `${e.type}/${e.id}`, name: (mappedName || fallback[kind]).slice(0, 100), unnamed: !mappedName, kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway, ...(kind === 'steps' ? { streetPaths: [geometry], streetEnds: [geometry[0], geometry.at(-1)!] } : {}) });
   }
   return items;
 }
