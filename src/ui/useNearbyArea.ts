@@ -32,7 +32,7 @@ export function useNearbyArea() {
       const permission = await Location.getForegroundPermissionsAsync();
       if (token !== generation.current) return;
       if (!permission.granted) { clearTimeout(timeout.current); setPending(false); setStatus('Tillat posisjon for å finne området rundt deg.'); return; }
-      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 0 }, p => { if (token === generation.current) accept(p); });
+      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 0, mayShowUserSettingsDialog: false }, p => { if (token === generation.current) accept(p); });
       if (token === generation.current) watch.current = sub; else sub.remove();
     } catch {
       if (token === generation.current) { clearTimeout(timeout.current); setPending(false); setStatus('Kan ikke finne posisjonen. Sjekk posisjonstilgangen og prøv igjen.'); }
