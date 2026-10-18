@@ -1,3 +1,4 @@
+import { MilestoneMedals } from './MilestoneMedals';
 import { RouteNameEditor } from './RouteNameEditor';
 import { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -18,10 +19,10 @@ export function TripRewards({ trip, trips, items, progress, visited, pending, sy
     {(pending || visited.pending) && <Text accessibilityLiveRegion="polite" style={s.small}>Sjekker turens funn … {visited.processed} av {visited.total}. Funnene vises underveis.</Text>}
     {syncPending && <Text style={s.small}>Noen kartdata mangler ennå. Funn kan komme til senere; turen er lagret.</Text>}
     {(error || visited.error) && <Text style={s.small}>Funnene er ikke ferdig sjekket. Se status og prøv igjen i Deg → Samlingen min.</Text>}
+    <MilestoneMedals milestones={rewards.milestones} xp={rewards.xp} levelBefore={rewards.levelBefore} levelAfter={rewards.levelAfter} />
     <Text style={s.subheading}>Nye funn · {rewards.newFinds.length}</Text>
     <DiscoveryRows items={rewards.newFinds} renderItem={item => <View key={item.id}><Pressable accessibilityRole="button" onPress={() => onMap(item)} style={{ paddingVertical: 10 }}><Text style={s.subheading}>✓ {item.name}</Text><Text style={s.small}>{kindLabels[item.kind]} · Ny i samlingen · Vis på kartet →</Text></Pressable><RouteNameEditor item={item} onRename={onRename} /></View>} />
     {!rewards.newFinds.length && !pending && !error && <Text style={s.body}>{syncPending ? 'Ingen nye funn bekreftet ennå.' : 'Ingen nye samleobjekter på denne turen. Distanse og høydemeter teller fortsatt.'}</Text>}
-    {rewards.milestones.length > 0 && <><Text style={s.subheading}>Nye milepæler</Text>{rewards.milestones.map(m => <Text key={m.id} style={s.body}>★ {m.title} · +{m.xp} XP</Text>)}<Text style={s.body}>+{rewards.xp} XP{rewards.levelAfter > rewards.levelBefore ? ` · Nivå ${rewards.levelAfter}!` : ''}</Text></>}
     {goals.filter(g => !g.needsRefresh).map(goal => <TripGoal key={goal.id} goal={goal} trip={trip} trips={trips} />)}
     {other.length > 0 && <><Text style={s.subheading}>Også på denne turen</Text><DiscoveryRows items={other} renderItem={item => <View key={item.id}><Pressable accessibilityRole="button" onPress={() => onMap(item)} style={{ paddingVertical: 8 }}><Text style={s.body}>{item.name}</Text><Text style={s.small}>{visited.progress[item.id].collected ? needsDiscoveryName(item) ? 'Registrert på turen' : 'Gått / besøkt igjen' : routeProgressLabel(visited.progress[item.id])} · Vis på kartet →</Text></Pressable><RouteNameEditor item={item} onRename={onRename} /></View>} /></>}
   </View>;

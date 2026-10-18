@@ -291,9 +291,9 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
           <Button title={busy ? 'Lagrer …' : 'Avslutt og lagre tur'} icon="check" onPress={finish} disabled={busy} />
         </> : <>
           <Button title={busy ? 'Et lite øyeblikk …' : 'Start en tur'} icon="arrow" onPress={() => { setStartName(''); setStartNames([defaultTripName(Date.now())]); setModal('start'); }} disabled={busy} />
-          <Pressable accessibilityRole="button" onPress={() => { setTab('profile'); setModal('collection'); }} style={s.card}><Text style={s.subheading}>Samlingen min →</Text><Text style={s.body}>Alle turer teller · {data.goals.length} aktive mål · {findCount} stempler</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => { setTab('profile'); setModal('collection'); }} style={s.card}><Text style={s.subheading}>Samlingen min →</Text><Text style={s.body}>Alle turer teller · {data.goals.length} aktive mål · {findCount} funn</Text></Pressable>
         </>}
-        {data.trails.length > 0 && <><Text style={s.heading}>Dine Tråkk-stier</Text>{data.trails.map(trail => <Pressable key={trail.id} accessibilityRole="button" accessibilityLabel={`Åpne sti: ${trail.name}`} onPress={() => openTrail(trail)} style={[s.card, s.between]}><View style={{ flex: 1 }}><Text style={s.subheading}>{trail.name}</Text><Text style={s.small}>Ditt navn · lagret {date(trail.createdAt)}</Text></View><Icon name="arrow" /></Pressable>)}</>}
+        {data.trails.length > 0 && <><Text style={s.heading}>Dine lagrede ruter</Text>{data.trails.map(trail => <Pressable key={trail.id} accessibilityRole="button" accessibilityLabel={`Åpne sti: ${trail.name}`} onPress={() => openTrail(trail)} style={[s.card, s.between]}><View style={{ flex: 1 }}><Text style={s.subheading}>{trail.name}</Text><Text style={s.small}>Lagret fra en tur · {date(trail.createdAt)}</Text></View><Icon name="arrow" /></Pressable>)}</>}
       </>}
 
       {tab === 'history' && <>
@@ -305,7 +305,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
 
       {tab === 'profile' && <>
         <Text style={s.eyebrow}>LITT OM DEG OG TURENE DINE</Text><Text style={s.title}>Ditt eget tempo.</Text>
-        <View style={[s.card, s.row]}><Metric value={`${Math.floor(totals.elapsed / 3_600_000)} t`} label="ute på tur" /><Metric value={`${data.trails.length}`} label="navngitte stier" /><Metric value={`${findCount}`} label="stempler" /></View>
+        <View style={[s.card, s.row]}><Metric value={`${Math.floor(totals.elapsed / 3_600_000)} t`} label="ute på tur" /><Metric value={`${data.trails.length}`} label="lagrede ruter" /><Metric value={`${findCount}`} label="funn" /></View>
         <Button accessibilityLabel="Åpne samlingen min" secondary title={`Samlingen min · ${findCount} funn`} icon="check" onPress={() => setModal('collection')} />
         <Button accessibilityLabel="Åpne mine mål" secondary title={`Mine mål · ${data.goals.length} aktive`} icon="mountain" onPress={() => setModal('goals')} />
         <Avatar trips={data.trips} collected={findCount} color={data.avatarColor} onColor={color => { getStore().setSetting('avatarColor', color); setData(previous => ({ ...previous, avatarColor: color })); }} />

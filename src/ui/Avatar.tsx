@@ -34,6 +34,6 @@ export function Avatar({ trips, collected, color, onColor }: { trips: Trip[]; co
     {next.map(m => <Text key={m.id} style={s.body}>{m.title} · {Math.min(m.target, m.value).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} / {m.target} · {m.xp} XP</Text>)}
     <Pressable accessibilityRole="button" onPress={() => setShowAll(!showAll)}><Text style={s.chipText}>{showAll ? 'Skjul' : 'Vis'} oppnådde milepæler ({progress.milestones.filter(m => m.earned).length})</Text></Pressable>
     {showAll && progress.milestones.filter(m => m.earned).map(m => <Text key={m.id} style={s.body}>✓ {m.title} · {m.xp} XP</Text>)}
-    <Text style={s.small}>Hver milepæl gir XP én gang. Nivå og utstyr følger de lagrede turene og stemplene dine, og beregnes på nytt ved sletting av turer.</Text>
+    <Text style={s.small}>Hver milepæl gir XP én gang. Nivå og utstyr følger de lagrede turene og funnene dine, og beregnes på nytt ved sletting av turer.</Text>
   </View>;
 }
