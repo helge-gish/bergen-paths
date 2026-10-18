@@ -10,9 +10,7 @@ import { DiscoveryRows } from './DiscoveryRows';
 import { needsDiscoveryName, routeProgressLabel } from '../domain/discoveryGroups';
 import { colors, styles as s } from './theme';
 
-export function TripRewards({ trip, trips, items, progress, pending, syncPending, error, goals, onMap, onRename }: { trip: Trip; trips: Trip[]; items: Discovery[]; progress: Record<string, Progress>; pending: boolean; syncPending: boolean; error: string | null; goals: Goal[]; onMap: (item: Discovery) => void; onRename: (item: Discovery, name: string) => void }) {
-  const ownTrip = useMemo(() => [trip], [trip]);
-  const visited = useCollectionProgress(items, ownTrip);
+export function TripRewards({ trip, trips, items, progress, visited, pending, syncPending, error, goals, onMap, onRename }: { trip: Trip; trips: Trip[]; items: Discovery[]; progress: Record<string, Progress>; visited: ReturnType<typeof useCollectionProgress>; pending: boolean; syncPending: boolean; error: string | null; goals: Goal[]; onMap: (item: Discovery) => void; onRename: (item: Discovery, name: string) => void }) {
   const rewards = useMemo(() => tripRewards(trip, trips, items, progress), [trip, trips, items, progress]);
   const other = items.filter(i => !rewards.newFinds.some(n => n.id === i.id) && visited.progress[i.id]?.fraction > 0);
   return <View style={[s.card, { borderColor: colors.ink }]}>

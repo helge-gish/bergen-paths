@@ -39,7 +39,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     }
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
-export async function startTracking(ghostId: string | null, audioEnabled: boolean) {
+export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string) {
   if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg en annen sti eller tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
   const foreground = await Location.requestForegroundPermissionsAsync();
@@ -53,7 +53,8 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
     // needs a separate permission. Denying notifications must not discard a trip.
     await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
   }
-  const store = getStore(), trip = store.begin(ghostId, audioEnabled);
+  const store = getStore(), trip = store.begin(ghostId, audioEnabled, Date.now(), name);
+  if (suggestion) store.suggestName(trip.id, suggestion);
   store.setSetting('trackingError', null);
   store.setSetting('audioError', null);
   try {

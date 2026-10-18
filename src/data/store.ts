@@ -1,3 +1,4 @@
+import { defaultTripName } from '../domain/tripNames';
 import { isGhostTrip } from '../domain/types';
 import { distance } from '../domain/geo';
 import type { Fix, Profile, Trail, Trip } from '../domain/types';
@@ -41,11 +42,12 @@ export function createStore(db: Database) {
       if (key !== completedKey) { completedTrips = rows.map(hydrate); completedKey = key; }
       return completedTrips;
     },
-    begin(ghostId: string | null, audioEnabled: boolean, now = Date.now()) {
+    begin(ghostId: string | null, audioEnabled: boolean, now = Date.now(), name?: string) {
       const tripId = id();
       db.withTransactionSync(() => {
-        db.runSync('INSERT INTO trips VALUES (?, ?, ?, NULL, ?, ?, ?)', tripId, 'Tur i Byfjellene', now, ghostId, audioEnabled ? 1 : 0, now);
+        db.runSync('INSERT INTO trips VALUES (?, ?, ?, NULL, ?, ?, ?)', tripId, name?.trim().slice(0, 80) || defaultTripName(now), now, ghostId, audioEnabled ? 1 : 0, now);
         store.setSetting(`mode:${tripId}`, ghostId ? 'ghost' : 'normal');
+        store.setSetting(`automaticName:${tripId}`, !name?.trim());
       });
       return store.getTrip(tripId)!;
     },
@@ -67,14 +69,15 @@ export function createStore(db: Database) {
         db.runSync("UPDATE trips SET ghostId = NULL WHERE ghostId = ? OR ghostId IN (SELECT 'trail:' || id FROM trails WHERE tripId = ?)", tripId, tripId);
         db.runSync('DELETE FROM trails WHERE tripId = ?', tripId);
         deleted = db.runSync('DELETE FROM trips WHERE id = ?', tripId).changes === 1;
-        db.runSync('DELETE FROM settings WHERE key IN (?, ?)', `segments:${tripId}`, `mode:${tripId}`);
+        db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`);
         // Rebuild collection stamps from the remaining history on the next snapshot.
         store.setSetting('osmAwards', {});
       });
       return deleted;
     },
-    cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?)', `segments:${tripId}`, `mode:${tripId}`); }); },
-    rename(tripId: string, name: string) { const value = name.trim().slice(0, 80); if (!value) throw new Error('Gi turen et navn først.'); db.runSync('UPDATE trips SET name = ? WHERE id = ?', value, tripId); },
+    cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`); }); },
+    rename(tripId: string, name: string) { const value = name.trim().slice(0, 80); if (!value) throw new Error('Gi turen et navn først.'); db.withTransactionSync(() => { db.runSync('UPDATE trips SET name = ? WHERE id = ?', value, tripId); store.setSetting(`automaticName:${tripId}`, false); }); },
+    suggestName(tripId: string, name: string) { if (name.trim() && store.setting(`automaticName:${tripId}`, false)) db.runSync('UPDATE trips SET name = ? WHERE id = ?', name.trim().slice(0, 80), tripId); },
     setAudio(tripId: string, enabled: boolean) { db.runSync('UPDATE trips SET audioEnabled = ? WHERE id = ?', enabled ? 1 : 0, tripId); },
     claimCue(tripId: string, now: number) { return db.runSync('UPDATE trips SET lastCueAt = ? WHERE id = ? AND endedAt IS NULL AND audioEnabled = 1 AND lastCueAt <= ?', now, tripId, now - 60_000).changes === 1; },
     trails(): Trail[] { return db.getAllSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails ORDER BY createdAt DESC').map(r => ({ ...r, points: JSON.parse(r.points) })); },

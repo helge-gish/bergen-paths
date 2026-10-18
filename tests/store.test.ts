@@ -159,3 +159,25 @@ test('status refreshes reuse completed tracks and map input identities; finish/d
   store.deleteTrip(first.id); assert.equal(store.trips().length, 1);
   raw.close();
 });
+
+test('automatic trip names can improve at finish; chosen names survive suggestions and restart', () => {
+  const { store, db, raw } = database();
+  const auto = store.begin(null, false, 1000);
+  assert.notEqual(auto.name, 'Tur i Byfjellene');
+  store.suggestName(auto.id, 'Tur fra Testgaten');
+  store.finish(auto.id, 5000);
+  const reopened = createStore(db);
+  reopened.suggestName(auto.id, 'Langs Testgaten');
+  assert.equal(reopened.getTrip(auto.id)?.name, 'Langs Testgaten');
+  reopened.rename(auto.id, '  Kveldstur med familien  ');
+  reopened.suggestName(auto.id, 'Et annet forslag');
+  assert.equal(createStore(db).getTrip(auto.id)?.name, 'Kveldstur med familien');
+  const chosen = reopened.begin(null, false, 10000, 'Min valgte tur');
+  reopened.suggestName(chosen.id, 'Automatisk forslag');
+  reopened.finish(chosen.id, 15000);
+  reopened.suggestName(chosen.id, 'Tur til toppen');
+  assert.equal(reopened.getTrip(chosen.id)?.name, 'Min valgte tur');
+  reopened.deleteTrip(auto.id);
+  assert.equal(reopened.setting(`automaticName:${auto.id}`, null), null);
+  raw.close();
+});
