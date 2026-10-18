@@ -1,14 +1,17 @@
 import { streetLength } from '../domain/streets';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { kindLabels, type Discovery, type DiscoveryKind, type Progress } from '../domain/discoveries';
 import { colors, styles as s } from './theme';
 import { Button, Icon } from './components';
+const nameOrder = new Intl.Collator('nb', { numeric: true });
 export function Discoveries({ items, progress: readyProgress, busy, onSync, onMap }: { items: Discovery[]; progress: Record<string, Progress> | null; busy: boolean; onSync: () => void; onMap: (item: Discovery) => void }) {
   const [filter, setFilter] = useState<DiscoveryKind | 'all'>('all'), [limit, setLimit] = useState(25);
   const progress = readyProgress ?? {};
   const collected = Object.values(progress).filter(p => p.collected).length;
-  const visible = items.filter(p => filter === 'all' || p.kind === filter).sort((a, b) => Number(progress[b.id]?.collected) - Number(progress[a.id]?.collected) || a.name.localeCompare(b.name, 'nb'));
+  // Reuse the collator: constructing locale rules for every comparison stalls
+  // Hermes when a home area contains thousands of names.
+  const visible = useMemo(() => items.filter(p => filter === 'all' || p.kind === filter).sort((a, b) => Number(!!readyProgress?.[b.id]?.collected) - Number(!!readyProgress?.[a.id]?.collected) || nameOrder.compare(a.name, b.name)), [items, filter, readyProgress]);
   return <View style={{ gap: 18 }}>
     <View style={[s.card, { backgroundColor: colors.ink }]}>
       <Text style={{ color: '#C2D3C3', fontSize: 10, letterSpacing: 2 }}>FUNN PÅ TURENE DINE</Text>
