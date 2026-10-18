@@ -64,3 +64,8 @@ Finished tracks and immutable map definitions keep their identity across status 
 Navnløse stier og trapper grupperes som ekstra spor. Brukeren kan gi dem et lokalt Tråkk-navn, slik at faktisk gjennomgåtte ruter får en navngitt plass i samlingen. Navn beholdes ved OSM-oppdatering, men endrer ikke kilden. Offisielle OSM-navn er låst og tar over dersom en navnløs rute får offisielt navn senere. Delte navn er ennå ikke implementert.
 
 Retning for sosial navngiving: første bruker foreslår et navn som kan tas i bruk. Andre må kunne foreslå rettelser, alternative lokale navn og rapportere misbruk; navnet låses ikke permanent til førstemann. OSM-navn og Tråkk-navn må ha tydelig kilde, historikk og en felles objektidentitet. Dette trenger server, synkronisering og moderering sammen med den sosiale delen. Ingen deling skjer i denne versjonen.
+
+
+### Utsiktspunkter uten navn (0.3.4)
+
+Også navnløse utsiktspunkter ligger i den kompakte «Uten navn»-gruppen i samling og turdetaljer. De påvirker ikke hovedtall, samle-milepæler eller nye målforslag før de har fått navn. Et bekreftet besøk kreves fortsatt. Navngiving er lokal, overlever kartoppdatering, og kan ikke endre offisielle navn. Eldre kartdata med standardtittelen «Utsiktspunkt» følger samme regel.

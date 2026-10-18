@@ -33,7 +33,7 @@ try:
         trunk=[coordinate(0,200),coordinate(120,200)]
         left=[trunk[-1],coordinate(120,208)]; right=[trunk[-1],coordinate(120,180)]
         def street(id,name,paths,ends):return dict(id=id,name=name,kind='street',**paths[0][0],geometry=paths[0],streetPaths=paths,streetEnds=ends,sourceUrl='',fetchedAt=now)
-        items=[street('street/corner','Testgate hjoerne',[corner],corner),street('street/fan','Testgate kryss',[trunk,left,right],[trunk[0],left[-1],right[-1]]),dict(id='way/unnamed',name='Sti uten navn',kind='trail',**corner[0],geometry=corner,sourceUrl='',fetchedAt=now)]
+        items=[street('street/corner','Testgate hjoerne',[corner],corner),street('street/fan','Testgate kryss',[trunk,left,right],[trunk[0],left[-1],right[-1]]),dict(id='node/unnamed',name='Utsiktspunkt',kind='viewpoint',**coordinate(20,0),geometry=[],sourceUrl='',fetchedAt=now)]
         def setting(k,v): db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',(k,json.dumps(v)))
         setting('osmDiscoveries',items);setting('homeArea',dict(name='Testomraade',radius=3000,**coordinate(0,0)))
         cache=dict(points={},regions={},streets={'1':now})
@@ -45,18 +45,19 @@ try:
         adb('shell','rm','-f',path+'-wal',path+'-shm');adb('push',str(folder/'trakk.db'),'/data/local/tmp/trakk-test.db');adb('shell','cat /data/local/tmp/trakk-test.db > '+path)
     launch();tap('Turlogg');tap('Hjoerner og gateender')
     find('Nye funn · 2');find('✓ Testgate hjoerne');find('✓ Testgate kryss')
+    find('Uten navn · 1')
     print('PASS: final APK awards short sidewalk corners and a terminal junction fan',flush=True)
     tap('Lukk');tap('Deg');tap('Åpne samlingen min');find('Dine funn · 2')
-    find('Stier og trapper uten navn · 1')
+    find('Uten navn · 1')
     with open('/tmp/trakk-rewards.png','wb') as output:subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
-    tap('Åpne stier og trapper uten navn');tap('Gi et Tråkk-navn');tap('Tråkk-navn')
-    adb('shell','input','text','Nabolagsstien');adb('shell','input','keyevent','4');tap('Lagre Tråkk-navn')
-    tap('Lukk');tap('Åpne samlingen min');find('Dine funn · 3');find('✓ Nabolagsstien')
-    tap('Vis Nabolagsstien på kartet');find('Nabolagsstien · markert i korall · Lukk ×')
+    tap('Åpne funn uten navn');tap('Gi et Tråkk-navn');tap('Tråkk-navn')
+    adb('shell','input','text','Nabolagsutsikten');adb('shell','input','keyevent','4');tap('Lagre Tråkk-navn')
+    tap('Lukk');tap('Åpne samlingen min');find('Dine funn · 3');find('✓ Nabolagsutsikten')
+    tap('Vis Nabolagsutsikten på kartet');find('Nabolagsutsikten · markert i korall · Lukk ×')
     adb('shell','am','force-stop',PACKAGE);launch();tap('Deg');tap('Åpne samlingen min')
-    find('Dine funn · 3');find('✓ Nabolagsstien')
+    find('Dine funn · 3');find('✓ Nabolagsutsikten')
     with open('/tmp/trakk-names.png','wb') as output:subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
-    print('PASS: final APK groups unnamed routes; local naming, map opening and awards survive restart',flush=True)
+    print('PASS: final APK groups unnamed viewpoints; local naming, map opening and awards survive restart',flush=True)
 finally:
     Path('/tmp/trakk-crash.log').write_text(adb('logcat','-b','crash','-d',check=False))
     Path('/tmp/trakk-js.log').write_text(adb('logcat','-d','-s','ReactNativeJS:V','AndroidRuntime:E',check=False))
