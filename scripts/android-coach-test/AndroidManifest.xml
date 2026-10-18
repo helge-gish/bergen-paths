@@ -3,7 +3,7 @@
 <uses-permission android:name="android.permission.WAKE_LOCK"/>
 <queries><package android:name="no.trakk.app"/><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>
 <application android:label="Trakk coach test only">
-<service android:name="no.trakk.coachtest.TestVoice" android:exported="true"><intent-filter><action android:name="android.intent.action.TTS_SERVICE"/></intent-filter></service>
+<service android:name="no.trakk.coachtest.TestVoice" android:exported="true"><intent-filter><action android:name="android.intent.action.TTS_SERVICE"/><category android:name="android.intent.category.DEFAULT"/></intent-filter></service>
 </application>
 <instrumentation android:name="no.trakk.coachtest.Check" android:targetPackage="no.trakk.coachtest"/>
 </manifest>
