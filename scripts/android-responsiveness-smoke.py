@@ -18,13 +18,18 @@ def assert_page(label, timeout=12):
     while time.monotonic()-started < timeout:
         if node_bounds(label): return time.monotonic()-started
         time.sleep(.3)
-    print(adb('shell','dumpsys','cpuinfo',check=False)[-6000:],flush=True)
-    # A final tap at the actual accessibility bounds distinguishes a hit-target
-    # problem from a blocked JS thread.
-    tap('Deg')
-    time.sleep(2)
-    print('Diagnostic Deg tap:',bool(node_bounds('Ditt eget tempo.')),flush=True)
+    print('\n'.join(line for line in adb('shell','dumpsys','cpuinfo',check=False).splitlines() if 'no.trakk' in line or 'TOTAL' in line or 'CPU usage' in line),flush=True)
     raise AssertionError('UI did not respond: '+label)
+
+
+base_launch = launch
+def launch():
+    start=time.monotonic()
+    base_launch()
+    # Cold startup is measured separately. Never send a navigation tap to the
+    # startup/splash screen before the tab bar exists.
+    assert_page('Hvor går turen?',timeout=90)
+    print(f'Cold start ready in {time.monotonic()-start:.2f}s (including fixed 8s boot wait)',flush=True)
 
 
 def tab(label):
