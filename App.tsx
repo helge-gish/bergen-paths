@@ -23,7 +23,8 @@ import { TrailMap } from './src/ui/TrailMap';
 import { trailReference } from './src/domain/trailReference';
 import { Compass } from './src/ui/Compass';
 import { Discoveries } from './src/ui/Discoveries';
-import { collectionProgress, type Discovery } from './src/domain/discoveries';
+import { type Discovery } from './src/domain/discoveries';
+import { useCollectionProgress } from './src/ui/useCollectionProgress';
 import { fetchPeaks } from './src/services/osm';
 import { exportLog } from './src/services/export';
 
@@ -33,11 +34,8 @@ const date = (timestamp: number) => new Date(timestamp).toLocaleDateString('nb-N
 const decimal = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
 function snapshot() {
   const store = getStore(), trips = store.trips(), discoveries = store.setting<Discovery[]>('osmDiscoveries', []), awards = store.setting<Record<string, number>>('osmAwards', {});
-  const progress = collectionProgress(discoveries, trips);
-  const currentAwards = Object.fromEntries(Object.entries(progress).filter(([, p]) => p.collected).map(([id, p]) => [id, p.firstVisit ?? awards[id] ?? Date.now()]));
-  if (JSON.stringify(currentAwards) !== JSON.stringify(awards)) store.setSetting('osmAwards', currentAwards);
   const active = store.active();
-  return { active, segmentWindow: active ? store.segmentWindow(active.id) : null, trips, trails: store.trails(), discoveries, awards: currentAwards, homeArea: store.setting<HomeArea | null>('homeArea', null), goals: store.setting<Goal[]>('goals', []), catalog: store.setting<Goal[]>('goalCatalog', []), avatarColor: store.setting('avatarColor', '#E8A164'), syncError: store.setting<string | null>('collectionSyncError', null), profile: store.profile(), error: store.setting<string | null>('trackingError', null), audioError: store.setting<string | null>('audioError', null) };
+  return { active, segmentWindow: active ? store.segmentWindow(active.id) : null, trips, trails: store.trails(), discoveries, awards, homeArea: store.setting<HomeArea | null>('homeArea', null), goals: store.setting<Goal[]>('goals', []), catalog: store.setting<Goal[]>('goalCatalog', []), avatarColor: store.setting('avatarColor', '#E8A164'), syncError: store.setting<string | null>('collectionSyncError', null), profile: store.profile(), error: store.setting<string | null>('trackingError', null), audioError: store.setting<string | null>('audioError', null) };
 }
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return <Modal animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SafeAreaView style={s.screen}><View style={[s.between, { padding: 22 }]}><Text style={[s.heading, { flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Lukk" onPress={onClose} style={{ padding: 10 }}><Icon name="close" /></Pressable></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>{children}</ScrollView></SafeAreaView></Modal>;
@@ -108,10 +106,17 @@ function Trakk() {
   const [serviceMissing, setServiceMissing] = useState(false), [weightText, setWeightText] = useState(data.profile.weightKg?.toString() ?? '');
   const refresh = useCallback(() => setData(snapshot()), []);
   const active = data.active;
+  const progress = useCollectionProgress(data.discoveries, data.trips);
+  useEffect(() => {
+    if (!progress) return;
+    const awards = Object.fromEntries(Object.entries(progress).filter(([, p]) => p.collected).map(([id, p]) => [id, p.firstVisit ?? Date.now()]));
+    getStore().setSetting('osmAwards', awards);
+    setData(previous => ({ ...previous, awards }));
+  }, [progress]);
   useEffect(() => { setSegmentNotice(null); }, [active?.id]);
   const latestSegment = data.trails.find(t => t.id === data.segmentWindow?.lastTrailId);
   useEffect(() => { setSegmentName(latestSegment?.name ?? ''); }, [latestSegment?.id, latestSegment?.name]);
-  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  useEffect(() => { if (!active) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [active?.id]);
   useEffect(() => {
     if (!active) return;
     const timer = setInterval(() => { const store = getStore(); setData(prev => ({ ...prev, active: store.active(), error: store.setting<string | null>('trackingError', null), audioError: store.setting<string | null>('audioError', null) })); }, 3000);
@@ -153,7 +158,7 @@ function Trakk() {
   }, [active?.id, data.trips.length, refresh]);
   const totals = useMemo(() => data.trips.reduce((sum, t) => { const m = tripMetrics(t); return { meters: sum.meters + m.meters, ascent: sum.ascent + m.ascent, elapsed: sum.elapsed + m.elapsed }; }, { meters: 0, ascent: 0, elapsed: 0 }), [data.trips]);
   const detail = data.trips.find(t => t.id === selectedTrip);
-  const attempt = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action(); refresh(); } catch (e) { Alert.alert('Det gikk ikke helt', e instanceof Error ? e.message : String(e)); } finally { refresh(); setBusy(false); } };
+  const attempt = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action(); } catch (e) { Alert.alert('Det gikk ikke helt', e instanceof Error ? e.message : String(e)); } finally { refresh(); setBusy(false); } };
   const locate = () => attempt(async () => {
     const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) throw new Error('Tillat posisjon for å finne deg på kartet.');
     const p = toFix(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })); setPosition(p); setFocus(p);
@@ -224,7 +229,7 @@ function Trakk() {
         <Text style={s.body}>Bare start og gå. Stier, topper, hytter, gater og andre steder samles automatisk etter lagring, også på skyggeturer. Kategoriene under filtrerer bare visningen.</Text>
         <Text style={s.small}>{syncing ? 'Henter kartdata langs lagrede turer …' : data.syncError ? `Noen kartdata venter: ${data.syncError} Turene er lagret og sjekkes igjen når appen har nett.` : 'Kartdata langs turene hentes mens appen er åpen. Manglende data prøves igjen senere.'}</Text>
         <Goals goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => setTab('profile')} />
-        <Discoveries items={data.discoveries} trips={data.trips} awards={data.awards} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
+        <Discoveries items={data.discoveries} progress={progress} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
       </>}
 
       {tab === 'history' && <>

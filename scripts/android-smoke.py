@@ -61,7 +61,7 @@ def find(label, contains=False):
                 if x2 > x1 and y2 > y1:
                     return (x1+x2)//2, (y1+y2)//2
         width, height = map(int, re.findall(r'(\d+)x(\d+)', adb('shell', 'wm', 'size'))[-1])
-        adb('shell', 'input', 'swipe', str(width//2), str(height*3//4), str(width//2), str(height//3), '300')
+        adb('shell', 'input', 'swipe', '8', str(height*3//4), '8', str(height//3), '300')
         time.sleep(2)
     raise RuntimeError('Visible content not found: ' + label)
 

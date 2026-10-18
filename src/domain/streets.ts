@@ -59,6 +59,14 @@ export function streetLength(item: Discovery): number {
 }
 type Sample = { p: Coordinate; a: Coordinate; b: Coordinate; weight: number };
 export function streetProgress(item: Discovery, trips: Trip[]): Progress {
+  const work = streetProgressSteps(item, trips);
+  let step = work.next();
+  while (!step.done) step = work.next();
+  return step.value;
+}
+/** Cooperative checkpoints let the UI process touches even for a long street. */
+export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = false): Generator<void, Progress> {
+  let work = 0;
   const coordinates = (item.streetPaths ?? [item.geometry]).flat();
   if (!coordinates.length) return { fraction: 0, collected: false, firstVisit: null };
   let south = Infinity, north = -Infinity, west = Infinity, east = -Infinity;
@@ -67,7 +75,7 @@ export function streetProgress(item: Discovery, trips: Trip[]): Progress {
   const samples: Sample[] = [];
   for (const path of item.streetPaths ?? [item.geometry]) for (let i = 1; i < path.length; i++) {
     const a = path[i - 1], b = path[i], length = distance(a, b), n = Math.ceil(length / 8);
-    for (let j = 0; j < n; j++) { const f = (j + 0.5) / n; samples.push({ p: { latitude: a.latitude + (b.latitude - a.latitude) * f, longitude: a.longitude + (b.longitude - a.longitude) * f }, a, b, weight: length / n }); }
+    for (let j = 0; j < n; j++) { if (++work % 256 === 0) yield; const f = (j + 0.5) / n; samples.push({ p: { latitude: a.latitude + (b.latitude - a.latitude) * f, longitude: a.longitude + (b.longitude - a.longitude) * f }, a, b, weight: length / n }); }
   }
   const grid = new Map<string, number[]>();
   const cell = (p: Coordinate) => [Math.floor(p.longitude / 0.001), Math.floor(p.latitude / 0.0005)];
@@ -75,11 +83,12 @@ export function streetProgress(item: Discovery, trips: Trip[]): Progress {
   const total = samples.reduce((n, s) => n + s.weight, 0);
   let best = 0;
   if (!total) return { fraction: 0, collected: false, firstVisit: null };
-  for (const trip of trips.filter(t => t.endedAt !== null).sort((a, b) => a.startedAt - b.startedAt)) {
+  for (const trip of (ordered ? trips : trips.filter(t => t.endedAt !== null).sort((a, b) => a.startedAt - b.startedAt))) {
     let previous: Fix | null = null;
     let covered = new Set<number>(), ends = new Set<number>();
     const reset = () => { covered = new Set(); ends = new Set(); };
-    for (const b of [...trip.points].sort((a, b) => a.timestamp - b.timestamp)) {
+    for (const b of (ordered ? trip.points : [...trip.points].sort((a, b) => a.timestamp - b.timestamp))) {
+      if (++work % 128 === 0) yield;
       if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || !Number.isFinite(b.timestamp) || !Number.isFinite(b.accuracy) || b.accuracy < 0 || b.accuracy > 15 || b.timestamp < trip.startedAt || b.timestamp > trip.endedAt! || (b.speed !== null && b.speed > 3.3)) { previous = null; reset(); continue; }
       if (b.latitude < south - 0.0005 || b.latitude > north + 0.0005 || b.longitude < west - lonMargin || b.longitude > east + lonMargin) { previous = null; reset(); continue; }
       const a = previous; previous = b;

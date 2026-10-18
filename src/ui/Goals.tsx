@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { HomeArea } from '../domain/areas';
 import type { Trip } from '../domain/types';
-import { goalProgress, type Goal } from '../domain/goals';
+import { type Goal } from '../domain/goals';
+import { useCollectionProgress } from './useCollectionProgress';
 import { searchPlaces, type Place } from '../services/osm';
 import { Button } from './components';
 import { TrailMap } from './TrailMap';
@@ -32,22 +33,28 @@ export function AreaPicker({ area, onSave, onHere }: { area: HomeArea | null; on
 }
 export function Goals({ goals, catalog, trips, busy, onToggle, onLoad, onBergen, onArea }: { goals: Goal[]; catalog: Goal[]; trips: Trip[]; busy: boolean; onToggle: (goal: Goal) => void; onLoad: () => void; onBergen: () => void; onArea: () => void }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const entries = useMemo(() => [...goals, ...catalog.filter(g => !goals.some(a => a.id === g.id))].map(g => ({ goal: g, progress: goalProgress(g, trips), active: goals.some(a => a.id === g.id) })), [goals, catalog, trips]);
+  const entries = useMemo(() => [...goals, ...catalog.filter(g => !goals.some(a => a.id === g.id))].map(g => ({ goal: g, active: goals.some(a => a.id === g.id) })), [goals, catalog, trips]);
   return <View style={{ gap: 16 }}>
     <Text style={s.heading}>Målbibliotek</Text>
     <Text style={s.body}>Velg personlige mål. Alle turer samler stempler uansett hvilke mål du har aktivert. Tidligere turer teller også.</Text>
     <Button secondary title="Velg hjemmeområde" onPress={onArea} />
     <Button secondary title={busy ? 'Henter mål …' : 'Lag målforslag for hjemmeområdet'} disabled={busy} onPress={onLoad} />
     <Button secondary title="Hent målet: De syv byfjellene i Bergen" disabled={busy} onPress={onBergen} />
-    {entries.map(({ goal, progress, active }) => <View key={goal.id} style={s.card}>
-      <Text style={s.eyebrow}>{active ? progress.complete ? 'MÅL OPPNÅDD' : 'DITT MÅL' : 'FORSLAG'}</Text>
-      <Text style={s.subheading}>{goal.title}</Text>
-      <Text style={s.heading}>{progress.collected} / {progress.total}</Text>
-      <Text style={s.body}>{goal.description}</Text>
-      <Button secondary title={active ? 'Deaktiver mål' : 'Aktiver som mitt mål'} onPress={() => onToggle(goal)} />
-      <Pressable accessibilityRole="button" onPress={() => setExpanded(expanded === goal.id ? null : goal.id)}><Text style={s.small}>{expanded === goal.id ? 'Skjul innhold' : 'Se hva målet inneholder'}</Text></Pressable>
-      {expanded === goal.id && <Text style={s.small}>{goal.targets.map(t => t.name).join(' · ')}</Text>}
-    </View>)}
+    {entries.map(({ goal, active }) => <GoalCard key={goal.id} goal={goal} active={active} trips={trips} expanded={expanded === goal.id} onToggle={() => onToggle(goal)} onExpand={() => setExpanded(expanded === goal.id ? null : goal.id)} />)}
     <Text style={s.small}>Aktive mål beholder kartutvalget de startet med. OSM kan mangle steder og gater. Dette er personlige mål på mobilen; vennelister og rangering er ikke koblet til ennå.</Text>
+  </View>;
+}
+
+function GoalCard({ goal, active, trips, expanded, onToggle, onExpand }: { goal: Goal; active: boolean; trips: Trip[]; expanded: boolean; onToggle: () => void; onExpand: () => void }) {
+  const progress = useCollectionProgress(goal.targets, trips);
+  const collected = progress ? goal.targets.filter(t => progress[t.id]?.collected).length : null;
+  return <View style={s.card}>
+    <Text style={s.eyebrow}>{active ? collected !== null && goal.targets.length > 0 && collected === goal.targets.length ? 'MÅL OPPNÅDD' : 'DITT MÅL' : 'FORSLAG'}</Text>
+    <Text style={s.subheading}>{goal.title}</Text>
+    <Text style={s.heading}>{collected === null ? 'Sjekker turene …' : `${collected} / ${goal.targets.length}`}</Text>
+    <Text style={s.body}>{goal.description}</Text>
+    <Button secondary title={active ? 'Deaktiver mål' : 'Aktiver som mitt mål'} onPress={onToggle} />
+    <Pressable accessibilityRole="button" onPress={onExpand}><Text style={s.small}>{expanded ? 'Skjul innhold' : 'Se hva målet inneholder'}</Text></Pressable>
+    {expanded && <Text style={s.small}>{goal.targets.map(t => t.name).join(' · ')}</Text>}
   </View>;
 }

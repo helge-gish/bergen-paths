@@ -34,8 +34,8 @@ export function TrailMap({ fitRoute = false, fitReference = false, selectedDisco
     if (ready && size.width > 0 && size.height > 0 && bounds) camera.current?.fitBounds(bounds, { padding: { top: 30, right: 30, bottom: 38, left: 30 }, duration: 0 });
   }, [bounds, ready, size]);
   useEffect(() => { if (focus && !selectedDiscovery && !fitRoute && !fitReference) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute, fitReference]);
-  return <View onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
-    <Map style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
+  return <View testID="trail-map" onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
+    <Map dragPan={true} style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
       <Camera ref={camera} initialViewState={{ center: focus ? [focus.longitude, focus.latitude] : [0, 20], zoom: focus ? 14 : 1.5 }} />
       <GeoJSONSource id="discoveries" data={targets}>
         <Layer id="discovery-paths" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': ['case', ['get', 'selected'], colors.coral, ['get', 'collected'], '#426D3A', '#A9B6A0'], 'line-width': ['case', ['get', 'selected'], 5, 2], 'line-opacity': 0.85 }} />

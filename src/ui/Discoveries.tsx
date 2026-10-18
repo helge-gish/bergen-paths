@@ -1,21 +1,17 @@
 import { streetLength } from '../domain/streets';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { collectionProgress, kindLabels, type Discovery, type DiscoveryKind } from '../domain/discoveries';
-import type { Trip } from '../domain/types';
+import { kindLabels, type Discovery, type DiscoveryKind, type Progress } from '../domain/discoveries';
 import { colors, styles as s } from './theme';
 import { Button, Icon } from './components';
-export function Discoveries({ items, trips, awards, busy, onSync, onMap }: { items: Discovery[]; trips: Trip[]; awards: Record<string, number>; busy: boolean; onSync: () => void; onMap: (item: Discovery) => void }) {
+export function Discoveries({ items, progress: readyProgress, busy, onSync, onMap }: { items: Discovery[]; progress: Record<string, Progress> | null; busy: boolean; onSync: () => void; onMap: (item: Discovery) => void }) {
   const [filter, setFilter] = useState<DiscoveryKind | 'all'>('all'), [limit, setLimit] = useState(25);
-  const progress = useMemo(() => {
-    const values = collectionProgress(items, trips);
-    for (const item of items) if (awards[item.id] !== undefined) values[item.id] = { ...values[item.id], collected: true, firstVisit: awards[item.id] };
-    return values;
-  }, [items, trips, awards]);
+  const progress = readyProgress ?? {};
   const collected = Object.values(progress).filter(p => p.collected).length;
   const visible = items.filter(p => filter === 'all' || p.kind === filter).sort((a, b) => Number(progress[b.id]?.collected) - Number(progress[a.id]?.collected) || a.name.localeCompare(b.name, 'nb'));
   return <View style={{ gap: 18 }}>
     <View style={[s.card, { backgroundColor: colors.ink }]}><Text style={{ color: '#C2D3C3', fontSize: 10, letterSpacing: 2 }}>DIN SAMLING · OPENSTREETMAP</Text><Text style={{ color: colors.paper, fontSize: 44, fontWeight: '700' }}>{collected}<Text style={{ fontSize: 21, color: '#C2D3C3' }}> / {items.length}</Text></Text><Text style={{ color: colors.paper, fontSize: 16 }}>Gater samlet. Stier gått. Steder oppdaget.</Text></View>
+    {!readyProgress && <Text style={s.small}>Sjekker turene mot samlingen … Du kan bruke appen mens dette pågår.</Text>}
     <Text style={s.body}>Alle kategorier samles fra lagrede turer. Du kan også hente kartdata rundt valgt sted, hjemmeområdet eller posisjonen din før du går.</Text>
     <Button title={busy ? 'Henter fra OpenStreetMap …' : items.length ? 'Oppdater samlingen' : 'Hent kartdata i nærheten'} icon="map" secondary onPress={onSync} disabled={busy} />
 

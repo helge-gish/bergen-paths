@@ -1,6 +1,6 @@
 {
   "name": "trakk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",
@@ -34,7 +34,8 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "export": "expo export --platform all --max-workers 2"
+    "export": "expo export --platform all --max-workers 2",
+    "postinstall": "node scripts/patch-map-gestures.cjs"
   },
   "private": true
 }
