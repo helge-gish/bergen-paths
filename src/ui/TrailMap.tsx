@@ -24,10 +24,11 @@ export function TrailMap({ fitRoute = false, selectedDiscovery, trips = [], trai
     if (item.kind === 'trail' || item.kind === 'street') return (item.streetPaths ?? [item.geometry]).filter(path => path.length > 1).map((path, i) => ({ type: 'Feature' as const, id: `${item.id}/${i}`, properties, geometry: { type: 'LineString' as const, coordinates: path.map(p => [p.longitude, p.latitude]) } }));
     return [{ type: 'Feature' as const, id: item.id, properties, geometry: { type: 'Point' as const, coordinates: [item.longitude, item.latitude] } }];
   }) }), [discoveries, awards, selectedDiscovery]);
-  const bounds = useMemo(() => selectedDiscovery
-    ? coordinateBounds((selectedDiscovery.streetPaths ?? [selectedDiscovery.geometry]).flat())
-    : fitRoute ? coordinateBounds([...cleanPoints(current), ...cleanPoints(reference)]) : null,
-  [selectedDiscovery, fitRoute, current, reference]);
+  const discoveryBounds = useMemo(() => selectedDiscovery
+    ? coordinateBounds((selectedDiscovery.streetPaths ?? [selectedDiscovery.geometry]).flat()) : null, [selectedDiscovery]);
+  const routeBounds = useMemo(() => fitRoute ? coordinateBounds([...cleanPoints(current), ...cleanPoints(reference)]) : null,
+    [fitRoute, current, reference]);
+  const bounds = selectedDiscovery ? discoveryBounds : routeBounds;
   useEffect(() => {
     if (ready && size.width > 0 && size.height > 0 && bounds) camera.current?.fitBounds(bounds, { padding: { top: 30, right: 30, bottom: 38, left: 30 }, duration: 0 });
   }, [bounds, ready, size]);
