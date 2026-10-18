@@ -6,6 +6,9 @@
 
 - Registrerer GPS-spor, distanse, fart, høydeprofil og filtrerte høydemeter opp/ned.
 - Måler hele tiden fra start til slutt. Pauser trekkes aldri fra. Starttid og GPS-punkter lagres fortløpende i SQLite.
+- Har «Lagre sti hit» under vanlig tur, med automatisk start ved forrige klipp og valgfritt navn. Skyggeturer har ingen klippeverktøy. Se [turmodusene](docs/trip-modes.md).
+- Åpner lagrede stier fra Utforsk og kompasset, med direkte oppstart av stien som skygge.
+- Tilpasser kartet til hele den lagrede turen og lar deg slette turen med bekreftelse.
 - Lar deg navngi hele eller deler av et lagret turspor. Egne stier vises på kartet og i et kompass med luftlinjeavstand.
 - Viser en skygge av en tidligere tur, med den opprinnelige tidslinjen og pausene. Valgfrie norske stemmemeldinger gir tidsavvik omtrent hvert minutt når sammenligningen er pålitelig.
 - Oppdager vedvarende ruteavvik og gjeninntreden på referanseruten. Avstikkere og GPS-hull gjør hele turens tidsresultat usammenlignbart; det gis ingen snarvei-rekord.
@@ -48,7 +51,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.2.0](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.2.0). Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
+**Android-testversjon:** [Tråkk 0.2.1](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.2.1). Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 
 Automatisk prøve på tilkoblet Android-emulator (APK-en må finnes under `android/app/build/outputs/apk/release/`):
 
