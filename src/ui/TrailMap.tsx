@@ -8,11 +8,11 @@ import { colors, styles as s } from './theme';
 import { Icon } from './components';
 import type { Discovery } from '../domain/discoveries';
 const EMPTY_POINTS: Fix[] = [];
-type Props = { fitRoute?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
+type Props = { fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
-export function TrailMap({ fitRoute = false, selectedDiscovery, trips = [], trails = [], discoveries = [], awards = {}, peaks = [], current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
+export function TrailMap({ fitRoute = false, fitReference = false, selectedDiscovery, trips = [], trails = [], discoveries = [], awards = {}, peaks = [], current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
   const camera = useRef<CameraRef>(null);
   const [failed, setFailed] = useState(false), [ready, setReady] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -28,11 +28,12 @@ export function TrailMap({ fitRoute = false, selectedDiscovery, trips = [], trai
     ? coordinateBounds((selectedDiscovery.streetPaths ?? [selectedDiscovery.geometry]).flat()) : null, [selectedDiscovery]);
   const routeBounds = useMemo(() => fitRoute ? coordinateBounds([...cleanPoints(current), ...cleanPoints(reference)]) : null,
     [fitRoute, current, reference]);
-  const bounds = selectedDiscovery ? discoveryBounds : routeBounds;
+  const referenceBounds = useMemo(() => fitReference ? coordinateBounds(cleanPoints(reference)) : null, [fitReference, reference]);
+  const bounds = selectedDiscovery ? discoveryBounds : referenceBounds ?? routeBounds;
   useEffect(() => {
     if (ready && size.width > 0 && size.height > 0 && bounds) camera.current?.fitBounds(bounds, { padding: { top: 30, right: 30, bottom: 38, left: 30 }, duration: 0 });
   }, [bounds, ready, size]);
-  useEffect(() => { if (focus && !selectedDiscovery && !fitRoute) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute]);
+  useEffect(() => { if (focus && !selectedDiscovery && !fitRoute && !fitReference) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute, fitReference]);
   return <View onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
     <Map style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
       <Camera ref={camera} initialViewState={{ center: focus ? [focus.longitude, focus.latitude] : [5.347, 60.393], zoom: focus ? 14 : 11.5 }} />

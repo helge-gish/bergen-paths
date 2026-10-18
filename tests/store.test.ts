@@ -80,3 +80,19 @@ test('an active trip cannot be deleted and a failed deletion rolls back dependen
   assert.ok(store.getTrip(t.id)); assert.equal(store.trails().length, 1); assert.equal(store.active()?.ghostId, t.id);
   assert.equal(store.active()?.id, other.id); raw.close();
 });
+test('saved trail is a persistent ghost with its own start and pauses, and deletion clears trail references', () => {
+  const { store, db, raw } = database(); const parent = store.begin(null, false, 1000);
+  store.append(parent.id, [point, { ...point, timestamp: 21000, latitude: 60.3902 }, { ...point, timestamp: 51000, latitude: 60.3902 }, { ...point, timestamp: 71000, latitude: 60.3904 }]);
+  store.finish(parent.id, 90000);
+  const trail = store.saveTrail(parent.id, 'Segment med pause', 21000, 71000);
+  const ref = `trail:${trail.id}`, reopened = createStore(db);
+  const ghost = reopened.getReference(ref)!;
+  assert.equal(ghost.name, 'Segment med pause'); assert.equal(ghost.startedAt, 21000); assert.equal(ghost.endedAt, 71000);
+  assert.equal(ghost.points.length, 3); assert.equal(ghost.points[1].timestamp - ghost.points[0].timestamp, 30000);
+  assert.equal(reopened.getReference(parent.id)?.id, parent.id); assert.equal(reopened.getReference('trail:missing'), null);
+  const active = reopened.begin(ref, true, 100000);
+  assert.equal(reopened.active()?.ghostId, ref);
+  reopened.deleteTrip(parent.id);
+  assert.equal(reopened.getReference(ref), null); assert.equal(reopened.getTrip(active.id)?.ghostId, null);
+  raw.close();
+});

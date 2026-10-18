@@ -29,7 +29,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     store.append(active.id, data.locations.map(toFix));
     store.setSetting('trackingError', null);
     if (!active.ghostId || !active.audioEnabled) return;
-    const current = store.getTrip(active.id)!, ghost = store.getTrip(active.ghostId);
+    const current = store.getTrip(active.id)!, ghost = store.getReference(active.ghostId);
     if (!ghost) return;
     const now = Date.now();
     if (now - current.lastCueAt < 60_000) return;
@@ -40,6 +40,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
 export async function startTracking(ghostId: string | null, audioEnabled: boolean) {
+  if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg en annen sti eller tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
   const foreground = await Location.requestForegroundPermissionsAsync();
   if (!foreground.granted) throw new Error('Tråkk trenger posisjonstillatelse for å registrere turen.');

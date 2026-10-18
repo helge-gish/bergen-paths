@@ -50,6 +50,43 @@ try:
     time.sleep(6)
     with open('/tmp/trakk-map.png', 'wb') as output:
         subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=output, check=True, timeout=30)
+    tap('Lukk')
+    tap('Utforsk')
+    tap('Åpne sti: Teststi')
+    find('Stien din')
+    find('Gå denne igjen med skygge')
+    tap('Lukk')
+    tap('Turlogg')
+    tap('Utforsk')
+    tap('Finn stier med kompasset')
+    tap('Åpne sti: Teststi')
+    find('Stien din')
+    tap('Gå denne igjen med skygge')
+    find('Skygge: Teststi')
+    adb('emu', 'geo', 'fix', '5.32', '60.39')
+    time.sleep(3)
+    tap('Start turen min')
+    for i in range(3):
+        adb('emu', 'geo', 'fix', str(5.32 + i * .00007), '60.39')
+        time.sleep(3)
+        alive()
+    adb('shell', 'am', 'force-stop', PACKAGE)
+    with tempfile.TemporaryDirectory() as temp:
+        pull_database(Path(temp))
+        db = sqlite3.connect(Path(temp) / 'trakk.db')
+        replay_id, reference_id = db.execute('SELECT id, ghostId FROM trips WHERE endedAt IS NULL').fetchone()
+        assert reference_id == 'trail:map-test-trail'
+        db.close()
+    launch()
+    find('DEG MOT DEG')
+    find('Teststi')
+    tap('Avslutt og lagre tur')
+    tap('Avslutt og lagre')
+    time.sleep(2)
+    tap('Lukk')
+    count += 1
+    print('PASS: saved trail opens from Explore and compass; replay keeps segment ghost after restart', flush=True)
+    tap('Karttest 3 km')
     tap('Slett tur')
     tap('Avbryt')
     tap('Lukk')
@@ -70,6 +107,7 @@ try:
         assert db.execute("SELECT COUNT(*) FROM points WHERE tripId='map-delete-fixture'").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM trails WHERE tripId='map-delete-fixture'").fetchone()[0] == 0
         assert db.execute("SELECT ghostId FROM trips WHERE id='ghost-test-fixture'").fetchone()[0] is None
+        assert db.execute('SELECT ghostId FROM trips WHERE id = ?', (replay_id,)).fetchone()[0] is None
         assert db.execute('SELECT COUNT(*) FROM trips').fetchone()[0] == count - 1
         db.close()
     launch()

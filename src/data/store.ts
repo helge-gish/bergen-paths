@@ -1,4 +1,5 @@
 import type { Fix, Profile, Trail, Trip } from '../domain/types';
+import { trailReference } from '../domain/trailReference';
 import { cleanPoints } from '../domain/geo';
 type Param = string | number | null;
 export interface Database {
@@ -47,8 +48,8 @@ export function createStore(db: Database) {
         const trip = store.getTrip(tripId);
         if (!trip) return;
         if (trip.endedAt === null) throw new Error('Avslutt turen før du sletter den.');
+        db.runSync("UPDATE trips SET ghostId = NULL WHERE ghostId = ? OR ghostId IN (SELECT 'trail:' || id FROM trails WHERE tripId = ?)", tripId, tripId);
         db.runSync('DELETE FROM trails WHERE tripId = ?', tripId);
-        db.runSync('UPDATE trips SET ghostId = NULL WHERE ghostId = ?', tripId);
         deleted = db.runSync('DELETE FROM trips WHERE id = ?', tripId).changes === 1;
         // Rebuild collection stamps from the remaining history on the next snapshot.
         store.setSetting('osmAwards', {});
@@ -60,6 +61,11 @@ export function createStore(db: Database) {
     setAudio(tripId: string, enabled: boolean) { db.runSync('UPDATE trips SET audioEnabled = ? WHERE id = ?', enabled ? 1 : 0, tripId); },
     claimCue(tripId: string, now: number) { return db.runSync('UPDATE trips SET lastCueAt = ? WHERE id = ? AND endedAt IS NULL AND audioEnabled = 1 AND lastCueAt <= ?', now, tripId, now - 60_000).changes === 1; },
     trails(): Trail[] { return db.getAllSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails ORDER BY createdAt DESC').map(r => ({ ...r, points: JSON.parse(r.points) })); },
+    getReference(referenceId: string): Trip | null {
+      if (!referenceId.startsWith('trail:')) return store.getTrip(referenceId);
+      const trail = db.getFirstSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails WHERE id = ?', referenceId.slice(6));
+      return trail ? trailReference({ ...trail, points: JSON.parse(trail.points) }) : null;
+    },
     saveTrail(tripId: string, name: string, from: number, to: number): Trail {
       const trip = store.getTrip(tripId);
       if (!trip || trip.endedAt === null) throw new Error('Avslutt turen før du lagrer en sti.');
