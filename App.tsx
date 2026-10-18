@@ -15,6 +15,7 @@ import { areaGoals, bergenGoal, type Goal } from './src/domain/goals';
 import { syncCollections, pendingSurveys, mergeIntoStore, loadArea } from './src/services/collectionSync';
 import { AreaPicker, Goals } from './src/ui/Goals';
 import { Avatar } from './src/ui/Avatar';
+import { TripRewards } from './src/ui/TripRewards';
 import { cleanPoints } from './src/domain/geo';
 import type { Coordinate, Trail, Trip } from './src/domain/types';
 import { colors, styles as s } from './src/ui/theme';
@@ -23,13 +24,13 @@ import { TrailMap } from './src/ui/TrailMap';
 import { trailReference } from './src/domain/trailReference';
 import { Compass } from './src/ui/Compass';
 import { Discoveries } from './src/ui/Discoveries';
-import { type Discovery } from './src/domain/discoveries';
+import { type Discovery, type Progress } from './src/domain/discoveries';
 import { useCollectionProgress } from './src/ui/useCollectionProgress';
 import { fetchPeaks } from './src/services/osm';
 import { exportLog } from './src/services/export';
 
-type Tab = 'explore' | 'passport' | 'history' | 'profile';
-const tabs: { id: Tab; title: string; icon: IconName }[] = [{ id: 'explore', title: 'Utforsk', icon: 'map' }, { id: 'passport', title: 'Turpass', icon: 'check' }, { id: 'history', title: 'Turlogg', icon: 'book' }, { id: 'profile', title: 'Deg', icon: 'user' }];
+type Tab = 'explore' | 'history' | 'profile';
+const tabs: { id: Tab; title: string; icon: IconName }[] = [{ id: 'explore', title: 'Utforsk', icon: 'map' }, { id: 'history', title: 'Turlogg', icon: 'book' }, { id: 'profile', title: 'Deg', icon: 'user' }];
 const date = (timestamp: number) => new Date(timestamp).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' });
 const decimal = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
 function snapshot() {
@@ -40,7 +41,7 @@ function snapshot() {
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return <Modal animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SafeAreaView style={s.screen}><View style={[s.between, { padding: 22 }]}><Text style={[s.heading, { flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Lukk" onPress={onClose} style={{ padding: 10 }}><Icon name="close" /></Pressable></View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>{children}</ScrollView></SafeAreaView></Modal>;
 }
-function TripDetails({ trip, reference, weight, onClose, onChange, onGhost, onDelete, allowSegments }: { trip: Trip; reference: Trip | null; weight: number | null; onClose: () => void; onChange: () => void; onGhost: () => void; onDelete: () => void; allowSegments: boolean }) {
+function TripDetails({ trip, reference, weight, onClose, onChange, onGhost, onDelete, allowSegments, rewards }: { rewards: React.ReactNode; trip: Trip; reference: Trip | null; weight: number | null; onClose: () => void; onChange: () => void; onGhost: () => void; onDelete: () => void; allowSegments: boolean }) {
   const [name, setName] = useState(trip.name), [trailName, setTrailName] = useState('');
   const [fromMinute, setFromMinute] = useState('0'), [toMinute, setToMinute] = useState('');
   const metrics = useMemo(() => tripMetrics(trip), [trip]);
@@ -68,6 +69,7 @@ function TripDetails({ trip, reference, weight, onClose, onChange, onGhost, onDe
     <TrailMap fitRoute current={metrics.points} reference={reference?.points} focus={metrics.points[0]} height={250} />
     <View style={s.row}><Metric value={durationLabel(metrics.elapsed)} label="total tid · med alle pauser" /><Metric value={kmLabel(metrics.meters)} label="kilometer" /></View>
     <View style={s.row}><Metric value={metrics.hasElevation ? `${Math.round(metrics.ascent)}` : '—'} label="høydemeter opp" /><Metric value={metrics.hasElevation ? `${Math.round(metrics.descent)}` : '—'} label="høydemeter ned" /><Metric value={decimal(metrics.averageKmh)} label="km/t · hele turen" /></View>
+    {rewards}
     <Pressable accessibilityRole="button" accessibilityLabel="Slett tur" onPress={confirmDelete} style={{ paddingVertical: 12 }}><Text style={{ color: colors.coral, fontWeight: '700' }}>Slett tur</Text></Pressable>
     <View style={s.card}><ElevationChart values={metrics.points.filter(p => p.altitudeAccuracy !== null && p.altitudeAccuracy >= 0 && p.altitudeAccuracy <= 15).map(p => p.altitude)} /></View>
     {metrics.gapsMs > 0 && <View style={s.notice}><Text style={s.small}>Sporet har GPS-opphold. Tiden er komplett, men distanse og høydemeter kan være for lave. Oppholdene tegnes ikke som rette stier.</Text></View>}
@@ -98,7 +100,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const [data, setData] = useState(initialData), [tab, setTab] = useState<Tab>('explore');
   const [busyMessage, setBusyMessage] = useState('Arbeider …');
   const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState<'compass' | 'ghost' | 'start' | 'trail' | null>(null);
+  const [modal, setModal] = useState<'compass' | 'ghost' | 'start' | 'trail' | 'collection' | 'goals' | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<string | null>(null), [ghostId, setGhostId] = useState<string | null>(null);
   const [selectedTrailId, setSelectedTrailId] = useState<string | null>(null);
   const [selectedDiscovery, setSelectedDiscovery] = useState<Discovery | null>(null);
@@ -107,13 +109,15 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const [serviceMissing, setServiceMissing] = useState(false), [weightText, setWeightText] = useState(data.profile.weightKg?.toString() ?? '');
   const refresh = useCallback(() => setData(snapshot()), []);
   const active = data.active;
-  const progress = useCollectionProgress(data.discoveries, data.trips);
+  const savedProgress = useMemo(() => Object.fromEntries(Object.entries(data.awards).map(([id, time]) => [id, { fraction: 1, collected: true, firstVisit: time } satisfies Progress])), [data.awards]);
+  const collection = useCollectionProgress(data.discoveries, data.trips, savedProgress);
+  const progress = collection.progress;
   useEffect(() => {
-    if (!progress) return;
+    if (collection.pending || collection.error) return;
     const awards = Object.fromEntries(Object.entries(progress).filter(([, p]) => p.collected).map(([id, p]) => [id, p.firstVisit ?? Date.now()]));
     getStore().setSetting('osmAwards', awards);
     setData(previous => ({ ...previous, awards }));
-  }, [progress]);
+  }, [progress, collection.pending, collection.error]);
   useEffect(() => { setSegmentNotice(null); }, [active?.id]);
   const latestSegment = data.trails.find(t => t.id === data.segmentWindow?.lastTrailId);
   useEffect(() => { setSegmentName(latestSegment?.name ?? ''); }, [latestSegment?.id, latestSegment?.name]);
@@ -178,7 +182,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     Alert.alert('Samlingen er oppdatert', streetError ? `Stier og steder er hentet. Gatekartet venter: ${streetError}` : 'Alle lagrede turer sjekkes mot kartdataene. Du trenger ikke velge kategori før turen.');
   }, 'Henter kartdata for området …');
   const loadGoals = () => attempt(async () => {
-    if (!data.homeArea) { setTab('profile'); Alert.alert('Velg et hjemmeområde', 'Søk etter et sted eller bruk din posisjon under Deg.'); return; }
+    if (!data.homeArea) { setModal(null); setTab('profile'); Alert.alert('Velg et hjemmeområde', 'Søk etter et sted eller bruk din posisjon under Deg.'); return; }
     const streetError = await loadArea(getStore(), data.homeArea, data.homeArea.radius);
     const suggestions = areaGoals(data.homeArea, getStore().setting<Discovery[]>('osmDiscoveries', []));
     getStore().setSetting('goalCatalog', [...data.catalog.filter(g => g.curated), ...suggestions]);
@@ -201,7 +205,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
 
   return <View style={s.screen}><StatusBar style="dark" /><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1 }}>
     <View style={[s.between, { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }]}><View style={s.row}><View style={{ width: 38, height: 38, backgroundColor: colors.ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Image source={require('./assets/trakk-icon.png')} style={{ width: 38, height: 38, borderRadius: 12 }} /></View><Text style={{ fontSize: 28, fontWeight: '800', color: colors.ink, letterSpacing: -1.2 }}>tråkk<Text style={{ color: colors.coral }}>.</Text></Text></View></View>
-    {(busy || syncing || !progress) && <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 22, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}><ActivityIndicator size="small" color={colors.ink} /><Text style={[s.small, { flex: 1 }]}>{busy ? busyMessage : syncing ? 'Henter kartdata … Du kan bruke appen imens.' : 'Sjekker turene mot kartdata … Du kan bruke appen imens.'}</Text></View>}
+    {(busy || syncing || collection.pending || collection.error) && <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 22, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>{!collection.error && <ActivityIndicator size="small" color={colors.ink} />}<Text style={[s.small, { flex: 1 }]}>{busy ? busyMessage : syncing ? 'Henter kartdata … Du kan bruke appen imens.' : collection.error ? 'Funnene kunne ikke oppdateres. Prøv igjen i Samlingen min.' : `Sjekker funn: ${collection.processed} av ${collection.total} …`}</Text></View>}
     {active && tab !== 'explore' && <Pressable accessibilityRole="button" onPress={() => setTab('explore')} style={{ marginHorizontal: 22, padding: 12, borderRadius: 14, backgroundColor: colors.ink }}><Text style={{ color: 'white', fontWeight: '600' }}>● Tur pågår · {durationLabel(now - active.startedAt)} →</Text></Pressable>}
     <ScrollView key={tab} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
       {tab === 'explore' && <>
@@ -223,17 +227,9 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
           <Button title={busy ? 'Lagrer …' : 'Avslutt og lagre tur'} icon="check" onPress={finish} disabled={busy} />
         </> : <>
           <Button title={busy ? 'Et lite øyeblikk …' : 'Start en tur'} icon="arrow" onPress={() => setModal('start')} disabled={busy} />
-          <Pressable accessibilityRole="button" onPress={() => setTab('passport')} style={s.card}><Text style={s.subheading}>Turpass og personlige mål →</Text><Text style={s.body}>Alle turer teller · {data.goals.length} aktive mål · {Object.keys(data.awards).length} stempler</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => { setTab('profile'); setModal('collection'); }} style={s.card}><Text style={s.subheading}>Samlingen min →</Text><Text style={s.body}>Alle turer teller · {data.goals.length} aktive mål · {Object.keys(data.awards).length} stempler</Text></Pressable>
         </>}
         {data.trails.length > 0 && <><Text style={s.heading}>Dine Tråkk-stier</Text>{data.trails.map(trail => <Pressable key={trail.id} accessibilityRole="button" accessibilityLabel={`Åpne sti: ${trail.name}`} onPress={() => openTrail(trail)} style={[s.card, s.between]}><View style={{ flex: 1 }}><Text style={s.subheading}>{trail.name}</Text><Text style={s.small}>Ditt navn · lagret {date(trail.createdAt)}</Text></View><Icon name="arrow" /></Pressable>)}</>}
-      </>}
-
-      {tab === 'passport' && <>
-        <Text style={s.title}>Turpasset ditt.</Text>
-        <Text style={s.body}>Bare start og gå. Stier, topper, hytter, gater og andre steder samles automatisk etter lagring, også på skyggeturer. Kategoriene under filtrerer bare visningen.</Text>
-        <Text style={s.small}>{syncing ? 'Henter kartdata langs lagrede turer …' : data.syncError ? `Noen kartdata venter: ${data.syncError} Turene er lagret og sjekkes igjen når appen har nett.` : 'Kartdata langs turene hentes mens appen er åpen. Manglende data prøves igjen senere.'}</Text>
-        <Goals homeArea={data.homeArea} goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => setTab('profile')} />
-        <Discoveries items={data.discoveries} progress={progress} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
       </>}
 
       {tab === 'history' && <>
@@ -246,6 +242,8 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
       {tab === 'profile' && <>
         <Text style={s.eyebrow}>LITT OM DEG OG TURENE DINE</Text><Text style={s.title}>Ditt eget tempo.</Text>
         <View style={[s.card, s.row]}><Metric value={`${Math.floor(totals.elapsed / 3_600_000)} t`} label="ute på tur" /><Metric value={`${data.trails.length}`} label="navngitte stier" /><Metric value={`${Object.keys(data.awards).length}`} label="stempler" /></View>
+        <Button accessibilityLabel="Åpne samlingen min" secondary title={`Samlingen min · ${Object.keys(data.awards).length} funn`} icon="check" onPress={() => setModal('collection')} />
+        <Button accessibilityLabel="Åpne mine mål" secondary title={`Mine mål · ${data.goals.length} aktive`} icon="mountain" onPress={() => setModal('goals')} />
         <Avatar trips={data.trips} collected={Object.keys(data.awards).length} color={data.avatarColor} onColor={color => { getStore().setSetting('avatarColor', color); setData(previous => ({ ...previous, avatarColor: color })); }} />
         <AreaPicker area={data.homeArea} onHere={here} onSave={area => { getStore().setSetting('homeArea', area); setFocus(area); setData(previous => ({ ...previous, homeArea: area })); }} />
         <View style={s.card}><Text style={s.subheading}>Et grovt energianslag</Text><Text style={s.body}>Vekt kan brukes til et omtrentlig energiintervall etter turen. Det inkluderer pauser. Alder og høyde alene gjør ikke anslaget presist, så vi ber ikke om dem nå.</Text><Text style={s.small}>Vekt i kg · valgfritt, bare lagret på mobilen</Text><TextInput accessibilityLabel="Vekt i kilogram, valgfritt" keyboardType="decimal-pad" style={s.input} value={weightText} onChangeText={setWeightText} placeholder="F.eks. 75" /><Button secondary title="Lagre innstilling" onPress={() => { const n = weightText.trim() ? Number(weightText.replace(',', '.')) : null; if (n !== null && (!Number.isFinite(n) || n < 25 || n > 300)) { Alert.alert('Sjekk vekten', 'Oppgi mellom 25 og 300 kg, eller la feltet være tomt.'); return; } getStore().setSetting('profile', { weightKg: n }); refresh(); Alert.alert('Lagret', n === null ? 'Energianslaget er slått av.' : 'Vekten er lagret lokalt.'); }} /></View>
@@ -256,11 +254,15 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     </ScrollView>
     <View style={{ flexDirection: 'row', paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12), paddingHorizontal: 12, backgroundColor: colors.paper, borderTopWidth: 1, borderTopColor: colors.line }}>{tabs.map(item => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: item.id === tab }} onPress={() => setTab(item.id)} style={{ flex: 1, alignItems: 'center', gap: 5, paddingVertical: 6 }}><View style={{ backgroundColor: tab === item.id ? colors.pale : 'transparent', paddingHorizontal: 18, paddingVertical: 5, borderRadius: 20 }}><Icon name={item.icon} color={tab === item.id ? colors.ink : '#8A9386'} size={22} /></View><Text style={{ fontSize: 10, fontWeight: tab === item.id ? '700' : '500', color: tab === item.id ? colors.ink : colors.muted }}>{item.title}</Text></Pressable>)}</View>
   </SafeAreaView>
+  {modal === 'collection' && <Sheet title="Samlingen min" onClose={() => setModal(null)}>
+    <Discoveries items={data.discoveries} progress={progress} checking={collection.pending} checked={collection.processed} error={collection.error} onRetry={collection.retry} syncError={data.syncError} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setModal(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
+  </Sheet>}
+  {modal === 'goals' && <Sheet title="Mine mål" onClose={() => setModal(null)}><Goals homeArea={data.homeArea} goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => { setModal(null); setTab('profile'); }} /></Sheet>}
   {modal === 'compass' && <Sheet title="Hva ligger den veien?" onClose={() => setModal(null)}><Compass trails={data.trails} onOpen={openTrail} /></Sheet>}
   {modal === 'ghost' && <Sheet title="Velg din skygge" onClose={() => setModal('start')}><Text style={s.body}>Velg en lagret sti eller tidligere tur og start nær samme sted. Skyggen følger den gamle tidslinjen, også gjennom pausene.</Text><Button secondary title="Gå uten skygge" onPress={() => { setGhostId(null); setModal('start'); }} />{!references.length && <Empty title="Først setter du et spor" icon="ghost">Etter den første turen kan du gå sammen med skyggen din.</Empty>}{references.filter(t => cleanPoints(t.points).length > 1).map(t => <Pressable accessibilityRole="button" key={t.id} style={s.card} onPress={() => repeatWithGhost(t)}><Text style={s.subheading}>{t.name}</Text><Text style={s.small}>{date(t.startedAt)} · {durationLabel((t.endedAt ?? t.startedAt) - t.startedAt)}</Text></Pressable>)}</Sheet>}
   {modal === 'trail' && selectedTrail && <SavedTrailDetails canRename={!active || !isGhostTrip(active)} onChange={refresh} trail={selectedTrail} onClose={() => setModal(null)} onGhost={() => repeatWithGhost(trailReference(selectedTrail))} onTrip={() => { setModal(null); setSelectedTrip(selectedTrail.tripId); }} />}
   {modal === 'start' && <Sheet title="Ut og sett spor." onClose={() => setModal(null)}><Image source={require('./assets/trakk-icon.png')} style={{ width: 64, height: 64, borderRadius: 18 }} /><Text style={s.title}>Alt er en del av turen.</Text><Text style={s.body}>Klokken går til du avslutter turen. Alle kategorier og personlige mål teller automatisk.</Text><Button secondary icon="ghost" title={ghost ? `Endre skygge: ${ghost.name}` : "Ta med en skygge (valgfritt)"} onPress={() => setModal('ghost')} />{ghost && <Button secondary title="Gå uten skygge" onPress={() => setGhostId(null)} />}<View style={s.card}><Text style={s.subheading}>GPS med skjermen låst</Text><Text style={s.body}>Tillat nøyaktig posisjon og «Tillat hele tiden» når Android spør. Tillat også varsler for å se den aktive registreringen i varselfeltet.</Text><Text style={s.small}>Telefonens batterisparing og tvangslukking kan stoppe registreringen. Før lengre turer bør du prøve en kort tur med låst skjerm.</Text></View>{ghost && <View style={s.card}><Text style={s.subheading}>Skygge: {ghost.name}</Text><View style={s.between}><Text style={[s.body, { flex: 1 }]}>Fortell meg hvordan jeg ligger an</Text><Switch accessibilityLabel="Slå på tale for skyggen" value={audio} onValueChange={setAudio} trackColor={{ true: colors.ink }} /></View><Button secondary title="Prøv stemmen" icon="sound" onPress={() => { Speech.speak('God tur! Jeg sier fra hvordan du ligger an mot skyggen din.', { language: 'nb-NO', onError: () => Alert.alert('Tale er ikke tilgjengelig', 'Kontroller at norsk tale er installert i Androids tekst-til-tale-innstillinger.') }); }} /></View>}<Button title={busy ? 'Starter GPS …' : 'Start turen min'} icon="arrow" disabled={busy} onPress={() => attempt(async () => { await startTracking(ghostId, audio); setModal(null); setTab('explore'); setServiceMissing(false); })} /></Sheet>}
-  {detail && <TripDetails allowSegments={!active || !isGhostTrip(active)} key={detail.id} trip={detail} reference={references.find(t => t.id === detail.ghostId) ?? null} weight={data.profile.weightKg} onDelete={() => { if (ghostId === detail.id) setGhostId(null); setSelectedTrip(null); refresh(); }} onClose={() => setSelectedTrip(null)} onChange={refresh} onGhost={() => repeatWithGhost(detail)} />}
+  {detail && <TripDetails rewards={<TripRewards trip={detail} trips={data.trips} items={data.discoveries} progress={progress} pending={collection.pending} syncPending={syncing || !!data.syncError} error={collection.error} goals={data.goals} onMap={item => { setSelectedTrip(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />} allowSegments={!active || !isGhostTrip(active)} key={detail.id} trip={detail} reference={references.find(t => t.id === detail.ghostId) ?? null} weight={data.profile.weightKg} onDelete={() => { if (ghostId === detail.id) setGhostId(null); setSelectedTrip(null); refresh(); }} onClose={() => setSelectedTrip(null)} onChange={refresh} onGhost={() => repeatWithGhost(detail)} />}
   </View>;
 }
 class Boundary extends React.Component<{ children: React.ReactNode }, { error: boolean }> {

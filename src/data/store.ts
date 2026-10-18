@@ -28,10 +28,19 @@ type Row = Omit<Trip, 'points' | 'audioEnabled'> & { audioEnabled: number };
 export function createStore(db: Database) {
   db.execSync(SCHEMA);
   const hydrate = (row: Row): Trip => ({ ...row, mode: store.setting<'normal' | 'ghost'>(`mode:${row.id}`, row.ghostId ? 'ghost' : 'normal'), audioEnabled: !!row.audioEnabled, points: db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix) });
+  let completedKey = '', completedTrips: Trip[] = [];
+  const immutableSettings = new Map<string, { raw: string; value: unknown }>();
   const store = {
     active(): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE endedAt IS NULL'); return r ? hydrate(r) : null; },
     getTrip(tripId: string): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE id = ?', tripId); return r ? hydrate(r) : null; },
-    trips(): Trip[] { return db.getAllSync<Row>('SELECT * FROM trips WHERE endedAt IS NOT NULL ORDER BY startedAt DESC').map(hydrate); },
+    trips(): Trip[] {
+      // Finished tracks cannot receive points through append(). Reuse their
+      // identities when a refresh only changed sync status or preferences.
+      const rows = db.getAllSync<Row>('SELECT * FROM trips WHERE endedAt IS NOT NULL ORDER BY startedAt DESC');
+      const key = JSON.stringify(rows);
+      if (key !== completedKey) { completedTrips = rows.map(hydrate); completedKey = key; }
+      return completedTrips;
+    },
     begin(ghostId: string | null, audioEnabled: boolean, now = Date.now()) {
       const tripId = id();
       db.withTransactionSync(() => {
@@ -120,7 +129,16 @@ export function createStore(db: Database) {
       db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', trail.id, tripId, trail.name, trail.createdAt, JSON.stringify(points));
       return trail;
     },
-    setting<T>(key: string, fallback: T): T { const r = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key); return r ? JSON.parse(r.value) as T : fallback; },
+    setting<T>(key: string, fallback: T): T {
+      const r = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key);
+      if (!r) return fallback;
+      if (!['osmDiscoveries', 'goals', 'goalCatalog'].includes(key)) return JSON.parse(r.value) as T;
+      const previous = immutableSettings.get(key);
+      if (previous?.raw === r.value) return previous.value as T;
+      const value = JSON.parse(r.value) as T;
+      immutableSettings.set(key, { raw: r.value, value });
+      return value;
+    },
     setSetting(key: string, value: unknown) { db.runSync('INSERT OR REPLACE INTO settings VALUES (?, ?)', key, JSON.stringify(value)); },
     profile(): Profile { return store.setting<Profile>('profile', { weightKg: null }); },
   };

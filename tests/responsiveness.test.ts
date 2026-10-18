@@ -29,3 +29,12 @@ test('large area evaluation allows UI timers to run and can be cancelled without
 test('cancellation before starting does no collection work', async () => {
   assert.equal(await collectionProgressAsync([street], [trip], () => true), null);
 });
+
+test('large unrelated areas finish and report monotonic progress instead of matching every track', async () => {
+  const far = Array.from({ length: 12000 }, (_, i) => ({ ...street, id: `far/${i}`, latitude: 65, geometry: [{ latitude: 65, longitude: 5 }, { latitude: 65.01, longitude: 5 }], streetPaths: undefined }));
+  const updates: number[]=[];
+  const result=await collectionProgressAsync(far,[trip],()=>false,u=>updates.push(u.processed));
+  assert.equal(Object.keys(result!).length,12000);
+  assert.equal(Object.values(result!).some(p=>p.collected),false);
+  assert.ok(updates.every((n,i)=>i===0 || n>=updates[i-1]));
+});

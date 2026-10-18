@@ -140,3 +140,22 @@ test('ghost mode forbids cuts even when its reference has been deleted', () => {
   assert.throws(() => store.saveTrail(trip.id, 'Ulovlig klipp', 3000, 23000), /skyggetur/);
   assert.equal(store.trails().length, 0); raw.close();
 });
+
+test('status refreshes reuse completed tracks and map input identities; finish/delete invalidate them', () => {
+  const { store, raw } = database();
+  const first = store.begin(null, false, 1000); store.append(first.id, [point]); store.finish(first.id, 11000);
+  const trips = store.trips();
+  store.setSetting('osmDiscoveries', [{ id: 'node/1' }]);
+  const items = store.setting('osmDiscoveries', []);
+  store.setSetting('collectionSyncError', 'offline'); store.setSetting('homeArea', { name: 'Sandviken' });
+  assert.equal(store.trips(), trips);
+  assert.equal(store.setting('osmDiscoveries', []), items);
+  store.append(first.id, [{ ...point, timestamp: 20000 }]);
+  assert.equal(store.trips()[0].points.length, 1);
+  const second = store.begin(null, false, 30000); store.finish(second.id, 40000);
+  assert.notEqual(store.trips(), trips); assert.equal(store.trips().length, 2);
+  store.setSetting('osmDiscoveries', [{ id: 'node/2' }]);
+  assert.notEqual(store.setting('osmDiscoveries', []), items);
+  store.deleteTrip(first.id); assert.equal(store.trips().length, 1);
+  raw.close();
+});

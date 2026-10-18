@@ -108,10 +108,10 @@ def navigation_check():
     tab('Utforsk')
     # Resolve the actual tab bounds before checking the resulting screen.
     w,h=map(int,re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1])
-    for index,label in [(3,'Ditt eget tempo.'),(1,'Målbibliotek'),(2,'Stor samling testtur'),(0,'Hvor går turen?')]*2:
+    for index,label in [(2,'Ditt eget tempo.'),(1,'Stor samling testtur'),(0,'Hvor går turen?')]*2:
         started=time.monotonic()
-        bounds=node_bounds(['Utforsk','Turpass','Turlogg','Deg'][index])
-        x,y=((bounds[0]+bounds[2])//2,(bounds[1]+bounds[3])//2) if bounds else (int(w*(index+.5)/4),h-56)
+        bounds=node_bounds(['Utforsk','Turlogg','Deg'][index])
+        x,y=((bounds[0]+bounds[2])//2,(bounds[1]+bounds[3])//2) if bounds else (int(w*(index+.5)/3),h-56)
         adb('shell','input','tap',str(x),str(y))
         elapsed=assert_page(label)
         print(f'PASS: tab {index} reacted in {time.monotonic()-started:.2f}s (includes adb/accessibility round trips)',flush=True)
@@ -134,15 +134,25 @@ try:
     adb('install','-r','android/app/build/outputs/apk/release/app-release.apk')
     adb('logcat','-c');launch();navigation_check()
     tab('Deg');tab('Utforsk');assert_page('Hvor går turen?');pan_check()
-    tab('Turpass');find('HJEMMEOMRÅDET DITT');find('Bergen');find('Endre hjemmeområde')
-    find('FUNN PÅ TURENE DINE')
+    tab('Deg');tap('Åpne mine mål');find('HJEMMEOMRÅDET DITT');find('Bergen');find('Endre hjemmeområde');tap('Lukk')
+    tap('Åpne samlingen min');find('Samlingen min');tap('Lukk')
+    # Readiness alone is insufficient: the old test never required calculation to finish.
+    tab('Utforsk')
+    deadline=time.monotonic()+120
+    while any('Sjekker funn:' in n.get('text','') for n in screen().iter('node')):
+        assert time.monotonic()<deadline, 'Collection calculation never finishes'
+        time.sleep(1)
+    print('PASS: large-area collection completes instead of displaying an endless check',flush=True)
+    # Returning from background must not restart identical collection input.
+    adb('shell','input','keyevent','3');launch()
+    assert not any('Sjekker funn:' in n.get('text','') for n in screen().iter('node')), 'Unchanged foreground refresh restarted collection'
     tab('Deg');find('Ditt hjemmeområde · valgfritt');tap('Radius 5 km')
     for r in [1,3,5]:
         bounds=node_bounds('Radius '+str(r)+' km')
         width=int(re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1][0])
         assert bounds and 0 <= bounds[0] < bounds[2] <= width, ('radius clipped',r,bounds)
     tap('Lagre hjemmeområde')
-    find('Hjemmeområdet er lagret. Finn mål i Turpass.')
+    find('Hjemmeområdet er lagret. Finn mål under Deg.')
     navigation_check()
     # Accessibility font scale must not push a radius choice off screen.
     adb('shell','settings','put','system','font_scale','1.3')

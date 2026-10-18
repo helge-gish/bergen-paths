@@ -20,8 +20,8 @@ export function Icon({ name, size = 24, color = colors.ink }: { name: IconName; 
   };
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d={paths[name]} stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
 }
-export function Button({ title, onPress, secondary = false, disabled = false, icon }: { title: string; onPress: () => void; secondary?: boolean; disabled?: boolean; icon?: IconName }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} onPress={onPress} disabled={disabled} style={({ pressed }) => [{ backgroundColor: secondary ? colors.pale : colors.ink, minHeight: 54, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 13, flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.45 : pressed ? 0.75 : 1 }]}>
+export function Button({ title, onPress, secondary = false, disabled = false, icon, accessibilityLabel }: { accessibilityLabel?: string; title: string; onPress: () => void; secondary?: boolean; disabled?: boolean; icon?: IconName }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled }} onPress={onPress} disabled={disabled} style={({ pressed }) => [{ backgroundColor: secondary ? colors.pale : colors.ink, minHeight: 54, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 13, flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.45 : pressed ? 0.75 : 1 }]}>
     {icon && <Icon name={icon} color={secondary ? colors.ink : colors.paper} size={20} />}<Text style={{ color: secondary ? colors.ink : colors.paper, fontSize: 15, fontWeight: '700' }}>{title}</Text>
   </Pressable>;
 }

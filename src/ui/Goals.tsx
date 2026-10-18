@@ -28,7 +28,7 @@ export function AreaPicker({ area, onSave, onHere }: { area: HomeArea | null; on
       <TextInput accessibilityLabel="Navn på hjemmeområdet" placeholder="Navn på området" value={name} onChangeText={setName} maxLength={60} style={s.input} />
       <Text style={s.small}>Området måles fra {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}. Navnet endrer ikke avgrensningen.</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{[1000, 3000, 5000].map(r => <Pressable accessibilityRole="button" accessibilityLabel={`Radius ${r / 1000} km`} accessibilityState={{ selected: radius === r }} key={r} onPress={() => setRadius(r)} style={[s.chip, { minWidth: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: radius === r ? colors.ink : colors.pale }]}><Text style={{ color: radius === r ? colors.paper : colors.ink }}>{r / 1000} km radius</Text></Pressable>)}</View>
-      <Button title="Lagre hjemmeområde" disabled={!name.trim() || busy} onPress={() => { onSave({ latitude: selected.latitude, longitude: selected.longitude, name: name.trim(), radius }); setMessage('Hjemmeområdet er lagret. Finn mål i Turpass.'); }} />
+      <Button title="Lagre hjemmeområde" disabled={!name.trim() || busy} onPress={() => { onSave({ latitude: selected.latitude, longitude: selected.longitude, name: name.trim(), radius }); setMessage('Hjemmeområdet er lagret. Finn mål under Deg.'); }} />
     </>}
     {!!message && <Text style={s.small}>{message}</Text>}
   </View>;
@@ -48,12 +48,14 @@ export function Goals({ homeArea, goals, catalog, trips, busy, onToggle, onLoad,
 }
 
 function GoalCard({ goal, active, trips, expanded, onToggle, onExpand }: { goal: Goal; active: boolean; trips: Trip[]; expanded: boolean; onToggle: () => void; onExpand: () => void }) {
-  const progress = useCollectionProgress(goal.needsRefresh ? NO_TARGETS : goal.targets, trips);
-  const collected = progress ? goal.targets.filter(t => progress[t.id]?.collected).length : null;
+  const check = useCollectionProgress(goal.needsRefresh ? NO_TARGETS : goal.targets, trips);
+  const collected = goal.targets.filter(t => check.progress[t.id]?.collected).length;
   return <View style={s.card}>
-    <Text style={s.eyebrow}>{active ? collected !== null && goal.targets.length > 0 && collected === goal.targets.length ? 'MÅL OPPNÅDD' : 'DITT MÅL' : 'FORSLAG'}</Text>
+    <Text style={s.eyebrow}>{active ? !check.pending && !check.error && !goal.needsRefresh && goal.targets.length > 0 && collected === goal.targets.length ? 'MÅL OPPNÅDD' : 'DITT MÅL' : 'FORSLAG'}</Text>
     <Text style={s.subheading}>{goal.title}</Text>
-    <Text style={s.heading}>{goal.needsRefresh ? 'Kartgrunnlaget er endret' : collected === null ? 'Sjekker turene …' : `${collected} / ${goal.targets.length}`}</Text>
+    <Text style={s.heading}>{goal.needsRefresh ? 'Kartgrunnlaget er endret' : `${collected} / ${goal.targets.length}`}</Text>
+    {check.pending && <Text style={s.small}>Sjekker mål: {check.processed} av {check.total} …</Text>}
+    {check.error && <Button secondary title="Prøv målsjekken igjen" onPress={check.retry} />}
     <Text style={s.body}>{goal.needsRefresh ? 'Dette målet brukte den gamle inndelingen av stier og gater. Hent nye målforslag og aktiver en oppdatert utgave. Turene dine er beholdt.' : goal.description}</Text>
     <Button secondary title={active ? 'Deaktiver mål' : 'Aktiver som mitt mål'} onPress={onToggle} />
     <Pressable accessibilityRole="button" onPress={onExpand}><Text style={s.small}>{expanded ? 'Skjul innhold' : 'Se hva målet inneholder'}</Text></Pressable>

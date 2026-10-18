@@ -87,8 +87,8 @@ export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = f
   if (!total) return { fraction: 0, collected: false, firstVisit: null };
   for (const trip of (ordered ? trips : trips.filter(t => t.endedAt !== null).sort((a, b) => a.startedAt - b.startedAt))) {
     let previous: Fix | null = null;
-    let covered = new Set<number>(), ends = new Set<number>();
-    const reset = () => { covered = new Set(); ends = new Set(); };
+    let covered = new Set<number>(), ends = new Set<number>(), coveredMeters = 0;
+    const reset = () => { covered = new Set(); ends = new Set(); coveredMeters = 0; };
     for (const b of (ordered ? trip.points : [...trip.points].sort((a, b) => a.timestamp - b.timestamp))) {
       if (++work % 128 === 0) yield;
       if (!Number.isFinite(b.latitude) || !Number.isFinite(b.longitude) || !Number.isFinite(b.timestamp) || !Number.isFinite(b.accuracy) || b.accuracy < 0 || b.accuracy > 15 || b.timestamp < trip.startedAt || b.timestamp > trip.endedAt! || (b.speed !== null && b.speed > 3.3)) { previous = null; reset(); continue; }
@@ -108,12 +108,12 @@ export function* streetProgressSteps(item: Discovery, trips: Trip[], ordered = f
         if (covered.has(i)) return;
         const sx = (s.b.longitude - s.a.longitude) * Math.cos(a.latitude * Math.PI / 180), sy = s.b.latitude - s.a.latitude;
         const alignment = Math.abs(dx * sx + dy * sy) / Math.hypot(dx, dy) / Math.hypot(sx, sy), f = along(s.p);
-        if (alignment >= Math.SQRT1_2 && f >= -2 / length && f <= 1 + 2 / length && project(s.p, a, b).distance <= 15) { covered.add(i); }
+        if (alignment >= Math.SQRT1_2 && f >= -2 / length && f <= 1 + 2 / length && project(s.p, a, b).distance <= 15) { covered.add(i); coveredMeters += s.weight; }
       });
       (item.streetEnds ?? []).forEach((p, i) => { if (Math.min(distance(a, p), distance(b, p)) <= 12) ends.add(i); });
-      const fraction = [...covered].reduce((n, i) => n + samples[i].weight, 0) / total;
+      const fraction = coveredMeters / total;
       best = Math.max(best, fraction);
-      if (fraction >= 0.95 && ends.size === (item.streetEnds ?? []).length) return { fraction, collected: true, firstVisit: b.timestamp };
+      if (fraction >= 0.95 && ends.size === (item.streetEnds ?? []).length) return { fraction, collected: true, firstVisit: b.timestamp, earnedTripId: trip.id };
     }
   }
   return { fraction: best, collected: false, firstVisit: null };
