@@ -18,7 +18,8 @@ adb, tap, find, launch, screen = (c[n] for n in ['adb','tap','find','launch','sc
 PACKAGE = c['PACKAGE']
 
 def top():
-    for _ in range(5): adb('shell','input','swipe','8','400','8','1900','90')
+    width,height=map(int,re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1])
+    for _ in range(6): adb('shell','input','swipe','8',str(height//3),'8',str(height*4//5),'120')
 
 def shot(name):
     with open('/tmp/'+name,'wb') as output: subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True,timeout=30)
@@ -60,7 +61,9 @@ try:
         adb('shell','rm','-f',path+'-wal',path+'-shm');adb('push',str(folder/'trakk.db'),'/data/local/tmp/trakk-test.db');adb('shell','cat /data/local/tmp/trakk-test.db > '+path)
     launch();tap('Turlogg');tap('Runden igjen');find('Fullførte strekk · 2');find('✓ Testbakken');find('Mot tidligere beste:',contains=True);shot('trakk-rewards.png')
     print('PASS: historical walk shows both completed stretches and previous/best comparison',flush=True)
-    tap('Bruk denne turen som skygge');wait_fix(60.01)
+    tap('Bruk denne turen som skygge');time.sleep(3)
+    if any(n.get('text')=='Turn on' for n in screen().iter('node')): tap('Turn on')
+    wait_fix(60.01)
     find('Gå til startpunktet først')
     node=next(n for n in screen().iter('node') if n.get('content-desc')=='Gå til startpunktet først')
     assert node.get('enabled')=='false', 'Ghost start must stay disabled away from start'
@@ -79,7 +82,7 @@ try:
     tap('Lagre strekk hit');find('✓ Strekket er lagret. Neste strekk starter her.')
     assert 'Navn på strekket' not in Path('/tmp/trakk-ui.xml').read_text()
     tap_contains('Angre ·');find('Angret. GPS-sporet er beholdt.')
-    tap('Sett start her');find('✓ Startpunkt satt her. Hele turen lagres fortsatt.');tap_contains('Angre ·');find('Angret. GPS-sporet er beholdt.')
+    top();wait_fix(60.0012,5.30285,2);tap('Sett start her');find('✓ Startpunkt satt her. Hele turen lagres fortsatt.');tap_contains('Angre ·');find('Angret. GPS-sporet er beholdt.')
     print('PASS: explicit free walking, save and set-start confirmations with undo, no stuck edit field',flush=True)
     tap('Avslutt og lagre tur');tap('Avslutt og lagre');time.sleep(3)
     adb('shell','am','force-stop',PACKAGE);launch();tap('Turlogg');tap('Runden igjen');find('Fullførte strekk · 2')
