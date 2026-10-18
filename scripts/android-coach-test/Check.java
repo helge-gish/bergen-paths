@@ -42,11 +42,12 @@ public class Check extends Instrumentation {
       stopCoach();count=TestVoice.spoken.size();SystemClock.sleep(1000);
       check(!(Boolean)call("offer",new Class[]{String.class,String.class},"old ghost","ghost"),"Stopped trainer retained route audio");
       check(TestVoice.spoken.size()==count,"Stop leaked audio");
+      configure(543000,true,true);SystemClock.sleep(1500);
+      check(TestVoice.spoken.size()==count,"Recreation replayed consumed cue");stopCoach();
       id="complete-test";configure(2098000,true,true);SystemClock.sleep(4000);
       check(TestVoice.spoken.stream().filter(s->s.contains("fire ganger fire fullført")).count()==1,"Completion cue missing/duplicated");
       Field wake=type.getDeclaredField("wake");wake.setAccessible(true);check(wake.get(coach)==null,"Completion retained wakelock");
-      stopCoach();count=TestVoice.spoken.size();id="native-test";configure(543000,true,true);SystemClock.sleep(1500);
-      check(TestVoice.spoken.size()==count,"Recreation replayed consumed cue");stopCoach();
+      stopCoach();
       result.putString("result","PASS: final APK native clock, locked screen, combined ghost+transition, pause, mute, resume, stop, completion, wakelock release and durable cue cursor");
       result.putString("spoken",TestVoice.spoken.toString());finish(-1,result);
     } catch(Throwable e) { result.putString("error",e.toString());result.putString("spoken",TestVoice.spoken.toString());finish(0,result); }
