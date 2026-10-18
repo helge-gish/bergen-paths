@@ -65,9 +65,11 @@ test('distance and ascent totals unlock milestones across trips but exclude unfi
 });
 
 test('the curated seven-peak goal resolves the local Fløyfjellet name for Fløyen', () => {
-  const items = PEAKS.map((peak, i) => ({ ...item, ...peak, id: `node/${i}`, kind: 'peak' as const, name: peak.id === 'floyen' ? 'Fløyfjellet' : peak.name }));
+  const observed = [[60.3775029,5.3869233],[60.3983862,5.3454053],[60.4131846,5.3665465],[60.4094845,5.3405812],[60.360776,5.3191415],[60.3757072,5.2914345],[60.3737874,5.2420929]];
+  const items = PEAKS.map((peak, i) => ({ ...item, ...peak, latitude: observed[i][0], longitude: observed[i][1], id: `node/${i}`, kind: 'peak' as const, name: peak.id === 'floyen' ? 'Fløyfjellet' : peak.name }));
   const goal = bergenGoal(items);
   assert.equal(goal?.targets.length, 7);
   assert.ok(goal?.targets.some(t => t.name === 'Fløyen (Fløyfjellet)'));
   assert.equal(bergenGoal(items.filter(t => t.name !== 'Fløyfjellet')), null);
+  assert.equal(bergenGoal(items.map(t => t.name === 'Løvstakken' ? { ...t, latitude: 60.3446, longitude: 5.3427 } : t)), null);
 });
