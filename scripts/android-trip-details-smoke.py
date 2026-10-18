@@ -59,6 +59,9 @@ try:
     tap('Turlogg')
     tap('Utforsk')
     tap('Finn stier med kompasset')
+    time.sleep(3)
+    if any(node.get('text') == 'No thanks' for node in context['screen']().iter('node')):
+        tap('No thanks')
     tap('Åpne sti: Teststi')
     find('Stien din')
     tap('Gå denne igjen med skygge')
