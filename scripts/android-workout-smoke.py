@@ -35,7 +35,9 @@ try:
   db.commit();db.execute('PRAGMA wal_checkpoint(TRUNCATE)');db.close()
   adb('shell','rm','-f',path+'-wal',path+'-shm');adb('push',str(Path(tmp)/'trakk.db'),'/data/local/tmp/trakk-test.db');adb('shell','cat /data/local/tmp/trakk-test.db > '+path)
  print('PASS: real start, pause survives process restart, resume, early trainer stop preserves active GPS trip, summary and durable state',flush=True)
- launch();tap('Utforsk');tap('Åpne strekk: Teststrekket');tap('Gå denne igjen med skygge');top();tap('4×4-trener · beta');tap('Fritt tempo')
+ launch();tap('Utforsk');tap('Åpne strekk: Teststrekket');tap('Gå denne igjen med skygge');time.sleep(3)
+ if any(n.get('text')=='Turn on' for n in screen().iter('node')):tap('Turn on');time.sleep(2)
+ top();tap('4×4-trener · beta');tap('Fritt tempo')
  top();assert any(n.get('content-desc')=='Fritt tempo' and n.get('checked')=='true' for n in screen().iter('node'))
  print('PASS: saved stretch + ghost uses same free/4x4 picker',flush=True)
 finally:

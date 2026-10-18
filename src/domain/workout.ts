@@ -44,7 +44,7 @@ export const workoutCues: WorkoutCue[] = workoutPhases.flatMap(p => {
   const offsets = p.kind === 'fast' ? [60, 120, 180, 230] : [p.seconds / 2, p.seconds - 60, p.seconds - 10];
   return [{ at: p.start * 1000, text: opening }, ...offsets.map((offset, i) => {
     const left = p.seconds - offset;
-    const remaining = left === 10 ? 'Ti sekunder' : left === 90 ? 'Ett og et halvt minutt' : left === 150 ? 'To og et halvt minutt' : `${left / 60 === 1 ? 'Ett' : left / 60} minutter`;
+    const remaining = left === 10 ? 'Ti sekunder' : left === 90 ? 'Ett og et halvt minutt' : left === 150 ? 'To og et halvt minutt' : left === 60 ? 'Ett minutt' : `${left / 60} minutter`;
     const next = p.kind === 'fast' ? 'rolig gange' : p.kind === 'cooldown' ? 'økten er ferdig' : 'rask gange';
     const motivation = p.kind === 'fast' && left > 10 ? ['Flott innsats! Hold en god rytme.', 'Halvveis i draget! Dette går fint.', 'Siste minuttet. Godt jobbet!'][i] + ' ' : '';
     return { at: (p.start + offset) * 1000, text: `${motivation}${remaining} igjen til ${next}.` };
