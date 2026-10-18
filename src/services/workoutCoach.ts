@@ -10,7 +10,7 @@ export function syncWorkoutCoach(trip: Trip | null): Promise<void> {
   if (!native) return Promise.resolve();
   const w = trip?.workout;
   const json = trip && trip.endedAt === null && w && w.endedAt === null
-    ? JSON.stringify({ id: trip.id, elapsedMs: w.elapsedMs, runningSince: w.runningSince, running: w.runningSince !== null, audio: w.audioEnabled, routeAudio: trip.audioEnabled,
+    ? JSON.stringify({ id: trip.id, elapsedMs: w.elapsedMs, runningSince: w.runningSince, running: w.runningSince !== null, audio: w.audioEnabled, routeAudio: trip.audioEnabled, routeKey: trip.ghostId,
       voice: getStore().setting<string | null>('voiceId', null), totalMs: WORKOUT_MS, phases: workoutPhases, cues: workoutCues }) : null;
   if (json === configured) return sequence;
   configured = json;
@@ -20,4 +20,4 @@ export function syncWorkoutCoach(trip: Trip | null): Promise<void> {
 export function workoutVoiceBusy() { return native?.busy() ?? false; }
 export function workoutVoiceError() { return native?.error() ?? null; }
 
-export async function offerWorkoutVoice(text: string, kind: 'ghost' | 'event') { return native ? native.offer(text, kind) : false; }
+export async function offerWorkoutVoice(text: string, kind: 'ghost' | 'event') { await sequence.catch(() => {}); return native ? native.offer(text, kind) : false; }

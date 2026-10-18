@@ -32,6 +32,7 @@ export function WorkoutCard({ trip, now, onChange }: { trip: Trip; now: number; 
       <Text style={s.body}>{status.paused ? 'Treningsklokken står stille. Tid og GPS for hele turen fortsetter.' : `Neste: ${status.next?.label ?? 'Fritt tempo · økten er ferdig'}`}</Text>
       <Text style={s.small}>{status.rounds} av 4 raske drag fullført · {countdown(Math.ceil((35 * 60_000 - status.elapsed) / 1000))} igjen av økten</Text>
       <View style={s.between}><Text style={[s.body, { flex: 1 }]}>Taletrener og påminnelser</Text><Switch accessibilityLabel="Lyd fra 4×4-treneren" value={w.audioEnabled} onValueChange={value => void change(value ? 'unmute' : 'mute')} /></View>
+      <Text style={s.small}>Skygge og strekk samordnes med treneren i én talekø.</Text>
       {error && <Text style={s.small}>{error}</Text>}
       <Button secondary title={status.paused ? 'Fortsett 4×4' : 'Pause 4×4'} onPress={() => void change(status.paused ? 'resume' : 'pause')} />
       <Button secondary title="Avslutt 4×4 · gå videre fritt" onPress={() => Alert.alert('Avslutte 4×4-treningen?', 'Turen, skyggen og GPS-registreringen fortsetter. Du styrer tempoet selv.', [{ text: 'Behold treningen', style: 'cancel' }, { text: 'Avslutt 4×4', onPress: () => void change('stop') }])} />

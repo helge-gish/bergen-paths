@@ -95,6 +95,7 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
   store.setSetting('audioError', null);
   try {
     await Location.startLocationUpdatesAsync(LOCATION_TASK, trackingOptions);
+    if (training === '4x4') await Speech.stop();
     await syncWorkoutCoach(trip).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     return trip;
   } catch (e) {

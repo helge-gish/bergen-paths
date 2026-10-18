@@ -48,6 +48,7 @@ private object Coach {
   @Volatile private var protectedUntil = 0L
   @Volatile var error: String? = null
   private var generation = 0
+  private var finishing = false
   private data class Pending(val text: String, val at: Long)
   private val pending = mutableMapOf<String, Pending>()
   @Volatile private var speakingUntil = 0L
@@ -56,9 +57,10 @@ private object Coach {
     if (config?.optBoolean("routeAudio") == true) pending[kind] = Pending(text, SystemClock.elapsedRealtime())
     return true
   }
-  private fun takePending(): String {
+  private fun takePending(shortOnly: Boolean = false): String {
     val now = SystemClock.elapsedRealtime()
-    val result = listOf("event", "ghost").mapNotNull { key -> pending.remove(key)?.takeIf { now - it.at < if (key == "ghost") 75_000 else 35_000 }?.text }
+    val keys = if (shortOnly) listOf("ghost") else listOf("event", "ghost")
+    val result = keys.mapNotNull { key -> pending.remove(key)?.takeIf { now - it.at < if (key == "ghost") 45_000 else 35_000 }?.text }
     return if (config?.optBoolean("routeAudio") == true) result.joinToString(" ") else ""
   }
   private fun flushPending(nextCue: Long) {
@@ -69,7 +71,7 @@ private object Coach {
     }
   }
   private val loop = object : Runnable {
-    override fun run() { tick(); if (config != null) handler.postDelayed(this, 500) }
+    override fun run() { tick(); if (config != null && !finishing) handler.postDelayed(this, 500) }
   }
   private fun elapsed(): Long = baseElapsed + if (config?.optBoolean("running") == true) SystemClock.elapsedRealtime() - baseClock else 0L
   fun busy(): Boolean = SystemClock.elapsedRealtime() < protectedUntil
@@ -77,6 +79,7 @@ private object Coach {
   fun configure(ctx: Context, json: String?) {
     if (json == raw) return
     val old = config
+    finishing = false
     raw = json
     handler.removeCallbacks(loop)
     context = ctx
@@ -89,6 +92,8 @@ private object Coach {
       return
     }
     val next = JSONObject(json)
+    if (!next.getBoolean("routeAudio")) pending.clear()
+    else if (old?.optString("routeKey") != next.optString("routeKey")) pending.remove("ghost")
     config = next
     baseElapsed = next.getLong("elapsedMs") + if (next.getBoolean("running")) (System.currentTimeMillis() - next.getLong("runningSince")).coerceAtLeast(0) else 0
     baseClock = SystemClock.elapsedRealtime()
@@ -156,6 +161,7 @@ private object Coach {
     }
   }
   private fun tick() {
+    if (finishing) return
     val c = config ?: return
     if (!c.getBoolean("running")) { protectedUntil = 0; flushPending(Long.MAX_VALUE); return }
     val ms = elapsed()
@@ -177,7 +183,7 @@ private object Coach {
       context!!.getSharedPreferences("trakk-coach", Context.MODE_PRIVATE).edit().putString("trip", c.getString("id")).putInt("cue", lastCue).commit()
       val cue = cues.getJSONObject(latest)
       if (c.getBoolean("audio")) {
-        if (ms - cue.getLong("at") <= 12_000) say((cue.getString("text") + " " + takePending()).trim(), latest.toString())
+        if (ms - cue.getLong("at") <= 12_000) say((cue.getString("text") + " " + takePending(nextCue - ms <= 15_000)).trim(), latest.toString())
         else if (ms < c.getLong("totalMs")) announceCurrent()
       }
     }
@@ -188,7 +194,7 @@ private object Coach {
       // Keep the completion audible, but stop the timer and release TTS shortly after.
       val completedRaw = raw
       handler.postDelayed({ if (raw == completedRaw) configure(context!!, null) }, 20_000)
-      config = null
+      finishing = true
     }
   }
 }
