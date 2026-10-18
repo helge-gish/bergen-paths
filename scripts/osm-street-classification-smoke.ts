@@ -3,7 +3,7 @@ import { overpass } from '../src/services/osm';
 import { parseOsm } from '../src/domain/discoveries';
 import { parseStreets } from '../src/domain/streets';
 async function main() {
-const data = await overpass('[out:json][timeout:60];way(around:4000,60.406,5.329)[name~"Gutenberg|Guttenberg",i];out geom;');
+const data = await overpass('[out:json][timeout:60];way(60.37,5.28,60.44,5.40)[name="Gutenbergsveien"];out geom;');
 console.log('OSM namesakes:', JSON.stringify(data.elements.map(e => ({id:e.id,tags:e.tags}))));
 assert.ok(data.elements.length > 0, 'Expected real Gutenberg street data');
 const trails = parseOsm(data,Date.now()).filter(i=>i.kind==='trail');
