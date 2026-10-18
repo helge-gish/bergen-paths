@@ -1,4 +1,4 @@
-import { isUnnamedRoute } from './discoveryGroups';
+import { needsDiscoveryName } from './discoveryGroups';
 import { achievements } from './achievements';
 import type { Discovery, Progress } from './discoveries';
 import type { Trip } from './types';
@@ -10,7 +10,7 @@ export function tripRewards(trip: Trip, trips: Trip[], items: Discovery[], progr
   const before = index < 0 ? [] : ordered.slice(0, index);
   const through = index < 0 ? [] : ordered.slice(0, index + 1);
   const beforeIds = new Set(before.map(t => t.id)), throughIds = new Set(through.map(t => t.id));
-  const finds = items.filter(i => !isUnnamedRoute(i));
+  const finds = items.filter(i => !needsDiscoveryName(i));
   const collectedBefore = finds.filter(i => progress[i.id]?.collected && beforeIds.has(progress[i.id].earnedTripId ?? '')).length;
   const collectedAfter = finds.filter(i => progress[i.id]?.collected && throughIds.has(progress[i.id].earnedTripId ?? '')).length;
   const earlier = achievements(before, collectedBefore), current = achievements(through, collectedAfter);

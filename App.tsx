@@ -1,5 +1,5 @@
 import { nameDiscovery } from './src/domain/discoveryNames';
-import { isUnnamedRoute } from './src/domain/discoveryGroups';
+import { needsDiscoveryName } from './src/domain/discoveryGroups';
 import { isGhostTrip } from './src/domain/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Image, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
@@ -111,7 +111,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const [serviceMissing, setServiceMissing] = useState(false), [weightText, setWeightText] = useState(data.profile.weightKg?.toString() ?? '');
   const refresh = useCallback(() => setData(snapshot()), []);
   const active = data.active;
-  const findCount = useMemo(() => data.discoveries.filter(i => !isUnnamedRoute(i) && data.awards[i.id] !== undefined).length, [data.discoveries, data.awards]);
+  const findCount = useMemo(() => data.discoveries.filter(i => !needsDiscoveryName(i) && data.awards[i.id] !== undefined).length, [data.discoveries, data.awards]);
   const renameDiscovery = (item: Discovery, name: string) => {
     try { const store = getStore(); store.setSetting('osmDiscoveries', nameDiscovery(store.setting<Discovery[]>('osmDiscoveries', []), item.id, name)); refresh(); }
     catch (e) { Alert.alert('Kunne ikke lagre navnet', e instanceof Error ? e.message : String(e)); }

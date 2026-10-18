@@ -1,14 +1,17 @@
 import type { Discovery, Progress } from './discoveries';
 
+const fallbacks: Partial<Record<Discovery['kind'], string[]>> = { trail: ['Sti uten navn'], steps: ['Trapp', 'Trapp uten navn'], viewpoint: ['Utsiktspunkt', 'Utsiktspunkt uten navn'] };
+
 /** Older saved map data has fallback titles but no explicit unnamed flag. */
-export function isUnnamedRoute(item: Discovery) {
+export function needsDiscoveryName(item: Discovery) {
   if (item.localName?.trim()) return false;
-  if (item.kind !== 'trail' && item.kind !== 'steps') return false;
-  return item.unnamed ?? (item.kind === 'trail' ? item.name === 'Sti uten navn' : ['Trapp', 'Trapp uten navn'].includes(item.name));
+  const names = fallbacks[item.kind];
+  if (!names) return false;
+  return item.unnamed ?? names.includes(item.name.trim());
 }
 export function groupDiscoveries(items: Discovery[]) {
   const named: Discovery[] = [], unnamed: Discovery[] = [];
-  for (const item of items) (isUnnamedRoute(item) ? unnamed : named).push(item);
+  for (const item of items) (needsDiscoveryName(item) ? unnamed : named).push(item);
   return { named, unnamed };
 }
 export function routeProgressLabel(p: Progress) {

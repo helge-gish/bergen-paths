@@ -73,3 +73,16 @@ test('a local name promotes only walked routes and renaming cannot duplicate a f
   const partial = walk('b', 0, 2, 1000);
   assert.equal(tripRewards(partial, [partial], items, collectionProgress(items, [partial])).newFinds.length, 0);
 });
+
+
+test('an unnamed viewpoint stays out of trip awards and XP until it is both visited and named', () => {
+  const a = walk('a', 0, 2, 1000);
+  const viewpoint: Discovery = { ...path, id: 'node/2', name: 'Utsiktspunkt', kind: 'viewpoint', geometry: [] };
+  const progress = collectionProgress([viewpoint], [a]);
+  assert.equal(progress[viewpoint.id].collected, true);
+  assert.equal(tripRewards(a, [a], [viewpoint], progress).newFinds.length, 0);
+  assert.equal(tripRewards(a, [a], [viewpoint], progress).xp, 0);
+  const named = nameDiscovery([viewpoint], viewpoint.id, 'Fjordgløtt');
+  assert.equal(tripRewards(a, [a], named, progress).newFinds.length, 1);
+  assert.equal(tripRewards(a, [a], named, {}).newFinds.length, 0);
+});
