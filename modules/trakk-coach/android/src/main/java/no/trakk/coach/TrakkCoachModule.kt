@@ -183,7 +183,7 @@ private object Coach {
       context!!.getSharedPreferences("trakk-coach", Context.MODE_PRIVATE).edit().putString("trip", c.getString("id")).putInt("cue", lastCue).commit()
       val cue = cues.getJSONObject(latest)
       if (c.getBoolean("audio")) {
-        if (ms - cue.getLong("at") <= 12_000) say((cue.getString("text") + " " + takePending(nextCue - ms <= 15_000)).trim(), latest.toString())
+        if (ms - cue.getLong("at") <= 2_000) say((cue.getString("text") + " " + takePending(nextCue - ms <= 15_000)).trim(), latest.toString())
         else if (ms < c.getLong("totalMs")) announceCurrent()
       }
     }
