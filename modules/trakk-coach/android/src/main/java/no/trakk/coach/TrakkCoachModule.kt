@@ -41,6 +41,7 @@ private object Coach {
   private var context: Context? = null
   private var engine: TextToSpeech? = null
   private var ready = false
+  private var voiceReady = false
   private var wake: PowerManager.WakeLock? = null
   private var baseElapsed = 0L
   private var baseClock = 0L
@@ -87,7 +88,7 @@ private object Coach {
     if (old?.optString("id") != JSONObject(json ?: "{}").optString("id")) pending.clear()
     wake?.let { if (it.isHeld) it.release() }; wake = null
     if (json == null) {
-      config = null; engine?.shutdown(); engine = null; ready = false
+      config = null; engine?.shutdown(); engine = null; ready = false; voiceReady = false
       generation++; protectedUntil = 0; error = null; pending.clear()
       return
     }
@@ -116,7 +117,8 @@ private object Coach {
           engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
             override fun onDone(id: String?) { speakingUntil = 0 }
-            @Deprecated("Android callback") override fun onError(id: String?) { speakingUntil = 0; error = "Tale kunne ikke spilles av. Sjekk talestemme og medievolum på mobilen." }
+            @Deprecated("Android callback") override fun onError(id: String?) { speakingUntil = 0; error = "Tale kunne ikke spilles av. Sjekk talestemme og medievolum på mobilen. Neste beskjed prøves igjen." }
+            override fun onError(id: String?, code: Int) { onError(id); Log.w("TrakkCoach", "Speech failed: $code; retrying at next cue") }
           })
           selectVoice()
           tick()
@@ -131,16 +133,18 @@ private object Coach {
   }
   private fun selectVoice() {
     error = null
+    voiceReady = true
     val selected = config?.optString("voice")
     val voices = engine?.voices.orEmpty()
     val voice = voices.find { it.name == selected } ?: voices.find { it.locale.language in listOf("nb", "nn", "no") && !it.isNetworkConnectionRequired }
       ?: voices.find { it.locale.language in listOf("nb", "nn", "no") }
     if (voice != null) engine?.voice = voice
-    else if ((engine?.setLanguage(Locale.forLanguageTag("nb-NO")) ?: -1) < 0) error = "Norsk talestemme mangler. Installer norsk tale i Androids taleinnstillinger."
+    else if ((engine?.setLanguage(Locale.forLanguageTag("nb-NO")) ?: -1) < 0) { voiceReady = false; error = "Norsk talestemme mangler. Installer norsk tale i Androids taleinnstillinger." }
     engine?.setSpeechRate(0.95f)
   }
   private fun say(text: String, cue: String) {
-    if (!ready || (config?.optBoolean("audio") != true && config?.optBoolean("routeAudio") != true) || error != null) return
+    if (!ready || !voiceReady || (config?.optBoolean("audio") != true && config?.optBoolean("routeAudio") != true)) return
+    error = null
     speakingUntil = SystemClock.elapsedRealtime() + 30_000
     protectedUntil = SystemClock.elapsedRealtime() + 15_000
     if (engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, cue) == TextToSpeech.ERROR) error = "Tale kunne ikke spilles av. Nedtellingen fungerer fortsatt."
