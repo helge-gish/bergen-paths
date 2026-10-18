@@ -181,3 +181,37 @@ test('automatic trip names can improve at finish; chosen names survive suggestio
   assert.equal(reopened.setting(`automaticName:${auto.id}`, null), null);
   raw.close();
 });
+test('undo restores a cut boundary and count without dropping recorded GPS; persists through restart', () => {
+  const { store, db, raw } = database(); const t = store.begin(null, false, 1000);
+  const pts = Array.from({length:8}, (_,i)=>({...point,timestamp:1000+i*10000,latitude:point.latitude+i*.0001}));
+  store.append(t.id, pts.slice(0,4));
+  const saved = store.clipSegment(t.id,31000);
+  store.append(t.id,pts.slice(4));
+  const reopened=createStore(db); reopened.undoSegment(t.id,39000);
+  assert.equal(reopened.trails().some(t=>t.id===saved.id),false);
+  assert.equal(reopened.segmentWindow(t.id).from,1000);
+  assert.equal(reopened.segmentWindow(t.id).count,0);
+  assert.equal(reopened.getTrip(t.id)?.points.length,8);
+  reopened.setSegmentStart(t.id,71000);
+  assert.equal(reopened.segmentWindow(t.id).from,71000);
+  reopened.undoSegment(t.id,75000); assert.equal(reopened.segmentWindow(t.id).from,1000);
+  reopened.setSegmentStart(t.id,71000);
+  assert.throws(()=>reopened.undoSegment(t.id,82000),/utløpt/);
+  raw.close();
+});
+test('only the latest segment action can be undone and finishing closes undo', () => {
+  const {store,raw}=database(); const t=store.begin(null,false,1000);
+  store.append(t.id,Array.from({length:4},(_,i)=>({...point,timestamp:1000+i*10000,latitude:point.latitude+i*.0001})));
+  store.clipSegment(t.id,31000); store.setSegmentStart(t.id,32000); store.undoSegment(t.id,33000);
+  assert.equal(store.trails().length,1);
+  assert.throws(()=>store.undoSegment(t.id,34000),/utløpt/);
+  store.setSegmentStart(t.id,34000);store.finish(t.id,35000);
+  assert.throws(()=>store.undoSegment(t.id,36000),/utløpt/);raw.close();
+});
+test('explicitly leaving ghost mode preserves time and fixes and enables future clips', () => {
+  const {store,raw}=database();const t=store.begin('old',true,1000);
+  store.append(t.id,[point]);store.leaveGhost(t.id);
+  const active=store.active()!;assert.equal(active.startedAt,1000);assert.equal(active.points.length,1);
+  assert.equal(active.ghostId,null);assert.equal(active.mode,'normal');
+  assert.equal(store.setting('originalGhost:'+t.id,null),'old');raw.close();
+});

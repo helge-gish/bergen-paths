@@ -25,6 +25,7 @@ PRAGMA user_version = 1;
 `;
 const id = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export type SegmentWindow = { from: number; count: number; lastTrailId: string | null };
+export type SegmentUndo = { before: SegmentWindow; after: SegmentWindow; trailId: string | null; expiresAt: number };
 type Row = Omit<Trip, 'points' | 'audioEnabled'> & { audioEnabled: number };
 export function createStore(db: Database) {
   db.execSync(SCHEMA);
@@ -78,6 +79,16 @@ export function createStore(db: Database) {
     cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`); }); },
     rename(tripId: string, name: string) { const value = name.trim().slice(0, 80); if (!value) throw new Error('Gi turen et navn først.'); db.withTransactionSync(() => { db.runSync('UPDATE trips SET name = ? WHERE id = ?', value, tripId); store.setSetting(`automaticName:${tripId}`, false); }); },
     suggestName(tripId: string, name: string) { if (name.trim() && store.setting(`automaticName:${tripId}`, false)) db.runSync('UPDATE trips SET name = ? WHERE id = ?', name.trim().slice(0, 80), tripId); },
+    leaveGhost(tripId: string) {
+      db.withTransactionSync(() => {
+        const trip = store.getTrip(tripId);
+        if (!trip || trip.endedAt !== null) throw new Error('Ingen aktiv tur.');
+        store.setSetting(`originalGhost:${tripId}`, trip.ghostId);
+        db.runSync('UPDATE trips SET ghostId = NULL WHERE id = ?', tripId);
+        store.setSetting(`mode:${tripId}`, 'normal');
+        store.setSetting(`segments:${tripId}`, { from: trip.points.at(-1)?.timestamp ?? trip.startedAt, count: 0, lastTrailId: null });
+      });
+    },
     setAudio(tripId: string, enabled: boolean) { db.runSync('UPDATE trips SET audioEnabled = ? WHERE id = ?', enabled ? 1 : 0, tripId); },
     claimCue(tripId: string, now: number) { return db.runSync('UPDATE trips SET lastCueAt = ? WHERE id = ? AND endedAt IS NULL AND audioEnabled = 1 AND lastCueAt <= ?', now, tripId, now - 60_000).changes === 1; },
     trails(): Trail[] { return db.getAllSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails ORDER BY createdAt DESC').map(r => ({ ...r, points: JSON.parse(r.points) })); },
@@ -86,33 +97,52 @@ export function createStore(db: Database) {
       if (!trip) throw new Error('Turen finnes ikke lenger.');
       return store.setting<SegmentWindow>(`segments:${tripId}`, { from: trip.startedAt, count: 0, lastTrailId: null });
     },
+    segmentUndo(tripId: string): SegmentUndo | null { return store.setting<SegmentUndo | null>(`segmentUndo:${tripId}`, null); },
+    undoSegment(tripId: string, now = Date.now()) {
+      db.withTransactionSync(() => {
+        const undo = store.segmentUndo(tripId), trip = store.getTrip(tripId);
+        if (!undo || now > undo.expiresAt || !trip || trip.endedAt !== null || JSON.stringify(store.segmentWindow(tripId)) !== JSON.stringify(undo.after)) throw new Error('Angrefristen er utløpt.');
+        if (undo.trailId) {
+          if (db.getFirstSync('SELECT id FROM trips WHERE ghostId = ?', 'trail:' + undo.trailId)) throw new Error('Strekket er allerede i bruk.');
+          db.runSync('DELETE FROM trails WHERE id = ?', undo.trailId);
+        }
+        store.setSetting(`segments:${tripId}`, undo.before);
+        store.setSetting(`segmentUndo:${tripId}`, null);
+      });
+    },
     setSegmentStart(tripId: string, now = Date.now()) {
       const trip = store.getTrip(tripId);
-      if (!trip || trip.endedAt !== null || isGhostTrip(trip)) throw new Error('Stisegmenter kan bare klippes under en vanlig tur.');
+      if (!trip || trip.endedAt !== null || isGhostTrip(trip)) throw new Error('Strekk kan bare klippes under en vanlig tur.');
       const last = cleanPoints(trip.points.filter(p => p.timestamp <= now)).at(-1);
       if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du setter startpunkt.');
-      store.setSetting(`segments:${tripId}`, { ...store.segmentWindow(tripId), from: last.timestamp });
+      db.withTransactionSync(() => {
+        const before = store.segmentWindow(tripId), after = { ...before, from: last.timestamp };
+        store.setSetting(`segments:${tripId}`, after);
+        store.setSetting(`segmentUndo:${tripId}`, { before, after, trailId: null, expiresAt: now + 10000 });
+      });
     },
     clipSegment(tripId: string, now = Date.now()): Trail {
       let saved: Trail | undefined;
       db.withTransactionSync(() => {
         const trip = store.getTrip(tripId);
-        if (!trip || trip.endedAt !== null || isGhostTrip(trip)) throw new Error('Stisegmenter kan bare klippes under en vanlig tur.');
+        if (!trip || trip.endedAt !== null || isGhostTrip(trip)) throw new Error('Strekk kan bare klippes under en vanlig tur.');
         const window = store.segmentWindow(tripId);
         const points = cleanPoints(trip.points.filter(p => p.timestamp >= window.from && p.timestamp <= now));
         const last = points.at(-1);
-        if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du lagrer stien.');
+        if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du lagrer strekket.');
         const meters = points.slice(1).reduce((n, p, i) => n + distance(points[i], p), 0);
-        if (points.length < 2 || meters < 10) throw new Error('Gå litt lenger før du lagrer neste stisegment.');
-        saved = { id: id(), tripId, name: `Sti ${window.count + 1} · ${new Date(now).toLocaleDateString('nb-NO')}`, createdAt: now, points };
+        if (points.length < 2 || meters < 10) throw new Error('Gå litt lenger før du lagrer neste strekk.');
+        saved = { id: id(), tripId, name: `Strekk ${window.count + 1} · ${new Date(now).toLocaleDateString('nb-NO')}`, createdAt: now, points };
         db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', saved.id, tripId, saved.name, now, JSON.stringify(points));
-        store.setSetting(`segments:${tripId}`, { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id });
+        const after = { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id };
+        store.setSetting(`segments:${tripId}`, after);
+        store.setSetting(`segmentUndo:${tripId}`, { before: window, after, trailId: saved.id, expiresAt: now + 10000 });
       });
       return saved!;
     },
     renameTrail(trailId: string, name: string) {
       const value = name.trim().slice(0, 80);
-      if (!value) throw new Error('Gi stien et navn først.');
+      if (!value) throw new Error('Gi strekket et navn først.');
       db.runSync('UPDATE trails SET name = ? WHERE id = ?', value, trailId);
     },
     getReference(referenceId: string): Trip | null {
@@ -122,9 +152,9 @@ export function createStore(db: Database) {
     },
     saveTrail(tripId: string, name: string, from: number, to: number): Trail {
       const trip = store.getTrip(tripId);
-      if (trip && isGhostTrip(trip)) throw new Error('En skyggetur kan ikke klippes til stisegmenter.');
-      if (!trip || trip.endedAt === null) throw new Error('Avslutt turen før du lagrer en sti.');
-      if (!name.trim()) throw new Error('Gi stien et navn.');
+      if (trip && isGhostTrip(trip)) throw new Error('En skyggetur kan ikke klippes til strekk.');
+      if (!trip || trip.endedAt === null) throw new Error('Avslutt turen før du lagrer et strekk.');
+      if (!name.trim()) throw new Error('Gi strekket et navn.');
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < trip.startedAt || to > trip.endedAt || to <= from) throw new Error('Velg et gyldig tidsrom innenfor turen.');
       const points = cleanPoints(trip.points.filter(p => p.timestamp >= from && p.timestamp <= to));
       if (points.length < 2) throw new Error('Dette tidsrommet har for få gode GPS-punkter.');

@@ -28,3 +28,23 @@ Koblingen må ha dokumentert navneopphav; likt navn alene er ikke nok. OSM kan b
 Prøv først et lite konsept med ett sekkefunn og én fjellfigur. Avklar aldersnivå, turvarighet, belønninger og hvilken type utfordring som faktisk gjør turen hyggeligere. Unngå at rask gange eller kontinuerlig skjermbruk blir nødvendig for framgang.
 
 Dette er et framtidig, valgfritt lag over turen. Det skal ikke gjøre start av en vanlig tur mer komplisert. Skyggemodus skal fortsatt ha tydelige kontroller uten klipping og navngiving av segmenter.
+
+## Kamera og AR som felles retning
+
+Brukeren ønsker **utvidet virkelighet (AR)** både for å finne strekk i nærheten og for framtidige monstre. Dette er notert som konsept, ikke bestilt til implementering i nåværende APK.
+
+- «Hva ligger den veien?» bør på sikt tilby kameravisning med tydelige indikatorer, navn, avstand og status for strekk rundt brukeren. Et trykk åpner strekket og gir mulighet til å velge det som skygge.
+- GPS og kompass kan plassere enkle retningsindikatorer over kamerabildet. Retningen er omtrentlig; dette alene er ikke presis forankring i terrenget.
+- Monstre og historiske figurer bør senere kunne stå i kamerabildets omgivelser, med grafikk, animasjon og interaksjon. ARCore på Android og ARKit på iOS er aktuelle for lokal sporing, flater og forankring.
+- Geografisk nærhet kan låse opp et møte. Lokal AR-forankring plasserer figuren når kameraet åpnes. Nøyaktig geografisk forankring er en separat funksjon med varierende dekning og krav; ikke alle steder eller telefoner kan forutsettes å støtte den.
+- Kart og kompass beholdes som alternativer. Vanlig turregistrering, skygge og innsamling fungerer uten at kameraet er åpent.
+
+En første framtidig prototype kan bestå av én indikator for et lagret strekk og én original figur som kan plasseres på en oppdaget flate. Kamera og eventuelle eksterne AR-tjenester skal vurderes når prototypen faktisk bestilles.
+
+## Personaer som levende skygger og treningskamerater
+
+Brukernotat: En figur kan dukke opp og tilby «Følg meg og slå meg til sted X for bonus!». Figuren kan også lede eller jage brukeren gjennom en valgt treningsøkt, for eksempel 4 × 4 minutter eller andre øktformer.
+
+Mulige roller er en turvenn som venter og viser vei, en rival som følger et avtalt tempo, og en trener som leder drag og pauser. Brukeren velger om utfordringen skal startes og hvilken økt eller vanskelighetsgrad som passer. Klokke, lyd og skygge på kartet kan drive økten uten kontinuerlig bruk av kameraet; AR brukes til møter og korte interaksjoner.
+
+Dette kan bygge videre på skygge og strekk: målpunkt, valgt tempo, progresjon, fullføring og bonus. Treningsvarianten trenger en egen øktmodell for oppvarming, drag, pauser og avslutning. Intensitet og tempo må kunne tilpasses brukeren og terrenget. 4 × 4 er et eksempel brukeren vil kunne velge, ikke en fast anbefaling til alle eller til barnemodus. Fortsatt kun idé; ikke implementert.

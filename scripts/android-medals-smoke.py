@@ -61,7 +61,7 @@ try:
     tap('Lukk'); tap('Samme tur igjen'); find('Dette fikk du på turen'); find('Nye funn · 0')
     assert not any('Medalje:' in n.get('content-desc', '') for n in context['screen']().iter('node'))
     print('PASS: repeating the walk does not repeat earned medals', flush=True)
-    tap('Lukk'); tap('Deg'); find('lagrede ruter'); find('funn'); find('Samlingen min · 1 funn')
+    tap('Lukk'); tap('Deg'); find('lagrede strekk'); find('funn'); find('Samlingen min · 1 funn')
     screenshot('trakk-names.png')
     assert not any('stempler' in (n.get('text', '') + n.get('content-desc', '')) or 'navngitte stier' in n.get('text', '') for n in context['screen']().iter('node'))
     adb('shell', 'am', 'force-stop', PACKAGE); launch(); tap('Turlogg'); tap('Medaljeturen')
