@@ -1,6 +1,6 @@
 import { isGhostTrip } from './src/domain/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, AppState, Image, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Image, Modal, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
@@ -93,9 +93,10 @@ function SavedTrailDetails({ trail, onClose, onGhost, onTrip, onChange, canRenam
   </Sheet>;
 }
 
-function Trakk() {
+function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const insets = useSafeAreaInsets();
-  const [data, setData] = useState(snapshot), [tab, setTab] = useState<Tab>('explore');
+  const [data, setData] = useState(initialData), [tab, setTab] = useState<Tab>('explore');
+  const [busyMessage, setBusyMessage] = useState('Arbeider …');
   const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<'compass' | 'ghost' | 'start' | 'trail' | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<string | null>(null), [ghostId, setGhostId] = useState<string | null>(null);
@@ -158,11 +159,11 @@ function Trakk() {
   }, [active?.id, data.trips.length, refresh]);
   const totals = useMemo(() => data.trips.reduce((sum, t) => { const m = tripMetrics(t); return { meters: sum.meters + m.meters, ascent: sum.ascent + m.ascent, elapsed: sum.elapsed + m.elapsed }; }, { meters: 0, ascent: 0, elapsed: 0 }), [data.trips]);
   const detail = data.trips.find(t => t.id === selectedTrip);
-  const attempt = async (action: () => Promise<void>) => { if (busy) return; setBusy(true); try { await action(); } catch (e) { Alert.alert('Det gikk ikke helt', e instanceof Error ? e.message : String(e)); } finally { refresh(); setBusy(false); } };
+  const attempt = async (action: () => Promise<void>, message = 'Lagrer endringer …') => { if (busy) return; setBusyMessage(message); setBusy(true); try { await action(); } catch (e) { Alert.alert('Det gikk ikke helt', e instanceof Error ? e.message : String(e)); } finally { refresh(); setBusy(false); } };
   const locate = () => attempt(async () => {
     const permission = await Location.requestForegroundPermissionsAsync(); if (!permission.granted) throw new Error('Tillat posisjon for å finne deg på kartet.');
     const p = toFix(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })); setPosition(p); setFocus(p);
-  });
+  }, 'Finner posisjonen din …');
   const here = async (): Promise<HomeArea> => {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) throw new Error('Tillat posisjon, eller søk etter et sted.');
@@ -174,7 +175,7 @@ function Trakk() {
     const streetError = await loadArea(getStore(), center, 3000);
     await syncCollections(getStore());
     Alert.alert('Samlingen er oppdatert', streetError ? `Stier og steder er hentet. Gatekartet venter: ${streetError}` : 'Alle lagrede turer sjekkes mot kartdataene. Du trenger ikke velge kategori før turen.');
-  });
+  }, 'Henter kartdata for området …');
   const loadGoals = () => attempt(async () => {
     if (!data.homeArea) { setTab('profile'); Alert.alert('Velg et hjemmeområde', 'Søk etter et sted eller bruk din posisjon under Deg.'); return; }
     const streetError = await loadArea(getStore(), data.homeArea, data.homeArea.radius);
@@ -182,7 +183,7 @@ function Trakk() {
     getStore().setSetting('goalCatalog', [...data.catalog.filter(g => g.curated), ...suggestions]);
     if (streetError) Alert.alert('Steder hentet, gatekart venter', streetError);
     else if (!suggestions.length) Alert.alert('Ingen mål funnet', 'Dette området mangler kartlagte turmål. Prøv et annet område.');
-  });
+  }, 'Henter kartdata og lager målforslag …');
   const loadBergenGoal = () => attempt(async () => {
     // Query only the seven peaks, near their documented locations; no global name matching.
     const items = await fetchPeaks({ latitude: 60.383, longitude: 5.32 }, 6500);
@@ -190,7 +191,7 @@ function Trakk() {
     const goal = bergenGoal(items);
     if (!goal) throw new Error('Kartkilden fant ikke alle syv topper. Prøv igjen senere; et ufullstendig mål blir ikke aktivert.');
     getStore().setSetting('goalCatalog', [...data.catalog.filter(g => !g.curated), goal]);
-  });
+  }, 'Henter de syv fjelltoppene …');
   const toggleGoal = (goal: Goal) => {
     getStore().setSetting('goals', data.goals.some(g => g.id === goal.id) ? data.goals.filter(g => g.id !== goal.id) : [...data.goals, goal]); refresh();
   };
@@ -198,6 +199,7 @@ function Trakk() {
 
   return <View style={s.screen}><StatusBar style="dark" /><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1 }}>
     <View style={[s.between, { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }]}><View style={s.row}><View style={{ width: 38, height: 38, backgroundColor: colors.ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Image source={require('./assets/trakk-icon.png')} style={{ width: 38, height: 38, borderRadius: 12 }} /></View><Text style={{ fontSize: 28, fontWeight: '800', color: colors.ink, letterSpacing: -1.2 }}>tråkk<Text style={{ color: colors.coral }}>.</Text></Text></View></View>
+    {(busy || syncing || !progress) && <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 22, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}><ActivityIndicator size="small" color={colors.ink} /><Text style={[s.small, { flex: 1 }]}>{busy ? busyMessage : syncing ? 'Henter kartdata … Du kan bruke appen imens.' : 'Sjekker turene mot kartdata … Du kan bruke appen imens.'}</Text></View>}
     {active && tab !== 'explore' && <Pressable accessibilityRole="button" onPress={() => setTab('explore')} style={{ marginHorizontal: 22, padding: 12, borderRadius: 14, backgroundColor: colors.ink }}><Text style={{ color: 'white', fontWeight: '600' }}>● Tur pågår · {durationLabel(now - active.startedAt)} →</Text></Pressable>}
     <ScrollView key={tab} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
       {tab === 'explore' && <>
@@ -264,4 +266,23 @@ class Boundary extends React.Component<{ children: React.ReactNode }, { error: b
   static getDerivedStateFromError() { return { error: true }; }
   render() { return this.state.error ? <SafeAreaView style={[s.screen, { padding: 24, justifyContent: 'center', gap: 20 }]}><Text style={s.title}>Vi snublet litt.</Text><Text style={s.body}>Tråkk kunne ikke åpne skjermen. Lukk og åpne appen igjen. Ikke slett appdata – turloggen kan fortsatt være lagret.</Text></SafeAreaView> : this.props.children; }
 }
-export default function App() { return <SafeAreaProvider><Boundary><Trakk /></Boundary></SafeAreaProvider>; }
+function Startup() {
+  const [data, setData] = useState<ReturnType<typeof snapshot> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    // Paint the native spinner and explanation before opening/reading SQLite.
+    const timer = setTimeout(() => {
+      try { setData(snapshot()); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [retry]);
+  if (data) return <Trakk initialData={data} />;
+  return <SafeAreaView style={[s.screen, { padding: 30, alignItems: 'center', justifyContent: 'center', gap: 20 }]}>
+    <StatusBar style="dark" />
+    <Image source={require('./assets/trakk-icon.png')} style={{ width: 80, height: 80, borderRadius: 22 }} />
+    <Text style={s.heading}>{error ? 'Kunne ikke åpne turloggen' : 'Åpner Tråkk …'}</Text>
+    {error ? <><Text style={s.body}>{error}</Text><Button title="Prøv igjen" onPress={() => { setError(null); setRetry(n => n + 1); }} /></> : <><ActivityIndicator size="large" color={colors.ink} /><Text style={[s.body, { textAlign: 'center' }]}>Laster turene og kartområdet ditt. Store samlinger kan ta litt tid.</Text></>}
+  </SafeAreaView>;
+}
+export default function App() { return <SafeAreaProvider><Boundary><Startup /></Boundary></SafeAreaProvider>; }

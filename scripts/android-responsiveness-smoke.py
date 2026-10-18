@@ -120,7 +120,12 @@ try:
     adb('install','-r','android/app/build/outputs/apk/release/app-release.apk')
     adb('logcat','-c');launch();navigation_check()
     tab('Deg');tab('Utforsk');assert_page('Hvor går turen?');pan_check()
-    tab('Deg');find('Ditt hjemmeområde · valgfritt');tap('5 km');tap('Lagre hjemmeområde')
+    tab('Deg');find('Ditt hjemmeområde · valgfritt');tap('Radius 5 km')
+    for r in [1,3,5]:
+        bounds=node_bounds('Radius '+str(r)+' km')
+        width=int(re.findall(r'(\d+)x(\d+)',adb('shell','wm','size'))[-1][0])
+        assert bounds and 0 <= bounds[0] < bounds[2] <= width, ('radius clipped',r,bounds)
+    tap('Lagre hjemmeområde')
     assert_page('Hjemmeområdet er lagret. Finn mål i Turpass.')
     navigation_check()
     adb('shell','am','force-stop',PACKAGE);launch();navigation_check()

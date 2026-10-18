@@ -25,7 +25,7 @@ export function AreaPicker({ area, onSave, onHere }: { area: HomeArea | null; on
       <TrailMap focus={selected} position={selected} height={180} />
       <TextInput accessibilityLabel="Navn på hjemmeområdet" placeholder="Navn på området" value={name} onChangeText={setName} maxLength={60} style={s.input} />
       <Text style={s.small}>Området måles fra {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}. Navnet endrer ikke avgrensningen.</Text>
-      <View style={s.row}>{[1000, 3000, 5000].map(r => <Pressable accessibilityRole="button" accessibilityState={{ selected: radius === r }} key={r} onPress={() => setRadius(r)} style={[s.chip, { backgroundColor: radius === r ? colors.ink : colors.pale }]}><Text style={{ color: radius === r ? colors.paper : colors.ink }}>{r / 1000} km radius</Text></Pressable>)}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{[1000, 3000, 5000].map(r => <Pressable accessibilityRole="button" accessibilityLabel={`Radius ${r / 1000} km`} accessibilityState={{ selected: radius === r }} key={r} onPress={() => setRadius(r)} style={[s.chip, { minWidth: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: radius === r ? colors.ink : colors.pale }]}><Text style={{ color: radius === r ? colors.paper : colors.ink }}>{r / 1000} km radius</Text></Pressable>)}</View>
       <Button title="Lagre hjemmeområde" disabled={!name.trim() || busy} onPress={() => { onSave({ latitude: selected.latitude, longitude: selected.longitude, name: name.trim(), radius }); setMessage('Hjemmeområdet er lagret. Finn mål i Turpass.'); }} />
     </>}
     {!!message && <Text style={s.small}>{message}</Text>}
