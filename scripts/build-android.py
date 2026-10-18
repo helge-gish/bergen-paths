@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 
 root = Path(__file__).resolve().parents[1]
+subprocess.run(['node', str(root / 'scripts/patch-map-gestures.cjs')], check=True)
 env = os.environ.copy()
 sdk = Path(env.get('ANDROID_HOME', '/workspace/.android-sdk'))
 jdks = sorted(Path('/workspace/.java').glob('jdk-17*'))

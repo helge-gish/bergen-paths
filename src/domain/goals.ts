@@ -3,11 +3,11 @@ import { type HomeArea, inArea } from './areas';
 import type { Trip } from './types';
 import { PEAKS } from './collections';
 import { distance } from './geo';
-export type Goal = { id: string; title: string; description: string; targets: Discovery[]; createdAt: number; curated?: boolean };
+export type Goal = { id: string; title: string; description: string; targets: Discovery[]; createdAt: number; curated?: boolean; needsRefresh?: boolean };
 // Stable definition IDs, independent of labels, ordering and activation date. Future rankings must share this exact definition.
 function fingerprint(value: string) { let hash = 2166136261; for (let i = 0; i < value.length; i++) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619); return (hash >>> 0).toString(16); }
 export function areaGoals(area: HomeArea, items: Discovery[], now = Date.now()): Goal[] {
-  return (['street', 'peak', 'viewpoint', 'hut', 'landmark', 'trail'] as const).flatMap(kind => {
+  return (['street', 'steps', 'peak', 'viewpoint', 'hut', 'landmark', 'trail'] as const).flatMap(kind => {
     const targets = items.filter(i => i.kind === kind && inArea(i, area)).sort((a, b) => a.id.localeCompare(b.id));
     if (!targets.length) return [];
     const definition = JSON.stringify(targets.map(i => [i.id, i.latitude, i.longitude, i.streetPaths ?? i.geometry]));
@@ -25,6 +25,7 @@ export function bergenGoal(items: Discovery[], now = Date.now()): Goal | null {
   return { id: `bergen-seven-v1-${fingerprint(JSON.stringify(targets.map(i => [i.id, i.latitude, i.longitude])))}`, title: 'De syv byfjellene i Bergen', description: 'Ulriken, Fløyen, Rundemanen, Sandviksfjellet, Løvstakken, Damsgårdsfjellet og Lyderhorn. Besøk alle syv, fordelt på så mange turer du vil.', targets, createdAt: now, curated: true };
 }
 export function goalProgress(goal: Goal, trips: Trip[]) {
+  if (goal.needsRefresh) return { collected: 0, total: goal.targets.length, complete: false };
   const progress = collectionProgress(goal.targets, trips);
   const collected = goal.targets.filter(t => progress[t.id]?.collected).length;
   return { collected, total: goal.targets.length, complete: goal.targets.length > 0 && collected === goal.targets.length };

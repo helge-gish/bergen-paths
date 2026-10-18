@@ -49,7 +49,10 @@ def install_hierarchy_helper():
             archive.write(out / 'dex/classes.dex', 'classes.dex')
         run([java / 'keytool', '-genkeypair', '-keystore', out / 'smoke.jks', '-storepass', 'android', '-keypass', 'android', '-alias', 'smoke', '-dname', 'CN=TrakkTest', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '1', '-noprompt'])
         run([tools / 'apksigner', 'sign', '--ks', out / 'smoke.jks', '--ks-pass', 'pass:android', apk])
-        adb('install', '-r', str(apk))
+        # Each helper build has a fresh ephemeral signer; remove only the test
+        # helper before reinstalling, never the app or its recorded walks.
+        adb('uninstall', 'no.trakk.hierarchy', check=False)
+        adb('install', str(apk))
 
 def find(label, contains=False):
     for _ in range(10):
@@ -61,7 +64,7 @@ def find(label, contains=False):
                 if x2 > x1 and y2 > y1:
                     return (x1+x2)//2, (y1+y2)//2
         width, height = map(int, re.findall(r'(\d+)x(\d+)', adb('shell', 'wm', 'size'))[-1])
-        adb('shell', 'input', 'swipe', str(width//2), str(height*3//4), str(width//2), str(height//3), '300')
+        adb('shell', 'input', 'swipe', '8', str(height*3//4), '8', str(height//3), '300')
         time.sleep(2)
     raise RuntimeError('Visible content not found: ' + label)
 

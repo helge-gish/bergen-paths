@@ -54,7 +54,7 @@ export async function streetRegion(center: Coordinate): Promise<StreetRegion> {
 /** Whole ways across an administrative area. Never turn a radius-clipped street into a completion target. */
 export async function fetchStreets(region: StreetRegion) {
   if (!Number.isSafeInteger(region.id) || region.id <= 0) throw new Error('Ugyldig gateområde.');
-  const data = await overpass(`[out:json][timeout:60];way(area:${region.id})[highway~"^(residential|living_street|pedestrian|unclassified|service|tertiary|secondary|primary)$"][name];out geom;`);
+  const data = await overpass(`[out:json][timeout:60];way(area:${region.id})[highway~"^(residential|living_street|pedestrian|footway|steps|unclassified|service|tertiary|secondary|primary)$"][name];out geom;`);
   return parseStreets(data, Date.now(), String(region.id));
 }
 export type Place = Coordinate & { id: string; name: string; label: string };

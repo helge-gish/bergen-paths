@@ -40,3 +40,28 @@ test('bad geometry and inaccessible roads are excluded without joining over miss
   const s = parseStreets({ elements: [way(1, full, { access: 'private' }), way(2, full, { foot: 'no' }), way(3, full, { area: 'yes' }), way(4, full, { name: '' }), { ...way(5, full), geometry: [{ lat: 60, lon: 5 }, null, { lat: 61, lon: 5 }] }] }, 1);
   assert.equal(s.length, 0); assert.throws(() => parseStreets({}, 1));
 });
+
+test('named footway fragments form one whole street; walking five percent cannot award it', () => {
+  const parts = Array.from({ length: 20 }, (_, i) => way(100+i, [p(i*5),p((i+1)*5)], { highway: 'footway', name: 'Gutenbergsveien' }));
+  const grouped = parseStreets({ elements: parts }, 1, 'Bergen');
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].kind, 'street');
+  const partial = streetProgress(grouped[0], [trip(full.slice(0,6))]);
+  assert.equal(partial.collected, false);
+  assert.ok(partial.fraction < .06);
+  assert.equal(parseStreets({ elements: [way(300, full, { highway: 'footway', footway: 'sidewalk' })] }, 1).length, 0);
+});
+
+test('walking on the sidewalk counts toward the street rather than a separate trail', () => {
+  const sidewalk = full.map(f => ({ ...f, longitude: f.longitude + .0001 }));
+  assert.equal(streetProgress(street, [trip(sidewalk)]).collected, true);
+});
+
+test('independent named stair flights group as stairs; a street with a stair section stays one street', () => {
+  const stairs = parseStreets({ elements: [way(1,[p(0),p(5)],{highway:'steps',name:'Testtrappen'}),way(2,[p(5),p(10)],{highway:'steps',name:'Testtrappen'})] },1,'area');
+  assert.equal(stairs.length,1); assert.equal(stairs[0].kind,'steps');
+  assert.equal(streetProgress(stairs[0],[trip(full)]).collected,true);
+  assert.equal(streetProgress(stairs[0],[trip(full.slice(0,3))]).collected,false);
+  const mixed = parseStreets({ elements: [way(1,[p(0),p(5)],{highway:'residential'}),way(2,[p(5),p(10)],{highway:'steps'})] },1,'area');
+  assert.equal(mixed.length,1);assert.equal(mixed[0].kind,'street');
+});
