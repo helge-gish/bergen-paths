@@ -61,6 +61,13 @@ export type Place = Coordinate & { id: string; name: string; label: string };
 export async function searchPlaces(name: string): Promise<Place[]> {
   const value = name.trim();
   if (value.length < 2 || value.length > 80) throw new Error('Skriv et stedsnavn på 2–80 tegn.');
-  const data = await overpass(`[out:json][timeout:30];node[place~"^(city|town|village|hamlet|suburb|neighbourhood)$"][name=${JSON.stringify(value)}];out body 30;`);
-  return data.elements.filter(e => e.type === 'node' && Number.isFinite(e.lat) && Number.isFinite(e.lon)).map(e => ({ id: `node/${e.id}`, name: e.tags?.name ?? value, label: [e.tags?.name ?? value, e.tags?.['is_in:country'], e.tags?.is_in, `${e.lat.toFixed(3)}, ${e.lon.toFixed(3)}`].filter(Boolean).join(' · '), latitude: e.lat, longitude: e.lon }));
+  const quoted = JSON.stringify(value);
+  const alias = JSON.stringify(`(^|;)${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(;|$)`);
+  const places = '[place~"^(city|town|village|hamlet|suburb|neighbourhood)$"]';
+  const data = await overpass(`[out:json][timeout:30];(node${places}[name=${quoted}];node${places}["name:nb"=${quoted}];node${places}[alt_name~${alias},i];rel[boundary=administrative][admin_level~"^(6|7|8)$"][name=${quoted}];);out center 30;`);
+  return data.elements.flatMap(e => {
+    const latitude = e.lat ?? e.center?.lat, longitude = e.lon ?? e.center?.lon;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+    return [{ id: `${e.type}/${e.id}`, name: e.tags?.name ?? value, label: [e.tags?.name ?? value, e.tags?.['is_in:country'], e.tags?.is_in, `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`].filter(Boolean).join(' · '), latitude, longitude }];
+  });
 }

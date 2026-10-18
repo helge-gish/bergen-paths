@@ -61,7 +61,7 @@ try:
     find('Nivå 2')
     with open('/tmp/trakk-avatar.png', 'wb') as output:
         subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=output, check=True, timeout=30)
-    tap('Avatarfarge #8595BD')
+    tap('Avatarfarge: Blå')
     find('Ditt hjemmeområde · valgfritt')
     find('Navn på hjemmeområdet')
     tap('Lagre hjemmeområde')

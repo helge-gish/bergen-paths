@@ -135,6 +135,7 @@ function Trakk() {
   const comparison = useMemo(() => active && ghost ? ghostComparison(active, ghost, now, route ?? undefined) : null, [active, ghost, now, route]);
   const [syncing, setSyncing] = useState(false);
   useEffect(() => {
+    setSyncing(false);
     if (active) return;
     let cancelled = false, timer: ReturnType<typeof setTimeout>;
     const run = async () => {

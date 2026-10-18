@@ -4,7 +4,7 @@
 
 Start walking without choosing categories. Finished normal and ghost walks are evaluated against every downloaded category. Foreground jobs discover map data for every visited grid cell (0.02° latitude × 0.04° longitude, 3 km query radius), retain independent point/street checkpoints, retry failures, and refresh after seven days. Raw GPS tracks stay on the phone; Overpass receives geographic search areas. Offline walks can receive awards retrospectively. Jobs are not OS background jobs: reopen the app with network to complete collection.
 
-A home area is optional. Search a named city, town, village or neighbourhood, or use current position, then select 1/3/5 km radius. Walking elsewhere counts equally. Global place searches match the local OSM name exactly. The map uses home area, recent track or current GPS; it no longer defaults to Bergen.
+A home area is optional. Search a named city, town, village or neighbourhood, or use current position, then select 1/3/5 km radius. Walking elsewhere counts equally. Place searches match OSM names, Norwegian names, alternative names and named administrative boundaries. The map uses home area, recent track or current GPS; it no longer defaults to Bergen.
 
 Named streets use the most local mapped administrative area at levels 6–8, with a scope in their identity. Complete OSM ways in that area are returned, preserving branches. A street's definition ends at its loaded administrative scope; this is not a promise of global name completeness. The UI describes the scope and full plotted geometry. Municipalities, data quality and boundaries vary worldwide; missing boundaries do not block point/trail collection. Existing unscoped streets are retired as their corresponding scoped OSM sources arrive.
 

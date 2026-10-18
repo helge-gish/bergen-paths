@@ -49,13 +49,13 @@ export async function loadArea(store: Store, center: Coordinate, radius: number)
   const points = await fetchDiscoveries(center, radius);
   mergeIntoStore(store, points);
   try {
-  const region = await streetRegion(center);
-  const cache = store.setting<Cache>('surveyCache', emptyCache());
-  if (!cache.streets[region.id] || Date.now() - cache.streets[region.id] > WEEK) {
-    mergeIntoStore(store, await fetchStreets(region));
-    // Read latest cache after network I/O to preserve another completed tile's checkpoints.
+    const region = await streetRegion(center);
+    const cache = store.setting<Cache>('surveyCache', emptyCache());
+    if (!cache.streets[region.id] || Date.now() - cache.streets[region.id] > WEEK) {
+      mergeIntoStore(store, await fetchStreets(region));
+      // Read latest cache after network I/O to preserve another completed tile's checkpoints.
     const latest = store.setting<Cache>('surveyCache', emptyCache()); latest.streets[region.id] = Date.now(); store.setSetting('surveyCache', latest);
-  }
-  return null;
+    }
+    return null;
   } catch (e) { return e instanceof Error ? e.message : String(e); }
 }

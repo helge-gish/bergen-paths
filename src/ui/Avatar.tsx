@@ -28,7 +28,7 @@ export function Avatar({ trips, collected, color, onColor }: { trips: Trip[]; co
       </Svg>
       <View style={{ flex: 1, gap: 8 }}><Text style={s.heading}>Nivå {level}</Text><Text style={s.body}>{progress.xp} XP</Text><Text style={s.small}>{progress.nextXp - progress.xp} XP til neste nivå</Text><Text style={s.small}>{progress.equipment.filter(e => e.level <= level).map(e => e.name).join(' · ')}</Text></View>
     </View>
-    <View style={s.row}>{['#E8A164', '#799E8A', '#8595BD'].map(c => <Pressable accessibilityRole="button" accessibilityLabel={`Avatarfarge ${c}`} accessibilityState={{ selected: c === color }} key={c} onPress={() => onColor(c)} style={{ width: 38, height: 38, borderRadius: 20, backgroundColor: c, borderWidth: c === color ? 3 : 0, borderColor: colors.ink }} />)}</View>
+    <View style={s.row}>{[{ color: '#E8A164', name: 'Aprikos' }, { color: '#799E8A', name: 'Skoggrønn' }, { color: '#8595BD', name: 'Blå' }].map(({ color: c, name }) => <Pressable accessibilityRole="button" accessibilityLabel={`Avatarfarge: ${name}`} accessibilityState={{ selected: c === color }} key={c} onPress={() => onColor(c)} style={{ width: 38, height: 38, borderRadius: 20, backgroundColor: c, borderWidth: c === color ? 3 : 0, borderColor: colors.ink }} />)}</View>
     {progress.nextEquipment && <Text style={s.body}>Neste utstyr: {progress.nextEquipment.name} på nivå {progress.nextEquipment.level}.</Text>}
     <Text style={s.subheading}>Neste milepæler</Text>
     {next.map(m => <Text key={m.id} style={s.body}>{m.title} · {Math.min(m.target, m.value).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} / {m.target} · {m.xp} XP</Text>)}
