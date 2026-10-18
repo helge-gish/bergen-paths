@@ -5,7 +5,7 @@ import { collectionProgress, kindLabels, type Discovery, type DiscoveryKind } fr
 import type { Trip } from '../domain/types';
 import { colors, styles as s } from './theme';
 import { Button, Icon } from './components';
-export function Discoveries({ items, trips, awards, busy, onSync, onSyncStreets, onMap }: { items: Discovery[]; trips: Trip[]; awards: Record<string, number>; busy: boolean; onSync: () => void; onSyncStreets: () => void; onMap: (item: Discovery) => void }) {
+export function Discoveries({ items, trips, awards, busy, onSync, onMap }: { items: Discovery[]; trips: Trip[]; awards: Record<string, number>; busy: boolean; onSync: () => void; onMap: (item: Discovery) => void }) {
   const [filter, setFilter] = useState<DiscoveryKind | 'all'>('all'), [limit, setLimit] = useState(25);
   const progress = useMemo(() => {
     const values = collectionProgress(items, trips);
@@ -16,10 +16,10 @@ export function Discoveries({ items, trips, awards, busy, onSync, onSyncStreets,
   const visible = items.filter(p => filter === 'all' || p.kind === filter).sort((a, b) => Number(progress[b.id]?.collected) - Number(progress[a.id]?.collected) || a.name.localeCompare(b.name, 'nb'));
   return <View style={{ gap: 18 }}>
     <View style={[s.card, { backgroundColor: colors.ink }]}><Text style={{ color: '#C2D3C3', fontSize: 10, letterSpacing: 2 }}>DIN SAMLING · OPENSTREETMAP</Text><Text style={{ color: colors.paper, fontSize: 44, fontWeight: '700' }}>{collected}<Text style={{ fontSize: 21, color: '#C2D3C3' }}> / {items.length}</Text></Text><Text style={{ color: colors.paper, fontSize: 16 }}>Gater samlet. Stier gått. Steder oppdaget.</Text></View>
-    <Text style={s.body}>Hent stier og turmål innen 3 km fra kartets valgte punkt, eller fra Fløyen som utgangspunkt. Samlingen vokser når du henter flere områder. Fremgang beregnes fra lagrede turer.</Text>
-    <Button title={busy ? 'Henter fra OpenStreetMap …' : items.length ? 'Hent / oppdater dette området' : 'Hent min første samling'} icon="map" secondary onPress={onSync} disabled={busy} />
-    <Button title={busy ? 'Henter kartdata …' : 'Hent / oppdater Bergens gater'} icon="map" secondary onPress={onSyncStreets} disabled={busy} />
-    <Text style={s.body}>Gå en gate ende til ende og samle den i Turpasset. Hele gaten med eventuelle forgreninger vises på kartet. Gater med samme navn telles samlet. {items.filter(i => i.kind === 'street' && progress[i.id]?.collected).length} av {items.filter(i => i.kind === 'street').length} hentede gater samlet.</Text>
+    <Text style={s.body}>Alle kategorier samles fra lagrede turer. Du kan også hente kartdata rundt valgt sted, hjemmeområdet eller posisjonen din før du går.</Text>
+    <Button title={busy ? 'Henter fra OpenStreetMap …' : items.length ? 'Oppdater samlingen' : 'Hent kartdata i nærheten'} icon="map" secondary onPress={onSync} disabled={busy} />
+
+    <Text style={s.body}>Gå en gate ende til ende og samle den i Turpasset. Hele gaten med eventuelle forgreninger vises på kartet. Gater med samme navn innen samme gateområde telles samlet. Gaten kan strekke seg utenfor radiusen til hjemmeområdet. {items.filter(i => i.kind === 'street' && progress[i.id]?.collected).length} av {items.filter(i => i.kind === 'street').length} hentede gater samlet.</Text>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(['all', ...Object.keys(kindLabels)] as (DiscoveryKind | 'all')[]).map(kind => <Pressable key={kind} accessibilityRole="button" accessibilityState={{ selected: filter === kind }} onPress={() => { setFilter(kind); setLimit(25); }} style={[s.chip, { backgroundColor: filter === kind ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: filter === kind ? colors.paper : colors.ink }]}>{kind === 'all' ? 'Alle' : kindLabels[kind]}</Text></Pressable>)}</View>
     {visible.slice(0, limit).map(item => {
       const p = progress[item.id];

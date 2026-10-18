@@ -78,76 +78,52 @@ def launch():
     time.sleep(8)
     alive()
 
-try:
-    install_hierarchy_helper()
-    adb('install', '-r', 'android/app/build/outputs/apk/release/app-release.apk')
-    first_run = os.environ.get('TRAKK_SMOKE_FIRST_RUN') == '1'
-    permissions = ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'POST_NOTIFICATIONS']
-    if not first_run:
-        permissions.append('ACCESS_BACKGROUND_LOCATION')
-    for permission in permissions:
-        adb('shell', 'pm', 'grant', PACKAGE, 'android.permission.' + permission)
-    adb('logcat', '-c')
-    adb('emu', 'geo', 'fix', '5.347', '60.393')
-    launch()
-    tap('Start en tur')
-    tap('Start turen min')
-    if first_run:
-        time.sleep(3)
-        adb('shell', 'pm', 'grant', PACKAGE, 'android.permission.ACCESS_BACKGROUND_LOCATION')
-        adb('shell', 'input', 'keyevent', '4')
-        time.sleep(3)
-    for i in range(8):
-        adb('emu', 'geo', 'fix', '5.347', str(60.393 + i * .00005))
-        time.sleep(3)
-        alive()
-    find('Avslutt og lagre tur')
-    if os.environ.get('TRAKK_SMOKE_SEGMENTS') == '1':
-        adb('emu', 'geo', 'fix', '5.347', '60.3934')
-        time.sleep(3)
-        tap('Lagre sti hit')
-        find('Stien er lagret. Neste segment starter her.')
-        print('PASS: normal recording saves a segment without ending the trip', flush=True)
-    services = adb('shell', 'dumpsys', 'activity', 'services', PACKAGE)
-    assert 'isForeground=true' in services, 'Location foreground service is missing'
-    adb('shell', 'input', 'keyevent', '223')
-    time.sleep(15)
-    alive()
-    adb('shell', 'input', 'keyevent', '224')
-    adb('shell', 'input', 'keyevent', '82')
-    adb('shell', 'am', 'force-stop', PACKAGE)
-    launch()
-    find('Avslutt og lagre tur')
-    tap('Avslutt og lagre tur')
-    tap('Avslutt og lagre')
-    alive()
-    print('PASS: start, GPS updates, relaunch active trip, finish', flush=True)
-    if os.environ.get('TRAKK_SMOKE_STREETS') == '1':
-        time.sleep(2)
-        tap('Lukk')
-        tap('Turpass')
-        tap('Hent / oppdater Bergens gater')
-        deadline = time.time() + 250
-        while time.time() < deadline:
-            xml = screen()
-            text = ET.tostring(xml, encoding='unicode')
-            if 'Gatekartet er klart' in text:
-                print('PASS: real Bergen street download: ' + text, flush=True)
-                break
-            if 'Det gikk ikke helt' in text:
-                raise RuntimeError('Street download failed: ' + text)
+if os.environ.get('TRAKK_SMOKE_HELPERS_ONLY') != '1':
+    try:
+        install_hierarchy_helper()
+        adb('install', '-r', 'android/app/build/outputs/apk/release/app-release.apk')
+        first_run = os.environ.get('TRAKK_SMOKE_FIRST_RUN') == '1'
+        permissions = ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'POST_NOTIFICATIONS']
+        if not first_run:
+            permissions.append('ACCESS_BACKGROUND_LOCATION')
+        for permission in permissions:
+            adb('shell', 'pm', 'grant', PACKAGE, 'android.permission.' + permission)
+        adb('logcat', '-c')
+        adb('emu', 'geo', 'fix', '5.347', '60.393')
+        launch()
+        tap('Start en tur')
+        tap('Start turen min')
+        if first_run:
             time.sleep(3)
-        else:
-            raise RuntimeError('Timed out waiting for Bergen street download')
-        tap('OK')
-        tap('Gater')
-        x, y = find('Vis på kartet →')
-        adb('shell', 'input', 'tap', str(x), str(y))
-        time.sleep(5)
+            adb('shell', 'pm', 'grant', PACKAGE, 'android.permission.ACCESS_BACKGROUND_LOCATION')
+            adb('shell', 'input', 'keyevent', '4')
+            time.sleep(3)
+        for i in range(8):
+            adb('emu', 'geo', 'fix', '5.347', str(60.393 + i * .00005))
+            time.sleep(3)
+            alive()
+        find('Avslutt og lagre tur')
+        if os.environ.get('TRAKK_SMOKE_SEGMENTS') == '1':
+            adb('emu', 'geo', 'fix', '5.347', '60.3934')
+            time.sleep(3)
+            tap('Lagre sti hit')
+            find('Stien er lagret. Neste segment starter her.')
+            print('PASS: normal recording saves a segment without ending the trip', flush=True)
+        services = adb('shell', 'dumpsys', 'activity', 'services', PACKAGE)
+        assert 'isForeground=true' in services, 'Location foreground service is missing'
+        adb('shell', 'input', 'keyevent', '223')
+        time.sleep(15)
         alive()
-        find('markert i korall', contains=True)
-        print('PASS: street collection list and selected street map', flush=True)
+        adb('shell', 'input', 'keyevent', '224')
+        adb('shell', 'input', 'keyevent', '82')
+        adb('shell', 'am', 'force-stop', PACKAGE)
+        launch()
+        find('Avslutt og lagre tur')
+        tap('Avslutt og lagre tur')
+        tap('Avslutt og lagre')
+        alive()
+        print('PASS: start, GPS updates, relaunch active trip, finish', flush=True)
 
-finally:
-    Path('/tmp/trakk-crash.log').write_text(adb('logcat', '-b', 'crash', '-d', check=False))
-    Path('/tmp/trakk-js.log').write_text(adb('logcat', '-d', '-s', 'ReactNativeJS:V', 'AndroidRuntime:E', check=False))
+    finally:
+        Path('/tmp/trakk-crash.log').write_text(adb('logcat', '-b', 'crash', '-d', check=False))
+        Path('/tmp/trakk-js.log').write_text(adb('logcat', '-d', '-s', 'ReactNativeJS:V', 'AndroidRuntime:E', check=False))

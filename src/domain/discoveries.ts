@@ -75,7 +75,7 @@ type OsmElement = { type: string; id: number; lat?: number; lon?: number; center
 export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
   if (!data || typeof data !== 'object' || !('elements' in data) || !Array.isArray(data.elements)) throw new Error('Uventet svar fra kartkilden. Prøv igjen senere.');
   const items: Discovery[] = [];
-  for (const e of (data.elements as OsmElement[]).slice(0, 5000)) {
+  for (const e of (data.elements as OsmElement[])) {
     if (!e || !['node', 'way', 'relation'].includes(e.type) || !Number.isSafeInteger(e.id)) continue;
     const t = e.tags ?? {};
     if (t.access === 'private' || t.access === 'no' || t.foot === 'no' || t.foot === 'private') continue;
