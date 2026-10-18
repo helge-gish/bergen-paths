@@ -2,6 +2,10 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { speak } from './voice';
+import { startGate } from '../domain/startGate';
+import { matchRoute } from '../domain/routeMatch';
+import { stretchResults, stretchDelta } from '../domain/stretchRuns';
 import { getStore } from '../data/native';
 import { ghostComparison, voiceCue } from '../domain/ghost';
 import type { Fix } from '../domain/types';
@@ -28,19 +32,35 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     if (!active) return;
     store.append(active.id, data.locations.map(toFix));
     store.setSetting('trackingError', null);
-    if (!active.ghostId || !active.audioEnabled) return;
-    const current = store.getTrip(active.id)!, ghost = store.getReference(active.ghostId);
-    if (!ghost) return;
+    const current = store.getTrip(active.id)!, ghost = active.ghostId ? store.getReference(active.ghostId) : null;
     const now = Date.now();
-    if (now - current.lastCueAt < 60_000) return;
-    const cue = voiceCue(ghostComparison(current, ghost, now), now, current.lastCueAt, current.audioEnabled);
-    if (cue && store.claimCue(current.id, now)) {
-      Speech.speak(cue, { language: 'nb-NO', rate: 0.95, onError: () => store.setSetting('audioError', 'Tale kunne ikke spilles av. Kontroller taleinnstillingene på mobilen.') });
+    // Deduplicate events durably, including muted events, so reopening never
+    // reads out old completions. Segment timing also runs on ordinary walks.
+    const results = stretchResults(current, store.trails(), store.trips(), ghost);
+    const seen = store.setting<string[]>(`stretchNotified:${current.id}`, []);
+    const fresh = results.filter(r => !seen.includes(`${r.trailId}:${Math.round(r.startedAt)}`));
+    if (fresh.length) store.setSetting(`stretchNotified:${current.id}`, [...seen, ...fresh.map(r => `${r.trailId}:${Math.round(r.startedAt)}`)]);
+    const completed = fresh.filter(r => now - r.endedAt < 45_000).at(-1);
+    const route = ghost ? matchRoute(current, ghost, now) : null;
+    const routeEvent = route?.newSegments.at(-1);
+    const eventKey = routeEvent ? `${routeEvent.startedAt}:${route?.state}` : null;
+    let cue: string | null = null;
+    if (eventKey && (route?.state === 'off-route' || route?.state === 'rejoined') && store.setting(`routeNotified:${current.id}`, '') !== eventKey) {
+      store.setSetting(`routeNotified:${current.id}`, eventKey);
+      cue = route.state === 'off-route' ? 'Du har gått av ruten. Eg lagrer turen videre. Se kartet for å finne tilbake, eller fortsett uten skygge.' : 'No e du tilbake på ruten. Eg sammenligner fortsatt strekkene, men ikke totaltiden.';
+    }
+    if (!cue && completed) cue = `Strekk fullført: ${completed.name}. ${completed.ghostSeconds !== null ? stretchDelta(completed.seconds, completed.ghostSeconds) + ' enn skyggen.' : completed.previousSeconds !== null ? stretchDelta(completed.seconds, completed.previousSeconds) + ' enn sist.' : 'Første registrerte tid.'}${completed.bestSeconds !== null && completed.bestSeconds - completed.seconds >= 5 ? ' Ny beste tid!' : ''}`;
+    if (cue && current.audioEnabled) {
+      store.setSetting(`eventSpoken:${current.id}`, now);
+      void speak(cue, current.id);
+    } else if (ghost && now - store.setting(`eventSpoken:${current.id}`, 0) >= 15000) {
+      const regular = voiceCue(ghostComparison(current, ghost, now, route!), now, current.lastCueAt, current.audioEnabled);
+      if (regular && store.claimCue(current.id, now)) void speak(regular, current.id);
     }
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
 export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string) {
-  if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg en annen sti eller tur.');
+  if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg et annet strekk eller en tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
   const foreground = await Location.requestForegroundPermissionsAsync();
   if (!foreground.granted) throw new Error('Tråkk trenger posisjonstillatelse for å registrere turen.');
@@ -53,7 +73,20 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
     // needs a separate permission. Denying notifications must not discard a trip.
     await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
   }
-  const store = getStore(), trip = store.begin(ghostId, audioEnabled, Date.now(), name);
+  const store = getStore();
+  let initial: Fix | null = null;
+  if (ghostId) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      initial = toFix(await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('GPS bruker litt tid. Gå under åpen himmel og prøv start igjen.')), 15000); })]));
+    } finally { if (timer) clearTimeout(timer); }
+    const reference = store.getReference(ghostId);
+    if (!reference) throw new Error('Skyggen finnes ikke lenger.');
+    const gate = startGate(reference, initial, Date.now());
+    if (!gate.ready) throw new Error(gate.message);
+  }
+  const trip = store.begin(ghostId, audioEnabled, Date.now(), name);
+  if (initial) store.append(trip.id, [{ ...initial, timestamp: trip.startedAt }]);
   if (suggestion) store.suggestName(trip.id, suggestion);
   store.setSetting('trackingError', null);
   store.setSetting('audioError', null);

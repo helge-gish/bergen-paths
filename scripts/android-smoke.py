@@ -109,8 +109,8 @@ if os.environ.get('TRAKK_SMOKE_HELPERS_ONLY') != '1':
         if os.environ.get('TRAKK_SMOKE_SEGMENTS') == '1':
             adb('emu', 'geo', 'fix', '5.347', '60.3934')
             time.sleep(3)
-            tap('Lagre sti hit')
-            find('Stien er lagret. Neste segment starter her.')
+            tap('Lagre strekk hit')
+            find('✓ Strekket er lagret. Neste strekk starter her.')
             print('PASS: normal recording saves a segment without ending the trip', flush=True)
         services = adb('shell', 'dumpsys', 'activity', 'services', PACKAGE)
         assert 'isForeground=true' in services, 'Location foreground service is missing'

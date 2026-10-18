@@ -4,6 +4,9 @@ export type RouteMatch = {
   state: 'same' | 'uncertain' | 'off-route' | 'rejoined';
   label: string;
   deviated: boolean;
+  referenceTime: number | null;
+  progressMeters: number;
+  totalMeters: number;
   newSegments: { startedAt: number; endedAt: number | null }[];
 };
 function sampled(points: Fix[], interval: number) {
@@ -14,7 +17,7 @@ function sampled(points: Fix[], interval: number) {
 }
 export function matchRoute(current: Trip, reference: Trip, now = Date.now()): RouteMatch {
   const live = sampled(cleanPoints(current.points), 10_000), ref = sampled(cleanPoints(reference.points), 5_000);
-  const result: RouteMatch = { state: 'uncertain', label: 'Venter på et tydelig GPS-spor', deviated: false, newSegments: [] };
+  const result: RouteMatch = { state: 'uncertain', label: 'Venter på et tydelig GPS-spor', deviated: false, referenceTime: null, progressMeters: 0, totalMeters: 0, newSegments: [] };
   if (live.length < 2 || ref.length < 2 || distance(live[0], ref[0]) > 60) return result;
   const path: { a: Fix; b: Fix; length: number; along: number }[] = [];
   let along = 0;
@@ -23,6 +26,7 @@ export function matchRoute(current: Trip, reference: Trip, now = Date.now()): Ro
     if (ref[i].timestamp - ref[i - 1].timestamp <= MAX_GAP_MS && length > 1) path.push({ a: ref[i - 1], b: ref[i], length, along });
     along += length;
   }
+  result.totalMeters = along;
   const grid = new Map<string, typeof path>();
   for (const edge of path) {
     // Nearby cells avoid rescanning an entire multi-hour reference for each fix.
@@ -36,16 +40,17 @@ export function matchRoute(current: Trip, reference: Trip, now = Date.now()): Ro
   let progress = 0, badSince: number | null = null, badCount = 0, off = false;
   let previous = live[0];
   for (const p of live) {
+    result.referenceTime = null;
     const step = distance(previous, p);
     const continuity = p.timestamp - previous.timestamp <= MAX_GAP_MS;
-    let best: { error: number; progress: number; score: number } | null = null;
+    let best: { error: number; progress: number; score: number; time: number } | null = null;
     const x = Math.floor(p.longitude / 0.002), y = Math.floor(p.latitude / 0.001);
     const local = new Set<typeof path[number]>();
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const edge of grid.get(`${x + dx}:${y + dy}`) ?? []) local.add(edge);
     for (const edge of local) {
       const projected = project(p, edge.a, edge.b), next = edge.along + projected.fraction * edge.length;
       const penalty = off ? 0 : Math.abs(next - progress - step) * 0.15;
-      const candidate = { error: projected.distance, progress: next, score: projected.distance + penalty };
+      const candidate = { error: projected.distance, progress: next, score: projected.distance + penalty, time: edge.a.timestamp + projected.fraction * (edge.b.timestamp - edge.a.timestamp) };
       if (!best || candidate.score < best.score) best = candidate;
     }
     const same = best && best.error <= 30 && (off || (best.progress >= progress - 25 && best.progress - progress <= Math.max(75, step * 3)));
@@ -58,6 +63,7 @@ export function matchRoute(current: Trip, reference: Trip, now = Date.now()): Ro
     } else if (same && best) {
       if (off) result.newSegments.at(-1)!.endedAt = p.timestamp;
       off = false; badSince = null; badCount = 0; progress = best.progress;
+      result.referenceTime = best.time; result.progressMeters = progress;
       result.state = result.deviated ? 'rejoined' : 'same';
       result.label = result.deviated ? 'Tilbake på sporet · turen er endret' : 'På samme rute';
     } else {
