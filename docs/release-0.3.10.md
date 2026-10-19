@@ -12,9 +12,10 @@ Rapportert feil i 0.3.9: klokken oppdaterte omtrent hvert 50. sekund under en va
 
 ## Validering
 
-- TypeScript-kontrollen og alle 141 tester består, inkludert fem nye regresjonstester for lange strekk, klokken ved GPS-opphold, fremtidige tidsstempler og uendrede/end­rede databaseøyeblikksbilder.
+- TypeScript-kontrollen og alle 141 tester består, inkludert fem nye regresjonstester for lange strekk, klokken ved GPS-opphold, fremtidige tidsstempler og uendrede/endrede databaseøyeblikksbilder.
 - En syntetisk sammenligning med 4 000 GPS-punkter gikk fra omtrent 2 877 ms i 0.3.9 til omtrent 32 ms i dette miljøet. Dette er en lokal måling, ikke en garanti for en bestemt telefon.
-- 200 deterministiske sammenligninger med GPS-drift, løkker og avstikkere ga samme strekkresultater som 0.3.9.
+- 1 000 deterministiske sammenligninger med GPS-drift, løkker og avstikkere ga samme strekkresultater som 0.3.9.
+- Android-releasebygget fullførte alle 655 oppgaver. Den ferdige APK-en er kontrollert for pakkenavn, versjonskode, ARM64-arkitektur, innebygd Hermes-kode og nødvendige tillatelser. APK-signaturen er identisk med GitHub-utgivelsen 0.3.9.
 - Fysisk Android-felttest gjenstår. Denne instansen har ingen tilkoblet Android-enhet eller emulator.
 
 Pakken er en ARM64-testversjon med innebygd JavaScript, pakkenavn `no.trakk.app`, versjon `0.3.10` og Android-versjonskode `15`. Installer over 0.3.9 som **Oppdater**, uten å avinstallere eller tømme data. Test klokken, knapper og lagring på en kort vanlig tur, også med dårlig GPS, før en lengre tur.
