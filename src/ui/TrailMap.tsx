@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Map, Camera, GeoJSONSource, Layer, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
@@ -9,11 +9,16 @@ import { Icon } from './components';
 import { mapSelection, type MapBounds } from '../domain/mapSelection';
 import type { Discovery } from '../domain/discoveries';
 const EMPTY_POINTS: Fix[] = [];
+const EMPTY_TRIPS: Trip[] = [];
+const EMPTY_TRAILS: Trail[] = [];
+const EMPTY_DISCOVERIES: Discovery[] = [];
+const EMPTY_PEAKS: Peak[] = [];
+const EMPTY_AWARDS: Record<string, number> = {};
 type Props = { startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
-export function TrailMap({ startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = [], trails = [], discoveries = [], awards = {}, peaks = [], current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
+export const TrailMap = memo(function TrailMap({ startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, awards = EMPTY_AWARDS, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
   const camera = useRef<CameraRef>(null);
   const [viewport, setViewport] = useState<MapBounds | null>(null);
   const displayed = useMemo(() => mapSelection(discoveries, viewport ?? (focus ? [focus.longitude - .025, focus.latitude - .012, focus.longitude + .025, focus.latitude + .012] : [-180, -85, 180, 85]), selectedDiscovery), [discoveries, viewport, focus, selectedDiscovery]);
@@ -59,4 +64,4 @@ export function TrailMap({ startPosition, guideStart = false, recenter = 0, fitR
     {displayed.limited && <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, right: 8, padding: 8, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Viser et utvalg. Zoom inn for flere detaljer.</Text></View>}
     {failed && <View style={{ position: 'absolute', top: 10, left: 10, right: 10, padding: 10, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Kartbakgrunnen trenger nett. GPS-sporet lagres fortsatt under en aktiv tur.</Text></View>}
   </View>;
-}
+});

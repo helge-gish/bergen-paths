@@ -2,6 +2,8 @@ import { cleanPoints, distance, MAX_GAP_MS } from './geo';
 import type { Fix, Trip } from './types';
 export const elapsedMs = (trip: Pick<Trip, 'startedAt' | 'endedAt'>, now = Date.now()) => Math.max(0, (trip.endedAt ?? now) - trip.startedAt);
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+type Geometry = ReturnType<typeof measureTrack>;
+const geometryCache = new WeakMap<Fix[], { start: number; end: number | null; from: number; until: number; value: Geometry }>();
 export function elevation(points: Fix[]) {
   let ascent = 0, descent = 0, anchor: number | null = null;
   let window: number[] = [], previousTime: number | null = null, count = 0;
@@ -19,7 +21,7 @@ export function elevation(points: Fix[]) {
   }
   return { ascent, descent, hasElevation: count >= 2 };
 }
-export function tripMetrics(trip: Trip, now = Date.now()) {
+function measureTrack(trip: Trip, now: number) {
   const points = cleanPoints(trip.points.filter(p => p.timestamp >= trip.startedAt && p.timestamp <= (trip.endedAt ?? now)));
   let meters = 0, anchor = points[0], gapsMs = 0;
   for (let i = 1; i < points.length; i++) {
@@ -29,6 +31,19 @@ export function tripMetrics(trip: Trip, now = Date.now()) {
     const step = distance(anchor, p);
     if (step >= Math.max(3, (anchor.accuracy + p.accuracy) / 4)) { meters += step; anchor = p; }
   }
+  return { points, meters, gapsMs, ...elevation(points) };
+}
+export function tripMetrics(trip: Trip, now = Date.now()) {
+  let cached = geometryCache.get(trip.points);
+  if (!cached || cached.start !== trip.startedAt || cached.end !== trip.endedAt || now < cached.from || now >= cached.until) {
+    const value = measureTrack(trip, now);
+    // Future-dated fixes must become visible when the clock catches up. Ended
+    // tracks have a fixed cutoff; elapsed time and stale speed remain live below.
+    const until = trip.endedAt !== null ? Infinity : trip.points.reduce((n, p) => p.timestamp > now ? Math.min(n, p.timestamp) : n, Infinity);
+    cached = { start: trip.startedAt, end: trip.endedAt, from: now, until, value };
+    geometryCache.set(trip.points, cached);
+  }
+  const { points, meters } = cached.value;
   const duration = elapsedMs(trip, now);
   const latest = points.at(-1), previous = points.at(-2);
   let speedKmh: number | null = null;
@@ -36,7 +51,7 @@ export function tripMetrics(trip: Trip, now = Date.now()) {
     if (latest.speed !== null && latest.speed >= 0 && latest.speed <= 12) speedKmh = latest.speed * 3.6;
     else if (previous && latest.timestamp - previous.timestamp <= 15_000) speedKmh = distance(previous, latest) / ((latest.timestamp - previous.timestamp) / 1000) * 3.6;
   }
-  return { points, meters, elapsed: duration, averageKmh: duration > 0 ? meters / duration * 3600 : 0, paceSeconds: meters >= 50 ? duration / meters : null, speedKmh, gapsMs, ...elevation(points) };
+  return { ...cached.value, elapsed: duration, averageKmh: duration > 0 ? meters / duration * 3600 : 0, paceSeconds: meters >= 50 ? duration / meters : null, speedKmh };
 }
 /** Gross energy range from broad activity MET bands, including resting time.
  * Never use age/height to imply individualized physiological accuracy. */

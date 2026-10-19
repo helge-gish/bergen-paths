@@ -30,8 +30,24 @@ export type SegmentUndo = { before: SegmentWindow; after: SegmentWindow; trailId
 type Row = Omit<Trip, 'points' | 'audioEnabled'> & { audioEnabled: number };
 export function createStore(db: Database) {
   db.execSync(SCHEMA);
-  const hydrate = (row: Row): Trip => ({ ...row, workout: store.setting<Workout | null>(`workout:${row.id}`, null), mode: store.setting<'normal' | 'ghost'>(`mode:${row.id}`, row.ghostId ? 'ghost' : 'normal'), audioEnabled: !!row.audioEnabled, points: db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix) });
+  const hydrated = new Map<string, { count: number; latest: number | null; metadata: string; trip: Trip }>();
+  const hydrate = (row: Row): Trip => {
+    const workout = store.setting<Workout | null>(`workout:${row.id}`, null);
+    const mode = store.setting<'normal' | 'ghost'>(`mode:${row.id}`, row.ghostId ? 'ghost' : 'normal');
+    const metadata = JSON.stringify([row, workout, mode]);
+    const revision = db.getFirstSync<{ count: number; latest: number | null }>('SELECT COUNT(*) AS count, MAX(timestamp) AS latest FROM points WHERE tripId = ?', row.id)!;
+    const old = hydrated.get(row.id);
+    // append() only inserts immutable points. Polling during a GPS outage must
+    // not deserialize the entire track or invalidate every derived calculation.
+    const samePoints = old?.count === revision.count && old.latest === revision.latest;
+    if (samePoints && old.metadata === metadata) return old.trip;
+    const points = samePoints ? old.trip.points : db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix);
+    const trip = { ...row, workout, mode, audioEnabled: !!row.audioEnabled, points };
+    hydrated.set(row.id, { ...revision, metadata, trip });
+    return trip;
+  };
   let completedKey = '', completedTrips: Trip[] = [];
+  let trailsKey = '', savedTrails: Trail[] = [];
   const immutableSettings = new Map<string, { raw: string; value: unknown }>();
   const store = {
     active(): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE endedAt IS NULL'); return r ? hydrate(r) : null; },
@@ -82,6 +98,7 @@ export function createStore(db: Database) {
         // Rebuild collection stamps from the remaining history on the next snapshot.
         store.setSetting('osmAwards', {});
       });
+      if (deleted) hydrated.delete(tripId);
       return deleted;
     },
     cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`, `workout:${tripId}`); }); },
@@ -99,7 +116,12 @@ export function createStore(db: Database) {
     },
     setAudio(tripId: string, enabled: boolean) { db.runSync('UPDATE trips SET audioEnabled = ? WHERE id = ?', enabled ? 1 : 0, tripId); },
     claimCue(tripId: string, now: number) { return db.runSync('UPDATE trips SET lastCueAt = ? WHERE id = ? AND endedAt IS NULL AND audioEnabled = 1 AND lastCueAt <= ?', now, tripId, now - 60_000).changes === 1; },
-    trails(): Trail[] { return db.getAllSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails ORDER BY createdAt DESC').map(r => ({ ...r, points: JSON.parse(r.points) })); },
+    trails(): Trail[] {
+      const rows = db.getAllSync<Omit<Trail, 'points'> & { points: string }>('SELECT * FROM trails ORDER BY createdAt DESC');
+      const key = JSON.stringify(rows);
+      if (key !== trailsKey) { savedTrails = rows.map(r => ({ ...r, points: JSON.parse(r.points) })); trailsKey = key; }
+      return savedTrails;
+    },
     segmentWindow(tripId: string): SegmentWindow {
       const trip = db.getFirstSync<Row>('SELECT * FROM trips WHERE id = ?', tripId);
       if (!trip) throw new Error('Turen finnes ikke lenger.');

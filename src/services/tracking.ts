@@ -10,6 +10,7 @@ import { stretchResults, stretchDelta } from '../domain/stretchRuns';
 import { getStore } from '../data/native';
 import { ghostComparison, voiceCue } from '../domain/ghost';
 import type { Fix } from '../domain/types';
+import { validFix } from '../domain/geo';
 export const LOCATION_TASK = 'trakk-location-v1';
 const trackingOptions: Location.LocationTaskOptions = {
   accuracy: Location.Accuracy.BestForNavigation,
@@ -32,8 +33,12 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     const active = store.active();
     if (!active) return;
     void syncWorkoutCoach(active).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
-    store.append(active.id, data.locations.map(toFix));
+    const fixes = data.locations.map(toFix);
+    store.append(active.id, fixes);
     store.setSetting('trackingError', null);
+    // Keep raw fixes for the recorded history, but poor GPS cannot advance a
+    // stretch or ghost. Do not replay those comparisons for unusable batches.
+    if (!fixes.some(validFix)) return;
     const current = store.getTrip(active.id)!, ghost = active.ghostId ? store.getReference(active.ghostId) : null;
     const now = Date.now();
     // Deduplicate events durably, including muted events, so reopening never

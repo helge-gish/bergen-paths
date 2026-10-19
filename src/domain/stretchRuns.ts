@@ -9,12 +9,14 @@ export function stretchRuns(trip: Trip, trail: Trail): StretchRun[] {
   const ref = cleanPoints(trail.points), live = cleanPoints(trip.id === trail.tripId ? trail.points : trip.points);
   if (ref.length < 2 || live.length < 2) return [];
   if (!live.some(p => distance(p, ref[0]) <= 35)) return [];
-  const edges: { a: Fix; b: Fix; along: number; length: number }[] = [];
+  const edges: { a: Fix; b: Fix; along: number; length: number; south: number; north: number; west: number; east: number }[] = [];
   let length = 0;
   for (let i = 1; i < ref.length; i++) {
     if (ref[i].timestamp - ref[i - 1].timestamp > 30_000) return [];
     const n = distance(ref[i - 1], ref[i]);
-    if (n > .2) edges.push({ a: ref[i - 1], b: ref[i], along: length, length: n });
+    if (n > .2) edges.push({ a: ref[i - 1], b: ref[i], along: length, length: n,
+      south: Math.min(ref[i - 1].latitude, ref[i].latitude), north: Math.max(ref[i - 1].latitude, ref[i].latitude),
+      west: Math.min(ref[i - 1].longitude, ref[i].longitude), east: Math.max(ref[i - 1].longitude, ref[i].longitude) });
     length += n;
   }
   if (length < 15) return [];
@@ -22,17 +24,45 @@ export function stretchRuns(trip: Trip, trail: Trail): StretchRun[] {
   const runs: StretchRun[] = [];
   let previous: { along: number; point: Fix } | null = null, startedAt: number | null = null;
   let missingSince: number | null = null;
+  const latitude = ref.reduce((n, p) => Math.max(n, Math.abs(p.latitude)), 0);
+  let lastEdge = 0;
+  const after = (along: number) => {
+    let lo = 0, hi = edges.length;
+    while (lo < hi) { const mid = (lo + hi) >>> 1; if (edges[mid].along <= along) lo = mid + 1; else hi = mid; }
+    return lo;
+  };
   for (const point of live) {
     if (previous && point.timestamp - previous.point.timestamp > 30_000) { previous = null; startedAt = null; }
     const step = previous ? distance(previous.point, point) : 0;
-    let best: { along: number; error: number; score: number } | null = null;
-    for (const edge of edges) {
+    const match = { best: null as { along: number; error: number; score: number } | null };
+    const longitudeScale = Math.cos(Math.max(latitude, Math.abs(point.latitude)) * Math.PI / 180);
+    const consider = (edge: typeof edges[number], index: number) => {
+      if (!previous && edge.along > gate) return;
+      // Conservative lower bounds reject distant edges before trigonometric
+      // projection. Seed with the preceding match, then preserve the original
+      // score and tie order over all edges (including loops and turnarounds).
+      const dy = Math.max(0, edge.south - point.latitude, point.latitude - edge.north);
+      const dx = Math.max(0, edge.west - point.longitude, point.longitude - edge.east);
+      const unwrapped = Math.max(Math.abs(edge.west - point.longitude), Math.abs(edge.east - point.longitude)) <= 180;
+      const spatial = Math.max(dy * 110000, unwrapped ? dx * 70000 * longitudeScale : 0);
+      const target = previous ? previous.along + step : 0;
+      const penaltyBound = previous ? Math.max(0, edge.along - target, target - edge.along - edge.length) * .35 : edge.along * .1;
+      if (match.best && spatial + penaltyBound > match.best.score + 1e-9) return;
       const p = project(point, edge.a, edge.b), along = edge.along + p.fraction * edge.length;
-      if (!previous && along > gate) continue;
+      if (!previous && along > gate) return;
       const penalty: number = previous ? Math.abs(along - previous.along - step) * .35 : along * .1;
       const candidate: { along: number; error: number; score: number } = { along, error: p.distance, score: p.distance + penalty };
-      if (!best || candidate.score < best.score) best = candidate;
-    }
+      if (!match.best || candidate.score < match.best.score || (candidate.score === match.best.score && index < lastEdge)) { match.best = candidate; lastEdge = index; }
+    };
+    if (edges[lastEdge]) consider(edges[lastEdge], lastEdge);
+    // The along-distance penalty alone bounds which edges can beat the seed.
+    // Binary search keeps long, densely sampled stretches out of an n² scan.
+    const budget = match.best ? (match.best.score + 1e-9) / .35 : Infinity;
+    const target = previous ? previous.along + step : 0;
+    const from = previous ? Math.max(0, after(target - budget) - 1) : 0;
+    const to = previous ? after(target + budget) : after(gate);
+    for (let i = from; i < to; i++) consider(edges[i], i);
+    const best = match.best;
     if (!best || best.error > 25 || (previous && (best.along < previous.along - 15 || best.along - previous.along > Math.max(35, step * 2.5)))) {
       missingSince ??= point.timestamp;
       if (point.timestamp - missingSince >= 15_000) { previous = null; startedAt = null; }

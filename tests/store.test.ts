@@ -15,6 +15,44 @@ function database() {
   return { db, raw, store: createStore(db) };
 }
 const point: Fix = { timestamp: 1000, latitude: 60.39, longitude: 5.34, altitude: 100, altitudeAccuracy: 3, accuracy: 5, speed: 0 };
+test('GPS outage polls reuse immutable snapshots; new and late fixes invalidate them', () => {
+  const { store, raw } = database();
+  const t = store.begin(null, true, 1000);
+  store.append(t.id, [point, { ...point, timestamp: 3000 }]);
+  const first = store.active()!;
+  assert.equal(store.active(), first);
+  store.append(t.id, [point]);
+  assert.equal(store.active(), first, 'duplicate delivery must not restart geometry work');
+  store.append(t.id, [{ ...point, timestamp: 2000 }]);
+  const changed = store.active()!;
+  assert.notEqual(changed, first);
+  assert.deepEqual(changed.points.map(p => p.timestamp), [1000, 2000, 3000]);
+  assert.equal(first.points.length, 2, 'previous snapshots stay immutable');
+  store.setAudio(t.id, false);
+  const muted = store.active()!;
+  assert.equal(muted.audioEnabled, false);
+  assert.equal(muted.points, changed.points, 'metadata changes retain GPS geometry');
+  assert.equal(store.active(), muted);
+  raw.close();
+});
+
+test('unchanged saved stretches retain identity; renaming and deletion are visible', () => {
+  const { store, raw } = database();
+  const t = store.begin(null, false, 1000);
+  store.append(t.id, [point, { ...point, timestamp: 11000, latitude: 60.3902 }]);
+  store.finish(t.id, 11000);
+  const trail = store.saveTrail(t.id, 'Strekk', 1000, 11000);
+  const before = store.trails();
+  assert.equal(store.trails(), before);
+  store.renameTrail(trail.id, 'Nytt navn');
+  const renamed = store.trails();
+  assert.notEqual(renamed, before);
+  assert.equal(renamed[0].name, 'Nytt navn');
+  assert.equal(before[0].name, 'Strekk');
+  store.deleteTrip(t.id);
+  assert.equal(store.trails().length, 0);
+  raw.close();
+});
 test('only one trip can record at a time', () => {
   const { store, raw } = database();
   store.begin(null, true, 1000);

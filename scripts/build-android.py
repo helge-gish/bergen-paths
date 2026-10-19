@@ -65,6 +65,13 @@ if proxy.hostname:
         '-Dhttp.proxyHost=' + proxy.hostname,
         '-Dhttp.proxyPort=' + str(proxy.port or 80),
     ])
+    # The wrapper downloads Gradle before Gradle parses the command-line -D
+    # flags. Give that bootstrap JVM the same proxy and trusted CA route too.
+    bootstrap = ' -Dhttps.proxyHost=' + proxy.hostname + ' -Dhttps.proxyPort=' + str(proxy.port or 80)
+    bootstrap += ' -Dhttp.proxyHost=' + proxy.hostname + ' -Dhttp.proxyPort=' + str(proxy.port or 80)
+    if trust.is_file():
+        bootstrap += ' -Djavax.net.ssl.trustStore=' + str(trust)
+    env['JAVA_TOOL_OPTIONS'] = env.get('JAVA_TOOL_OPTIONS', '') + bootstrap
 result = subprocess.run(args, cwd=root / 'android', env=env)
 if result.returncode:
     raise SystemExit(result.returncode)
