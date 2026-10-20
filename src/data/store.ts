@@ -1,5 +1,7 @@
 import { createWorkout, changeWorkout, type Workout } from '../domain/workout';
 import { defaultTripName } from '../domain/tripNames';
+import { fallbackStretchName, stretchName } from '../domain/stretchNames';
+import type { Discovery } from '../domain/discoveries';
 import { isGhostTrip } from '../domain/types';
 import { distance } from '../domain/geo';
 import type { Fix, Profile, Trail, Trip } from '../domain/types';
@@ -168,7 +170,8 @@ export function createStore(db: Database) {
         if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du lagrer strekket.');
         const meters = points.slice(1).reduce((n, p, i) => n + distance(points[i], p), 0);
         if (points.length < 2 || meters < 10) throw new Error('Gå litt lenger før du lagrer neste strekk.');
-        saved = { id: id(), tripId, name: `Strekk ${window.count + 1} · ${new Date(now).toLocaleDateString('nb-NO')}`, createdAt: now, points };
+        const name = stretchName(points, store.setting<Discovery[]>('osmDiscoveries', [])) ?? `Strekk ${window.count + 1} · ${new Date(now).toLocaleDateString('nb-NO')}`;
+        saved = { id: id(), tripId, name, createdAt: now, points };
         db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', saved.id, tripId, saved.name, now, JSON.stringify(points));
         const after = { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id };
         store.setSetting(`segments:${tripId}`, after);
@@ -190,11 +193,11 @@ export function createStore(db: Database) {
       const trip = store.getTrip(tripId);
       if (trip && isGhostTrip(trip)) throw new Error('En skyggetur kan ikke klippes til strekk.');
       if (!trip || trip.endedAt === null) throw new Error('Avslutt turen før du lagrer et strekk.');
-      if (!name.trim()) throw new Error('Gi strekket et navn.');
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < trip.startedAt || to > trip.endedAt || to <= from) throw new Error('Velg et gyldig tidsrom innenfor turen.');
       const points = cleanPoints(trip.points.filter(p => p.timestamp >= from && p.timestamp <= to));
       if (points.length < 2) throw new Error('Dette tidsrommet har for få gode GPS-punkter.');
-      const trail = { id: id(), tripId, name: name.trim().slice(0, 80), createdAt: Date.now(), points };
+      const value = name.trim().slice(0, 80) || stretchName(points, store.setting<Discovery[]>('osmDiscoveries', [])) || fallbackStretchName(from);
+      const trail = { id: id(), tripId, name: value, createdAt: Date.now(), points };
       db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', trail.id, tripId, trail.name, trail.createdAt, JSON.stringify(points));
       return trail;
     },

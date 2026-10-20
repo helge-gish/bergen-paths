@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { createStore, type Database } from '../src/data/store';
 import type { Fix } from '../src/domain/types';
+import type { Discovery } from '../src/domain/discoveries';
 function database() {
   const raw = new DatabaseSync(':memory:');
   const db: Database = {
@@ -15,6 +16,35 @@ function database() {
   return { db, raw, store: createStore(db) };
 }
 const point: Fix = { timestamp: 1000, latitude: 60.39, longitude: 5.34, altitude: 100, altitudeAccuracy: 3, accuracy: 5, speed: 0 };
+test('live and retrospective stretches get local endpoint titles while chosen names survive reopening', () => {
+  const { store, db, raw } = database();
+  const points = Array.from({ length: 21 }, (_, i) => ({ ...point, latitude: point.latitude + i * .0001, timestamp: 1000 + i * 10000 }));
+  const named = (name: string, index: number): Discovery => ({ ...points[index], id: name, name, kind: 'landmark', geometry: [], sourceUrl: '', fetchedAt: 1 });
+  store.setSetting('osmDiscoveries', [named('Startsted', 0), named('Midtsted', 10), named('Sluttsted', 20)]);
+  const trip = store.begin(null, false, 1000);
+  store.append(trip.id, points.slice(0, 11));
+  const live = store.clipSegment(trip.id, 101000);
+  assert.equal(live.name, 'Startsted – Midtsted');
+  store.renameTrail(live.id, 'Min favorittbakke');
+  store.append(trip.id, points.slice(11)); store.finish(trip.id, 201000);
+  const later = store.saveTrail(trip.id, '', 101000, 201000);
+  assert.equal(later.name, 'Midtsted – Sluttsted');
+  const manual = store.saveTrail(trip.id, 'Eget navn', 101000, 201000);
+  assert.equal(manual.name, 'Eget navn');
+  const reopened = createStore(db);
+  assert.equal(reopened.trails().find(t => t.id === live.id)?.name, 'Min favorittbakke');
+  assert.equal(reopened.trails().find(t => t.id === later.id)?.name, 'Midtsted – Sluttsted');
+  raw.close();
+});
+
+test('retrospective stretches can be saved without a typed name or downloaded map data', () => {
+  const { store, raw } = database();
+  const trip = store.begin(null, false, 1000);
+  store.append(trip.id, [point, { ...point, latitude: point.latitude + .0002, timestamp: 11000 }]);
+  store.finish(trip.id, 11000);
+  assert.match(store.saveTrail(trip.id, '', 1000, 11000).name, /^Strekk · /);
+  raw.close();
+});
 test('GPS outage polls reuse immutable snapshots; new and late fixes invalidate them', () => {
   const { store, raw } = database();
   const t = store.begin(null, true, 1000);

@@ -1,3 +1,4 @@
+import { fallbackStretchName, stretchName } from './src/domain/stretchNames';
 import { syncTripStatus } from './src/services/tripStatus';
 import { OptionalName } from './src/ui/OptionalName';
 import { WorkoutCard, WorkoutPicker } from './src/ui/Workout';
@@ -75,6 +76,13 @@ function TripDetails({ medals, stretches, trip, reference, weight, onClose, onCh
     catch (e) { Alert.alert('Navn mangler', String(e)); return false; }
   };
   const [fromMinute, setFromMinute] = useState('0'), [toMinute, setToMinute] = useState('');
+  const suggestedTrailName = useMemo(() => {
+    if (!createTrail) return '';
+    const from = Number(fromMinute.replace(',', '.')) * 60000 + trip.startedAt;
+    const to = toMinute.trim() ? Number(toMinute.replace(',', '.')) * 60000 + trip.startedAt : trip.endedAt!;
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || from < trip.startedAt || to > trip.endedAt!) return '';
+    return stretchName(trip.points.filter(p => p.timestamp >= from && p.timestamp <= to), items) ?? fallbackStretchName(from);
+  }, [createTrail, trip, items, fromMinute, toMinute]);
   const metrics = useMemo(() => tripMetrics(trip), [trip]);
   const energy = useMemo(() => energyEstimate(trip, weight), [trip, weight]);
   const match = useMemo(() => reference ? matchRoute(trip, reference, trip.endedAt ?? Date.now()) : null, [trip, reference]);
@@ -82,8 +90,8 @@ function TripDetails({ medals, stretches, trip, reference, weight, onClose, onCh
     try {
       const from = Number(fromMinute.replace(',', '.')) * 60_000 + trip.startedAt;
       const to = toMinute.trim() ? Number(toMinute.replace(',', '.')) * 60_000 + trip.startedAt : trip.endedAt!;
-      getStore().saveTrail(trip.id, trailName, from, to); onChange(); setTrailName(''); setCreateTrail(false);
-      Alert.alert('Et nytt Tråkk', 'Strekket er lagret på kartet og tilgjengelig i kompasset ditt.');
+      const saved = getStore().saveTrail(trip.id, trailName, from, to); onChange(); setTrailName(''); setCreateTrail(false);
+      Alert.alert('Strekk lagret ✓', `${saved.name}\nStrekket er tilgjengelig i kartet og kompasset ditt.`);
     } catch (e) { Alert.alert('Kunne ikke lagre strekket', e instanceof Error ? e.message : String(e)); }
   };
   const confirmDelete = () => Alert.alert('Slette turen?', 'Turen og GPS-sporet slettes permanent, sammen med egne strekk lagret fra turen. Samlingen beregnes fra turene som er igjen.', [
@@ -112,7 +120,7 @@ function TripDetails({ medals, stretches, trip, reference, weight, onClose, onCh
     {match && <View style={s.card}><Icon name="ghost" /><Text style={s.subheading}>Sammenlignet med skyggen</Text><Text style={s.body}>{reference!.name}</Text><Text style={s.small}>{sameCompletedRoute(trip, reference!) ? `Du fullførte samme rute. Total tid med pauser: ${stretchDelta(metrics.elapsed / 1000, (reference!.endedAt! - reference!.startedAt) / 1000)} enn skyggen. En personlig rekord må også slå din tidligere beste tid på ruten.` : 'Hele ruten kunne ikke bekreftes lik fra start til slutt. Avvik, ulikt start-/sluttpunkt eller GPS-opphold kan være årsaken. Derfor sammenlignes ikke totaltiden; fullførte strekk vurderes hver for seg.'}</Text>{allowSegments && !isGhostTrip(trip) && match.newSegments.map((part, i) => <Button key={part.startedAt} secondary title={`Navngi sporparti ${i + 1}`} onPress={() => { setCreateTrail(true); setFromMinute(((part.startedAt - trip.startedAt) / 60_000).toFixed(2)); setToMinute(part.endedAt ? ((part.endedAt - trip.startedAt) / 60_000).toFixed(2) : ''); }} />)}</View>}
     <Button icon="ghost" title="Bruk denne turen som skygge" onPress={onGhost} disabled={metrics.points.length < 2} />
     {allowSegments && !isGhostTrip(trip) && !createTrail && <Button secondary title="Lagre et strekk fra turen" onPress={() => setCreateTrail(true)} />}
-    {allowSegments && !isGhostTrip(trip) && createTrail && <View style={s.card}><Button secondary title="Avbryt nytt strekk" onPress={() => setCreateTrail(false)} /><Text style={s.eyebrow}>GI STREKKET ET NAVN</Text><Text style={s.subheading}>Et spor som er ditt.</Text><Text style={s.body}>Lagre hele tursporet, eller velg et tidsrom fra turen. Navnet blir synlig i ditt kart og kompass.</Text><TextInput accessibilityLabel="Navn på strekket" placeholder="F.eks. Stien langs elven" placeholderTextColor={colors.muted} value={trailName} onChangeText={setTrailName} maxLength={80} style={s.input} /><View style={s.row}><View style={{ flex: 1, gap: 5 }}><Text style={s.small}>Fra minutt</Text><TextInput accessibilityLabel="Startminutt for strekket" keyboardType="decimal-pad" style={s.input} value={fromMinute} onChangeText={setFromMinute} /></View><View style={{ flex: 1, gap: 5 }}><Text style={s.small}>Til minutt (tomt = slutt)</Text><TextInput accessibilityLabel="Sluttminutt for strekket" keyboardType="decimal-pad" style={s.input} value={toMinute} onChangeText={setToMinute} placeholder="Slutten" /></View></View><Button secondary title="Lagre strekket mitt" onPress={saveTrail} /></View>}
+    {allowSegments && !isGhostTrip(trip) && createTrail && <View style={s.card}><Button secondary title="Avbryt nytt strekk" onPress={() => setCreateTrail(false)} /><Text style={s.eyebrow}>LAGRE ET STREKK</Text><Text style={s.body}>Lagre hele tursporet, eller velg et tidsrom.</Text><OptionalName value={trailName || suggestedTrailName} emptyLabel="Velg et gyldig tidsrom" label="Endre navn på nytt strekk" onSave={value => setTrailName(value)} /><View style={s.row}><View style={{ flex: 1, gap: 5 }}><Text style={s.small}>Fra minutt</Text><TextInput accessibilityLabel="Startminutt for strekket" keyboardType="decimal-pad" style={s.input} value={fromMinute} onChangeText={setFromMinute} /></View><View style={{ flex: 1, gap: 5 }}><Text style={s.small}>Til minutt (tomt = slutt)</Text><TextInput accessibilityLabel="Sluttminutt for strekket" keyboardType="decimal-pad" style={s.input} value={toMinute} onChangeText={setToMinute} placeholder="Slutten" /></View></View><Button secondary title="Lagre strekket mitt" onPress={saveTrail} /></View>}
   </Sheet>;
 }
 
@@ -296,7 +304,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
             <Button secondary title="Flytt startpunkt hit" disabled={busy} onPress={() => Alert.alert('Starte strekket her?', 'Strekket vil begynne ved siste ferske GPS-punkt. Hele tursporet beholdes.', [{ text: 'Avbryt', style: 'cancel' }, { text: 'Sett startpunkt', onPress: () => void attempt(async () => { getStore().setSegmentStart(active.id); setEditingSegment(false); setNow(Date.now()); Vibration.vibrate(80); setSegmentNotice('✓ Startpunkt satt og markert i kartet. Velg «Sett slutt og lagre strekk» når du er fremme.'); Alert.alert('Startpunkt satt ✓', 'Startmarkøren vises i kartet. Gå strekket, og trykk «Sett slutt og lagre strekk» ved slutten.'); }) }])} />
 
 
-            {latestSegment && <><Text style={s.subheading}>Sist lagret: {latestSegment.name}</Text>{!editingSegment ? <Button secondary title="Gi strekket et navn" onPress={() => setEditingSegment(true)} /> : <><TextInput accessibilityLabel="Navn på strekket" placeholder="Navn på strekket" style={s.input} value={segmentName} onChangeText={setSegmentName} maxLength={80} /><Button secondary title="Lagre navn" disabled={busy || !segmentName.trim()} onPress={() => attempt(async () => { getStore().renameTrail(latestSegment.id, segmentName); setEditingSegment(false); setSegmentNotice('✓ Navnet er lagret.'); })} /><Button secondary title="Avbryt navneendring" onPress={() => { setSegmentName(latestSegment.name); setEditingSegment(false); }} /></>}</>}
+            {latestSegment && <><Text style={s.subheading}>Sist lagret: {latestSegment.name}</Text>{!editingSegment ? <Button secondary title="Endre navn" onPress={() => setEditingSegment(true)} /> : <><TextInput accessibilityLabel="Navn på strekket" placeholder="Navn på strekket" style={s.input} value={segmentName} onChangeText={setSegmentName} maxLength={80} /><Button secondary title="Lagre navn" disabled={busy || !segmentName.trim()} onPress={() => attempt(async () => { getStore().renameTrail(latestSegment.id, segmentName); setEditingSegment(false); setSegmentNotice('✓ Navnet er lagret.'); })} /><Button secondary title="Avbryt navneendring" onPress={() => { setSegmentName(latestSegment.name); setEditingSegment(false); }} /></>}</>}
 
           </View>}
           {isGhostTrip(active) && !ghost && <Text style={s.body}>Den valgte skyggen er ikke tilgjengelig. Turen registreres fortsatt som en skyggetur.</Text>}
