@@ -1,0 +1,61 @@
+import { trailFacts, type TrailFacts } from './trailFacts';
+import { usablePosition } from './position';
+import type { Discovery } from './discoveries';
+import { discoveryRows } from './discoveryRows';
+import { needsDiscoveryName } from './discoveryGroups';
+import { bearing, cleanPoints, project, relativeBearing, segments } from './geo';
+import type { Coordinate, Fix, Trail } from './types';
+
+export type TrailChoice = { id: string; name: string; item: Discovery; saved?: Trail; facts: TrailFacts };
+export type NearbyTrail = TrailChoice & { coordinate: Coordinate; meters: number; bearing: number };
+export type CameraHeading = { bearing: number; pitch: number; reliable: boolean; timestamp: number };
+const outlines = new WeakMap<Discovery, { paths: Coordinate[][]; south: number; north: number; west: number; east: number }>();
+export function trailChoices(items: Discovery[], saved: Trail[]): TrailChoice[] {
+  return [
+    ...saved.map(trail => {
+      const points = cleanPoints(trail.points), paths = segments(points);
+      const item: Discovery = { id: `saved:${trail.id}`, name: trail.name, kind: 'trail', latitude: points[0]?.latitude ?? 0, longitude: points[0]?.longitude ?? 0, geometry: points, streetPaths: paths, sourceUrl: '', fetchedAt: trail.createdAt };
+      return { id: item.id, name: trail.name, item, saved: trail, facts: trailFacts([], trail) };
+    }),
+    ...discoveryRows(items.filter(item => item.kind === 'trail' || item.kind === 'steps')).map(row => ({ id: row.id, name: needsDiscoveryName(row.item) ? '' : row.item.name, item: row.item, facts: trailFacts(row.members) })),
+  ];
+}
+function outline(item: Discovery) {
+  const cached = outlines.get(item);
+  if (cached) return cached;
+  const paths = (item.streetPaths ?? [item.geometry]).filter(path => path.length > 1);
+  let south = Infinity, north = -Infinity, west = Infinity, east = -Infinity;
+  for (const path of paths) for (const p of path) {
+    south = Math.min(south, p.latitude); north = Math.max(north, p.latitude);
+    west = Math.min(west, p.longitude); east = Math.max(east, p.longitude);
+  }
+  const result = { paths, south, north, west, east };
+  outlines.set(item, result); return result;
+}
+export function nearbyTrails(choices: TrailChoice[], position: Fix, radius = 3000): NearbyTrail[] {
+  if (!usablePosition(position) || !Number.isFinite(radius) || radius <= 0) return [];
+  const dy = radius / 110000, dx = dy / Math.max(.01, Math.cos(position.latitude * Math.PI / 180));
+  const result: NearbyTrail[] = [];
+  for (const choice of choices) {
+    const bounds = outline(choice.item);
+    if (position.latitude < bounds.south - dy || position.latitude > bounds.north + dy || position.longitude < bounds.west - dx || position.longitude > bounds.east + dx) continue;
+    let nearest: { coordinate: Coordinate; distance: number } | null = null;
+    for (const path of bounds.paths) for (let i = 1; i < path.length; i++) {
+      const hit = project(position, path[i - 1], path[i]);
+      if (!nearest || hit.distance < nearest.distance) nearest = hit;
+    }
+    if (!nearest || nearest.distance > radius) continue;
+    const angle = bearing(position, nearest.coordinate);
+    const direction = ['nord', 'nordøst', 'øst', 'sørøst', 'sør', 'sørvest', 'vest', 'nordvest'][Math.round(angle / 45) % 8];
+    result.push({ ...choice, name: choice.name || `${choice.item.kind === 'steps' ? 'Trapp' : 'Sti'} mot ${direction}`, coordinate: nearest.coordinate, meters: nearest.distance, bearing: angle });
+  }
+  return result.sort((a, b) => a.meters - b.meters || a.id.localeCompare(b.id));
+}
+export function cameraTarget(target: NearbyTrail, heading: CameraHeading | null, position: Fix | null, now: number) {
+  if (!heading?.reliable || !Number.isFinite(heading.timestamp) || !Number.isFinite(target.bearing) || !Number.isFinite(target.meters) || !Number.isFinite(heading.bearing) || !Number.isFinite(heading.pitch) || now - heading.timestamp > 2500 || heading.timestamp > now + 1000
+    || !usablePosition(position) || position.accuracy > 25 || now - position.timestamp > 15000 || position.timestamp > now + 5000) return null;
+  if (Math.abs(heading.pitch) > 55 || target.meters < 8) return null;
+  const delta = relativeBearing(target.bearing, heading.bearing);
+  // Directional HUD with an approximate field of view, not terrain registration.
+  return { delta, visible: Math.abs(delta) <= 30, fraction: .5 + Math.tan(delta * Math.PI / 180) / (2 * Math.tan(Math.PI / 6)) };
+}

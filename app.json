@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Tr\u00e5kk",
+    "name": "Tråkk",
     "slug": "trakk",
     "platforms": [
       "android",
       "ios"
     ],
-    "version": "0.3.13",
+    "version": "0.3.14",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "trakk",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "no.trakk.app",
-      "versionCode": 18,
+      "versionCode": 19,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED"
@@ -25,7 +25,10 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/trakk-icon.png",
         "backgroundColor": "#183D32"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "@maplibre/maplibre-react-native",
@@ -33,11 +36,19 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Tr\u00e5kk bruker posisjonen din til \u00e5 tegne turen og finne stier i n\u00e6rheten.",
-          "locationAlwaysAndWhenInUsePermission": "Tr\u00e5kk registrerer turen ogs\u00e5 n\u00e5r skjermen er l\u00e5st. Registreringen stopper n\u00e5r du avslutter turen.",
+          "locationWhenInUsePermission": "Tråkk bruker posisjonen din til å tegne turen og finne stier i nærheten.",
+          "locationAlwaysAndWhenInUsePermission": "Tråkk registrerer turen også når skjermen er låst. Registreringen stopper når du avslutter turen.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Tråkk bruker kameraet til å vise retningen til stier rundt deg. Ingen bilder lagres.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
         }
       ]
     ]

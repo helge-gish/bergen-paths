@@ -15,11 +15,11 @@ En Android-først tur-app for registrering, utforsking og samling, bygget med Ex
 - Samler navngitte gater i kartlagte lokale områder ved minst 95 % lengdedekning og alle ender i én sammenhengende, lagret gåtur. Hele gaten med forgreninger vises på kartet. Se [reglene for gatesamling](docs/street-collection.md).
 - Har et turpass for OSM-stier, topper, utsiktspunkter, hytter/ly, landemerker, kilder og rasteplasser. Stidekning kan samles over flere turer. Oppnådde stempler lagres lokalt; gatestempler vurderes på nytt ved kartoppdatering.
 - Henter kartobjekter automatisk langs lagrede turer mens appen er åpen, med mellomlagring og nye forsøk ved nettfeil. Alle kategorier teller på både vanlige turer og skyggeturer.
-- Har valgfritt hjemmeområde, målforslag fra OSM og aktiverbare personlige mål med fast innhold.
-- Har en avatar som får nivåer og utstyr fra distanse-, stignings- og samlingsmilepæler. Se [mål og sosial pilot](docs/goals-and-social.md).
+- Følger posisjonen din automatisk med valgt radius, og har målforslag fra OSM og aktiverbare personlige mål med fast innhold.
+- Har en fantasyavatar med mann/dame, animasjon og ranger fra distanse-, stignings- og samlingsmilepæler. Se [mål og sosial pilot](docs/goals-and-social.md).
 - Lagrer turlogg og valgfri vekt lokalt, og eksporterer turer og samling som en JSON-fil uten vekten.
 
-Dette er en første implementasjon. GPS med låst skjerm, tale i bakgrunnen, faktisk batteriforbruk, kartvisning og sensorpresisjon må kontrolleres på en fysisk Android-telefon før appen kan regnes som pålitelig på tur. Ingen konto, skysynk, sosial deling, kamera-AR eller planteidentifikasjon er implementert.
+Dette er en første implementasjon. GPS med låst skjerm, tale i bakgrunnen, faktisk batteriforbruk, kartvisning og sensorpresisjon må kontrolleres på en fysisk Android-telefon før appen kan regnes som pålitelig på tur. Retningsbasert kamera-AR finnes i Android-testutgaven; den krever feltprøving. Ingen konto, skysynk, sosial deling eller planteidentifikasjon er implementert.
 
 ## Utvikling
 
@@ -53,7 +53,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.3.13](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.13). Nye strekk får automatisk navn fra startsted, sluttsted og et relevant sted underveis når kartdataene støtter det. Gjelder både markering under turen og lagring av et tidsrom i etterkant. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.13.md).
+**Android-testversjon:** [Tråkk 0.3.14](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.14). Finn sti med kamera-AR og stiinformasjon, fullskjermkart og fantasyavatar med mann/dame, animasjon og nivåprogresjon. Installer som oppdatering for å beholde turene. Se [endringer, kartoppsett og kontroll](docs/release-0.3.14.md).
 
 Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 

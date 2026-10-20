@@ -1,39 +1,58 @@
-import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, AppState, Image, Pressable, Text, View } from 'react-native';
 import { achievements } from '../domain/achievements';
 import type { Trip } from '../domain/types';
+import { getStore } from '../data/native';
 import { colors, styles as s } from './theme';
-export function Avatar({ trips, collected, color, onColor }: { trips: Trip[]; collected: number; color: string; onColor: (value: string) => void }) {
+import { Icon } from './components';
+
+const art = require('../../assets/trakk-rangers.png');
+const ranks = [{ level: 1, name: 'Stivandrer', rune: '◇' }, { level: 2, name: 'Skogsvandrer', rune: '✧' }, { level: 3, name: 'Stivokter', rune: '❖' }, { level: 5, name: 'Fjellvokter', rune: '✦' }, { level: 8, name: 'Runemester', rune: '✺' }];
+export function Avatar({ trips, collected }: { trips: Trip[]; collected: number }) {
   const progress = useMemo(() => achievements(trips, collected), [trips, collected]);
-  const [showAll, setShowAll] = useState(false);
-  const { level } = progress;
+  const [variant, setVariant] = useState<'male' | 'female'>(() => getStore().setting<string>('avatarVariant', 'female') === 'male' ? 'male' : 'female');
+  const [showAll, setShowAll] = useState(false), [width, setWidth] = useState(300);
+  const [reduceMotion, setReduceMotion] = useState(true), [active, setActive] = useState(AppState.currentState === 'active');
+  const glow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); });
+    const motion = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    const state = AppState.addEventListener('change', value => setActive(value === 'active'));
+    return () => { mounted = false; motion.remove(); state.remove(); };
+  }, []);
+  useEffect(() => {
+    if (reduceMotion || !active) { glow.setValue(0); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(glow, { toValue: 1, duration: 2600, useNativeDriver: true, isInteraction: false }),
+      Animated.timing(glow, { toValue: 0, duration: 3300, useNativeDriver: true, isInteraction: false }),
+    ]));
+    loop.start(); return () => loop.stop();
+  }, [reduceMotion, active, glow]);
+  const { level, xp, nextXp } = progress;
+  const floor = (level - 1) ** 2 * 100, fraction = Math.max(0, Math.min(1, (xp - floor) / (nextXp - floor)));
+  const rank = [...ranks].reverse().find(r => r.level <= level)!, nextRank = ranks.find(r => r.level > level);
+  const earned = progress.milestones.filter(m => m.earned);
   const next = ['distance', 'ascent', 'discoveries'].flatMap(id => progress.milestones.find(m => m.id.startsWith(id) && !m.earned) ?? []);
-  return <View style={s.card}>
-    <Text style={s.heading}>Turkameraten din</Text>
-    <View style={[s.row, { alignItems: 'center' }]}>
-      <Svg width={130} height={160} viewBox="0 0 130 160" accessibilityLabel={`Turavatar på nivå ${level}`}>
-        <Circle cx="65" cy="80" r="62" fill={colors.pale} />
-        {level >= 3 && <Rect x="32" y="65" width="65" height="52" rx="12" fill="#A77843" stroke={colors.ink} strokeWidth="3" />}
-        <Path d="M49 110L45 143M78 110L85 143" stroke={colors.ink} strokeWidth="12" strokeLinecap="round" />
-        <Path d="M46 143H34M85 143H97" stroke="#795438" strokeWidth="13" strokeLinecap="round" />
-        <Path d="M48 72L28 102M81 72L102 96" stroke="#C89771" strokeWidth="10" strokeLinecap="round" />
-        <Rect x="44" y="65" width="40" height="52" rx="12" fill={color} stroke={colors.ink} strokeWidth="3" />
-        <Circle cx="64" cy="44" r="22" fill="#C89771" stroke={colors.ink} strokeWidth="2" />
-        <Circle cx="57" cy="44" r="2" fill={colors.ink} /><Circle cx="72" cy="44" r="2" fill={colors.ink} />
-        <Path d="M59 54Q64 59 70 53" stroke={colors.ink} strokeWidth="2" fill="none" />
-        {level >= 2 && <Path d="M41 36Q42 12 64 16Q84 17 86 36H41L91 38" fill={color} stroke={colors.ink} strokeWidth="4" strokeLinejoin="round" />}
-        {level >= 5 && <Path d="M105 89L99 148" stroke="#795438" strokeWidth="4" strokeLinecap="round" />}
-        {level >= 8 && <Circle cx="64" cy="81" r="7" fill={colors.yellow} stroke={colors.ink} strokeWidth="2" />}
-      </Svg>
-      <View style={{ flex: 1, gap: 8 }}><Text style={s.heading}>Nivå {level}</Text><Text style={s.body}>{progress.xp} XP</Text><Text style={s.small}>{progress.nextXp - progress.xp} XP til neste nivå</Text><Text style={s.small}>{progress.equipment.filter(e => e.level <= level).map(e => e.name).join(' · ')}</Text></View>
+  return <View style={[s.card, { padding: 0, overflow: 'hidden', borderColor: '#C7B788' }]}>
+    <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={{ width: '100%', height: width, overflow: 'hidden', backgroundColor: colors.ink }}>
+      <Image source={art} accessibilityLabel={`${variant === 'male' ? 'Mannlig' : 'Kvinnelig'} skogsvandrer med lykt i en eventyrskog`} style={{ position: 'absolute', width: width * 2, height: width, left: variant === 'female' ? -width : 0 }} resizeMode="stretch" />
+      <Animated.View pointerEvents="none" style={{ position: 'absolute', left: '14%', top: '73%', width: width * .2, height: width * .2, borderRadius: width, backgroundColor: '#FFD36C', opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [.03, .18] }), transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [.8, 1.35] }) }] }} />
+      {[{ x: '12%', y: '25%' }, { x: '83%', y: '58%' }, { x: '74%', y: '15%' }].map((p, i) => <Animated.View key={i} pointerEvents="none" style={{ position: 'absolute', left: p.x as `${number}%`, top: p.y as `${number}%`, width: 5, height: 5, borderRadius: 4, backgroundColor: '#FFE4A0', opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [.2, .9] }), transform: [{ translateY: glow.interpolate({ inputRange: [0, 1], outputRange: [0, -8 - i * 3] }) }] }} />)}
+      <View style={{ position: 'absolute', top: 14, left: 14, backgroundColor: '#142F29DB', padding: 10, borderRadius: 12 }}><Text style={{ color: '#F4D796', fontWeight: '800' }}>{rank.rune} NIVÅ {level}</Text></View>
     </View>
-    <View style={s.row}>{[{ color: '#E8A164', name: 'Aprikos' }, { color: '#799E8A', name: 'Skoggrønn' }, { color: '#8595BD', name: 'Blå' }].map(({ color: c, name }) => <Pressable accessibilityRole="button" accessibilityLabel={`Avatarfarge: ${name}`} accessibilityState={{ selected: c === color }} key={c} onPress={() => onColor(c)} style={{ width: 38, height: 38, borderRadius: 20, backgroundColor: c, borderWidth: c === color ? 3 : 0, borderColor: colors.ink }} />)}</View>
-    {progress.nextEquipment && <Text style={s.body}>Neste utstyr: {progress.nextEquipment.name} på nivå {progress.nextEquipment.level}.</Text>}
-    <Text style={s.subheading}>Neste milepæler</Text>
-    {next.map(m => <Text key={m.id} style={s.body}>{m.title} · {Math.min(m.target, m.value).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} / {m.target} · {m.xp} XP</Text>)}
-    <Pressable accessibilityRole="button" onPress={() => setShowAll(!showAll)}><Text style={s.chipText}>{showAll ? 'Skjul' : 'Vis'} oppnådde milepæler ({progress.milestones.filter(m => m.earned).length})</Text></Pressable>
-    {showAll && progress.milestones.filter(m => m.earned).map(m => <Text key={m.id} style={s.body}>✓ {m.title} · {m.xp} XP</Text>)}
-    <Text style={s.small}>Hver milepæl gir XP én gang. Nivå og utstyr følger de lagrede turene og funnene dine, og beregnes på nytt ved sletting av turer.</Text>
+    <View style={{ padding: 20, gap: 14 }}>
+      <Text style={s.eyebrow}>TURKAMERATEN DIN</Text><Text style={s.heading}>{rank.name}</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>{(['male', 'female'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: variant === value }} onPress={() => { getStore().setSetting('avatarVariant', value); setVariant(value); }} style={[s.chip, { minHeight: 44, flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: value === variant ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: value === variant ? colors.paper : colors.ink }]}>{value === 'male' ? 'Mann' : 'Dame'}</Text></Pressable>)}</View>
+      <View style={{ gap: 7 }}><Text style={s.subheading}>Nivå {level} · {xp.toLocaleString('nb-NO')} XP</Text>
+        <View accessibilityRole="progressbar" accessibilityLabel={`Fremgang mot nivå ${level + 1}`} accessibilityValue={{ min: 0, max: 100, now: Math.round(fraction * 100) }} style={{ height: 9, borderRadius: 6, backgroundColor: '#E4E1D2', overflow: 'hidden' }}><View style={{ height: '100%', width: `${fraction * 100}%`, backgroundColor: colors.ink }} /></View>
+        <Text style={s.small}>{nextXp - xp} XP til nivå {level + 1}{nextRank ? ` · ${nextRank.name} ved nivå ${nextRank.level}` : ''}</Text>
+      </View>
+      <Text style={s.subheading}>Neste prestasjoner</Text>
+      {next.map(m => <View key={m.id} style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><View style={{ padding: 12, borderRadius: 24, backgroundColor: colors.pale }}><Icon name={m.id.startsWith('ascent') ? 'mountain' : m.id.startsWith('discoveries') ? 'compass' : 'map'} size={22} /></View><View style={{ flex: 1 }}><Text style={s.chipText}>{m.title}</Text><Text style={s.small}>{Math.min(m.target, m.value).toLocaleString('nb-NO', { maximumFractionDigits: 1 })} / {m.target} {m.unit} · +{m.xp} XP</Text></View></View>)}
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: showAll }} onPress={() => setShowAll(!showAll)} style={{ paddingVertical: 10 }}><Text style={s.chipText}>{showAll ? 'Skjul' : 'Vis'} prestasjoner · {earned.length} oppnådd</Text></Pressable>
+      {showAll && <View style={{ gap: 9 }}>{earned.length ? earned.map(m => <View key={m.id} style={{ flexDirection: 'row', gap: 12, padding: 12, borderRadius: 14, backgroundColor: '#F0E9D5' }}><Text style={{ color: '#896A27', fontSize: 24 }}>✦</Text><View style={{ flex: 1 }}><Text style={s.chipText}>{m.title}</Text><Text style={s.small}>Oppnådd · {m.xp} XP</Text></View></View>) : <Text style={s.small}>Din første tur er starten på samlingen.</Text>}</View>}
+      <Text style={s.small}>XP kommer fra turene og funnene dine. Hver milepæl teller én gang. Slettes en tur, beregnes fremgangen på nytt.</Text>
+    </View>
   </View>;
 }

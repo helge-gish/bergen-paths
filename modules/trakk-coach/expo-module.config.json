@@ -1,1 +1,11 @@
-{"platforms":["android"],"android":{"modules":["no.trakk.coach.TrakkCoachModule"]}}
+{
+  "platforms": [
+    "android"
+  ],
+  "android": {
+    "modules": [
+      "no.trakk.coach.TrakkCoachModule",
+      "no.trakk.coach.CameraHeadingModule"
+    ]
+  }
+}
