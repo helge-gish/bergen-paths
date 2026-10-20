@@ -14,6 +14,8 @@ Dette er visningsgruppering. Eksisterende turspor, kartobjekt-ID-er, GPS-bevis, 
 
 TypeScript og 154 JavaScript-tester består. Seks nye regresjonstester dekker fem stideler pluss en trapp, komplette kartlinjer, like navn andre steder, sammenkobling uavhengig av rekkefølge, personlige/navnløse funn, delvis dekning og overlapp mellom turoppsummeringens seksjoner.
 
-Android-APK bygges med versjonsnavn 0.3.12 og versjonskode 17. Native Android-kode er uendret fra 0.3.11. Fysisk test av visningen på telefon gjenstår.
+Android-releasebygget fullførte. APK-en har versjonsnavn 0.3.12 og versjonskode 17. Pakkenavn, innebygd Hermes-kode og samme signatur som 0.3.11 er kontrollert. Native Android-kode er uendret fra 0.3.11. Fysisk test av visningen på telefon gjenstår.
 
 Installer som **Oppdater**, uten å avinstallere eller tømme appdata.
+
+APK: 42 267 115 byte. SHA-256: `f74bb9ff91bb3d346c9bc48739ba0a6923d59ee692a08cbb74fd606edeb40e34`.
