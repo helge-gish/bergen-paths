@@ -20,3 +20,5 @@ En syntetisk lokal ytelsessjekk med 5 000 kartobjekter, 500 000 kartpunkter og 4
 Android-versjon 0.3.13 har versjonskode 18. Fysisk test av navneforslagene gjenstår; kvaliteten avhenger av tilgjengelige kartnavn.
 
 Installer som **Oppdater**, uten å avinstallere eller tømme data.
+
+Android-releasebygget er fullført. Pakkenavn, innebygd Hermes-kode og samme signatur som 0.3.12 er kontrollert. APK: 42272387 byte. SHA-256: `0cfe5da2cda760b67eebc3ee789facb750704435a221d6595f6b77e66f6fc143`.
