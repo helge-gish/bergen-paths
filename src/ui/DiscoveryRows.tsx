@@ -1,15 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import type { Discovery } from '../domain/discoveries';
-import { groupDiscoveries } from '../domain/discoveryGroups';
+import { needsDiscoveryName } from '../domain/discoveryGroups';
+import type { DiscoveryRow } from '../domain/discoveryRows';
 import { Button } from './components';
 import { styles as s } from './theme';
 
-/** Presentation only: each mapped segment keeps its identity, award and map link. */
-export function DiscoveryRows({ items, renderItem }: { items: Discovery[]; renderItem: (item: Discovery) => ReactNode }) {
-  const { named, unnamed } = useMemo(() => groupDiscoveries(items), [items]);
+export function DiscoveryRows({ rows, renderItem }: { rows: DiscoveryRow[]; renderItem: (row: DiscoveryRow) => ReactNode }) {
+  const { named, unnamed } = useMemo(() => ({
+    named: rows.filter(row => !needsDiscoveryName(row.item)),
+    unnamed: rows.filter(row => needsDiscoveryName(row.item)),
+  }), [rows]);
   const [limit, setLimit] = useState(25), [open, setOpen] = useState(false), [groupLimit, setGroupLimit] = useState(12);
-  const counts = (['trail', 'steps', 'viewpoint'] as const).map(kind => ({ kind, count: unnamed.filter(i => i.kind === kind).length })).filter(entry => entry.count);
+  const counts = (['trail', 'steps', 'viewpoint'] as const).map(kind => ({ kind, count: unnamed.filter(i => i.item.kind === kind).length })).filter(entry => entry.count);
   const labels = { trail: ['sti', 'stier'], steps: ['trapp', 'trapper'], viewpoint: ['utsiktspunkt', 'utsiktspunkter'] };
   return <View style={{ gap: 14 }}>
     {named.slice(0, limit).map(renderItem)}
