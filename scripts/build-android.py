@@ -14,6 +14,7 @@ import urllib.request
 
 root = Path(__file__).resolve().parents[1]
 subprocess.run(['node', str(root / 'scripts/patch-map-gestures.cjs')], check=True)
+subprocess.run(['node', str(root / 'scripts/patch-camera-preview.cjs')], check=True)
 env = os.environ.copy()
 sdk = Path(env.get('ANDROID_HOME', '/workspace/.android-sdk'))
 jdks = sorted(Path('/workspace/.java').glob('jdk-17*'))
@@ -80,6 +81,15 @@ if result.returncode:
 apk = root / 'android/app/build/outputs/apk/release/app-release.apk'
 if not apk.is_file():
     raise SystemExit('Build returned success without the expected APK.')
+# Expo SDK 55 can substitute a prebuilt camera AAR. Verify that our patched
+# camera was actually compiled, not merely edited in node_modules.
+camera_classes = root / 'node_modules/expo-camera/android/build/tmp/kotlin-classes/release'
+camera_bytecode = subprocess.check_output([
+    str(Path(java_home) / 'bin/javap'), '-c', '-p', '-classpath', str(camera_classes),
+    'expo.modules.camera.ExpoCameraView',
+], text=True)
+if 'PreviewView$ImplementationMode.COMPATIBLE' not in camera_bytecode or 'setImplementationMode' not in camera_bytecode:
+    raise SystemExit('Compiled camera is missing the TextureView compatibility patch.')
 permissions = subprocess.check_output([
     str(sdk / 'build-tools/36.0.0/aapt'), 'dump', 'permissions', str(apk)
 ], text=True)

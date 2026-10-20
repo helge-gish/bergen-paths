@@ -1,24 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState, Linking, Pressable, Text, View } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { requireOptionalNativeModule } from 'expo';
 import * as Location from 'expo-location';
 import type { Discovery } from '../domain/discoveries';
 import type { Fix, Trail } from '../domain/types';
-import { cameraTarget, nearbyTrails, trailChoices, type CameraHeading, type NearbyTrail } from '../domain/trailFinder';
-import { freshPosition, usablePosition } from '../domain/position';
+import { nearbyTrails, trailChoices, type NearbyTrail } from '../domain/trailFinder';
+import { freshPosition } from '../domain/position';
 import { shortDistance } from '../domain/metrics';
 import { getStore } from '../data/native';
 import { toFix } from '../services/tracking';
+import { TrailCamera } from './TrailCamera';
 import { TrailMap } from './TrailMap';
 import { Button } from './components';
 import { colors, styles as s } from './theme';
-
-const headingSensor = requireOptionalNativeModule<{
-  start(latitude: number, longitude: number, altitude: number): Promise<boolean>;
-  stop(): Promise<void>;
-  addListener(name: 'heading', listener: (heading: CameraHeading) => void): { remove(): void };
-}>('TrakkCameraHeading');
 
 export function TrailFinder({ items, trails, busy, onRefresh, onMap, onStart, onGhost }: {
   items: Discovery[]; trails: Trail[]; busy: boolean; onRefresh: () => void;
@@ -82,48 +75,6 @@ export function TrailFinder({ items, trails, busy, onRefresh, onMap, onStart, on
     {position && !nearby.length && <Text style={s.body}>Ingen stier funnet i de nedlastede kartdataene innen 3 km. Hent kartdata for området rundt deg.</Text>}
     <Button secondary title={busy ? 'Henter stier …' : 'Hent stier rundt meg'} onPress={onRefresh} disabled={busy || !live} />
     <Text style={s.small}>Avstanden er i luftlinje, ikke en anbefalt vei gjennom terrenget. Listen bruker OpenStreetMap og egne strekk. Merkede fotruter fra Kartverket vises som et eget lag på kartet.</Text>
-  </View>;
-}
-
-function TrailCamera({ active, position, targets, now, onSelect }: { active: boolean; position: Fix | null; targets: NearbyTrail[]; now: number; onSelect: (target: NearbyTrail) => void }) {
-  const [permission, requestPermission, refreshPermission] = useCameraPermissions();
-  useEffect(() => { if (active) void refreshPermission(); }, [active, refreshPermission]);
-  const [heading, setHeading] = useState<CameraHeading | null>(null);
-  const [sensorError, setSensorError] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [width, setWidth] = useState(320);
-  const live = usablePosition(position) && position.accuracy <= 25 && now - position.timestamp <= 15000 && position.timestamp <= now + 5000;
-  // Restart only when a camera session starts or reliable location becomes
-  // available, not on every GPS fix or every sensor event.
-  useEffect(() => {
-    setHeading(null);
-    if (!active || !permission?.granted || !live || !position) return;
-    if (!headingSensor) { setSensorError('Kameraretning støttes ikke på denne enheten. Bruk kartet.'); return; }
-    let cancelled = false;
-    setSensorError(null);
-    const listener = headingSensor.addListener('heading', value => { if (!cancelled) setHeading(value); });
-    void headingSensor.start(position.latitude, position.longitude, position.altitude ?? 0).then(ok => {
-      if (cancelled) return;
-      if (!ok) setSensorError('Telefonen mangler retningssensor. Bruk kartet.');
-    }).catch(() => { if (!cancelled) setSensorError('Kunne ikke lese kameraretningen. Bruk kartet.'); });
-    return () => { cancelled = true; listener.remove(); void headingSensor?.stop().catch(() => {}); };
-  }, [active, permission?.granted, live]);
-  if (!permission?.granted) return <View style={s.card}><Text style={s.subheading}>Se stiene gjennom kameraet</Text><Text style={s.body}>Retning og navn legges over kamerabildet. Ingen bilder eller lyd tas opp.</Text><Button title={permission?.canAskAgain === false ? 'Åpne kameratillatelse' : 'Tillat kamera'} onPress={() => permission?.canAskAgain === false ? void Linking.openSettings() : void requestPermission().catch(() => setCameraError('Kunne ikke be om kameratilgang.'))} />{cameraError && <Text style={s.small}>{cameraError}</Text>}</View>;
-  const directional = targets.map(target => ({ target, screen: cameraTarget(target, heading, position, now) }));
-  const visible = directional.filter(item => item.screen?.visible).slice(0, 3);
-  const behind = directional.find(item => item.screen && !item.screen.visible);
-  const status = !live ? 'Venter på fersk, nøyaktig GPS …' : sensorError ?? (!heading || now - heading.timestamp > 2500 ? 'Finner kameraretningen …'
-    : !heading.reliable ? 'Kompasset er usikkert. Beveg mobilen rolig i et åttetall.'
-      : Math.abs(heading.pitch) > 55 ? 'Løft mobilen og pek mot horisonten.'
-        : targets[0]?.meters < 8 ? 'Du er ved stien. Se deg rundt.'
-          : !visible.length ? behind ? `Snu mot ${behind.screen!.delta < 0 ? 'venstre' : 'høyre'} for å se stien` : 'Pek rundt deg for å finne en sti' : null);
-  return <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={{ height: 380, borderRadius: 20, overflow: 'hidden', backgroundColor: '#172821' }}>
-    {active && <CameraView style={{ position: 'absolute', inset: 0 }} facing="back" mode="picture" mute onMountError={() => setCameraError('Kameraet kunne ikke åpnes. Bruk kartet.')} />}
-    <View pointerEvents="none" style={{ position: 'absolute', left: '49%', top: '45%' }}><Text style={{ color: 'white', fontSize: 30 }}>+</Text></View>
-    {!status && !cameraError && visible.map(({ target, screen }, i) => <Pressable key={target.id} accessibilityRole="button" accessibilityLabel={`Velg ${target.name}`} onPress={() => onSelect(target)} style={{ position: 'absolute', left: Math.max(8, Math.min(width - 168, screen!.fraction * width - 80)), top: 45 + i * 88, width: 160, borderRadius: 12, backgroundColor: '#183D32ED', borderWidth: 1, borderColor: 'white', padding: 9 }}>
-      <Text numberOfLines={2} style={{ color: 'white', fontWeight: '700' }}>{target.name}</Text><Text style={{ color: '#E9EDE2', fontSize: 12 }}>{shortDistance(target.meters)} · luftlinje</Text><Text numberOfLines={1} style={{ color: '#F4D796', fontSize: 11, marginTop: 3 }}>{shortDistance(target.facts.length)} {target.saved ? 'strekk' : 'kartlagt'}{target.facts.ascent !== null ? ` · ↑${Math.round(target.facts.ascent)} m` : ''}</Text>
-    </Pressable>)}
-    <View pointerEvents="none" style={{ position: 'absolute', left: 12, right: 12, bottom: 12, padding: 12, borderRadius: 12, backgroundColor: '#183D32E8' }}><Text style={{ color: 'white' }}>{cameraError ?? status ?? 'Trykk på et stinavn for å velge.'}</Text><Text style={{ color: '#D3DED5', fontSize: 11, marginTop: 5 }}>Retningsvisning · ikke en presis linje på bakken</Text></View>
   </View>;
 }
 

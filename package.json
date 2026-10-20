@@ -1,6 +1,6 @@
 {
   "name": "trakk",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",
@@ -26,6 +26,8 @@
     "@types/geojson": "^7946.0.16",
     "@types/node": "^24.19.2",
     "@types/react": "~19.2.0",
+    "@types/react-test-renderer": "^19.3.0",
+    "react-test-renderer": "^19.2.0",
     "tsx": "^4.20.6",
     "typescript": "~6.0.3"
   },
@@ -36,7 +38,16 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "export": "expo export --platform all --max-workers 2",
-    "postinstall": "node scripts/patch-map-gestures.cjs"
+    "postinstall": "node scripts/patch-map-gestures.cjs && node scripts/patch-camera-preview.cjs"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-camera"
+        ]
+      }
+    }
+  }
 }

@@ -26,12 +26,11 @@ const satelliteKey = process.env.EXPO_PUBLIC_MAPTILER_KEY?.trim() ?? '';
 export const TrailMap = memo(function TrailMap(props: Props) {
   const [full, setFull] = useState(false);
   const [background, setBackground] = useState(() => mapBackground(getStore().setting('mapBackground', null), !!satelliteKey));
-  const [routes, setRoutes] = useState(true);
   const view = useRef<ViewState | null>(null);
   const { height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const choose = (value: MapBackground) => { setBackground(value); getStore().setSetting('mapBackground', value); };
-  const shared = { ...props, background, onBackground: choose, routes, onRoutes: () => setRoutes(value => !value), restoredView: view.current, onView: (value: ViewState) => { view.current = value; } };
+  const shared = { ...props, background, onBackground: choose, restoredView: view.current, onView: (value: ViewState) => { view.current = value; } };
   return <>
     {!full ? <MapSurface {...shared} onExpand={() => setFull(true)} /> : <View style={{ height: props.height ?? 330 }} />}
     {full && <Modal visible animationType="fade" onRequestClose={() => setFull(false)}><SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
@@ -40,8 +39,8 @@ export const TrailMap = memo(function TrailMap(props: Props) {
     </SafeAreaView></Modal>}
   </>;
 });
-type SurfaceProps = Props & { fullscreen?: boolean; onExpand: () => void; background: MapBackground; onBackground: (value: MapBackground) => void; routes: boolean; onRoutes: () => void; restoredView: ViewState | null; onView: (view: ViewState) => void };
-function MapSurface({ positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, awards = EMPTY_AWARDS, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330, fullscreen = false, onExpand, background, onBackground, routes, onRoutes, restoredView, onView }: SurfaceProps) {
+type SurfaceProps = Props & { fullscreen?: boolean; onExpand: () => void; background: MapBackground; onBackground: (value: MapBackground) => void; restoredView: ViewState | null; onView: (view: ViewState) => void };
+function MapSurface({ positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, awards = EMPTY_AWARDS, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330, fullscreen = false, onExpand, background, onBackground, restoredView, onView }: SurfaceProps) {
   const mapCenter = focus ?? position ?? current.at(-1) ?? reference[0] ?? trips[0]?.points.at(-1) ?? trails[0]?.points[0] ?? selectedDiscovery;
   const camera = useRef<CameraRef>(null);
   const restored = useRef(restoredView);
@@ -77,7 +76,7 @@ function MapSurface({ positionStale = false, segmentStart, segmentEnd, startPosi
   return <View testID="trail-map" onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: fullscreen ? 0 : 22, overflow: 'hidden', backgroundColor: colors.pale }}>
     <Map dragPan={true} onRegionDidChange={({ nativeEvent }) => { if (!nativeEvent?.bounds) return; onView(nativeEvent); if (nativeEvent.userInteraction) userMoved.current = true; const next: MapBounds = [...nativeEvent.bounds]; setViewport(previous => previous?.every((value, i) => value === next[i]) ? previous : next); }} style={{ flex: 1 }} mapStyle={style} attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
       <Camera ref={camera} initialViewState={restored.current ?? { center: [mapCenter.longitude, mapCenter.latitude], zoom: 15 }} />
-      {routes && <RasterSource id="national-foot-routes" tiles={[FOOT_ROUTE_TILES]} tileSize={256} minzoom={8} maxzoom={18} attribution="© Kartverket · Nasjonal database for turruter"><Layer id="national-foot-routes" type="raster" paint={{ 'raster-opacity': 0.9 }} /></RasterSource>}
+      {<RasterSource id="national-foot-routes" tiles={[FOOT_ROUTE_TILES]} tileSize={256} minzoom={8} maxzoom={18} attribution="© Kartverket · Nasjonal database for turruter"><Layer id="national-foot-routes" type="raster" paint={{ 'raster-opacity': 0.9 }} /></RasterSource>}
       <GeoJSONSource id="discoveries" data={targets}>
         <Layer id="discovery-halo" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': '#FFFFFF', 'line-width': ['case', ['get', 'selected'], 8, 4], 'line-opacity': 0.85 }} />
         <Layer id="discovery-paths" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': ['case', ['get', 'selected'], colors.coral, ['get', 'collected'], '#426D3A', '#687A5D'], 'line-width': ['case', ['get', 'selected'], 5, 2], 'line-opacity': 0.85 }} />
@@ -91,13 +90,12 @@ function MapSurface({ positionStale = false, segmentStart, segmentEnd, startPosi
       {peaks.map(peak => <Marker key={peak.id} lngLat={[peak.longitude, peak.latitude]} onPress={() => onPeak?.(peak)}><View style={{ alignItems: 'center', padding: 4 }}><View style={{ padding: 5, borderRadius: 20, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.ink }}><Icon name="mountain" size={15} /></View><Text style={{ fontSize: 10, fontWeight: '700', color: colors.ink, backgroundColor: '#F7F5EEDD', paddingHorizontal: 4, borderRadius: 4 }}>{peak.name}</Text></View></Marker>)}
       {ghost && <Marker lngLat={[ghost.longitude, ghost.latitude]}><View style={{ padding: 8, backgroundColor: colors.coral, borderRadius: 25, borderWidth: 2, borderColor: 'white' }}><Icon name="ghost" color="white" size={19} /></View></Marker>}
       {startPosition && <Marker lngLat={[startPosition.longitude, startPosition.latitude]}><View style={{ padding: 7, backgroundColor: colors.ink, borderRadius: 8, borderWidth: 2, borderColor: 'white' }}><Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>START</Text></View></Marker>}
-      {segmentStart && <Marker lngLat={[segmentStart.longitude, segmentStart.latitude]}><View accessibilityLabel="Startpunkt for strekket" style={{ transform: [{ translateY: -42 }], backgroundColor: colors.ink, padding: 7, borderRadius: 8, borderWidth: 2, borderColor: 'white' }}><Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>START STREKK</Text></View></Marker>}
+      {segmentStart && <Marker lngLat={[segmentStart.longitude, segmentStart.latitude]}><View accessibilityLabel="Aktivt startmerke" style={{ transform: [{ translateY: -42 }], backgroundColor: colors.ink, padding: 7, borderRadius: 8, borderWidth: 2, borderColor: 'white' }}><Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>AKTIV START</Text></View></Marker>}
       {segmentEnd && (!segmentStart || distance(segmentStart, segmentEnd) > 10) && <Marker lngLat={[segmentEnd.longitude, segmentEnd.latitude]}><View style={{ backgroundColor: colors.coral, padding: 7, borderRadius: 8 }}><Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>SIST LAGRET</Text></View></Marker>}
       {position && <Marker lngLat={[position.longitude, position.latitude]}><View accessibilityLabel={positionStale ? "Sist kjente posisjon" : "Din posisjon"} style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: positionStale ? '#6D7B72' : '#1565E8', borderWidth: 3, borderColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 8 }}><Text style={{ color: 'white', fontWeight: '900', fontSize: 9 }}>{positionStale ? 'SIST' : 'DU'}</Text></View></Marker>}
     </Map>
     <View style={{ position: 'absolute', top: 8, left: 8, right: 8, flexDirection: 'row', gap: 6 }}>
-      {(['topo', ...(satelliteKey ? ['satellite'] : [])] as MapBackground[]).map(value => <MapControl key={value} title={value === 'topo' ? 'Turkart' : 'Satellitt'} selected={background === value} onPress={() => onBackground(value)} />)}
-      <MapControl title="Stier" selected={routes} onPress={onRoutes} />
+      {(satelliteKey ? ['topo', 'satellite'] as MapBackground[] : []).map(value => <MapControl key={value} title={value === 'topo' ? 'Turkart' : 'Satellitt'} selected={background === value} onPress={() => onBackground(value)} />)}
       <View style={{ flex: 1 }} /><MapControl title={fullscreen ? '↙' : '⛶'} label={fullscreen ? 'Minimer kartet' : 'Åpne kart i fullskjerm'} onPress={onExpand} />
     </View>
     {position && <View style={{ position: 'absolute', right: 10, bottom: 38 }}><MapControl title="◎" label="Finn min posisjon i kartet" onPress={() => { userMoved.current = false; camera.current?.flyTo({ center: [position.longitude, position.latitude], zoom: 16, duration: 400 }); }} /></View>}

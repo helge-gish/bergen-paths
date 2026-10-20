@@ -324,3 +324,21 @@ test('last map location falls back to saved tracks and survives reopening withou
   assert.equal(store.setting('homeArea', null), null);
   raw.close();
 });
+
+test('one active peg survives move, save, reopen and undo without losing the trip start', async () => {
+  const { activePeg } = await import('../src/domain/activePeg');
+  const { store, db, raw } = database();
+  const t = store.begin(null, false, 1000);
+  const points = Array.from({ length: 8 }, (_, i) => ({ ...point, latitude: point.latitude + i * .0001, timestamp: 1000 + i * 10000 }));
+  assert.equal(activePeg(t.startedAt, store.segmentWindow(t.id).from, []).atTripStart, true);
+  store.append(t.id, points.slice(0, 4)); store.setSegmentStart(t.id, 31000);
+  assert.equal(activePeg(t.startedAt, store.segmentWindow(t.id).from, store.getTrip(t.id)!.points).point?.timestamp, 31000);
+  store.append(t.id, points.slice(4)); store.clipSegment(t.id, 71000);
+  const reopened = createStore(db);
+  assert.equal(activePeg(t.startedAt, reopened.segmentWindow(t.id).from, reopened.getTrip(t.id)!.points).point?.timestamp, 71000);
+  reopened.undoSegment(t.id, 72000);
+  assert.equal(activePeg(t.startedAt, reopened.segmentWindow(t.id).from, reopened.getTrip(t.id)!.points).point?.timestamp, 31000);
+  assert.equal(reopened.getTrip(t.id)!.startedAt, 1000);
+  assert.equal(reopened.getTrip(t.id)!.points.length, 8);
+  raw.close();
+});
