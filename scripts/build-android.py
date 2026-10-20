@@ -48,6 +48,8 @@ architectures = env.get('TRAKK_ANDROID_ARCHITECTURES', 'arm64-v8a')
 if not re.fullmatch(r'(arm64-v8a|x86_64)(,(arm64-v8a|x86_64))*', architectures):
     raise SystemExit('Unsupported Android architecture list.')
 args = ['./gradlew', ':app:assembleRelease', '--no-daemon', '--max-workers=2', '-PreactNativeArchitectures=' + architectures]
+if env.get('TRAKK_ANDROID_CHECKS') == '1':
+    args.append(':trakk-coach:testReleaseUnitTest')
 jvm = '-Xmx4g -XX:MaxMetaspaceSize=1g'
 # The system Java trust store contains this environment's configured root CAs.
 # Keep certificate validation enabled when using a separately installed JDK.

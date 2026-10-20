@@ -1,3 +1,7 @@
+import { localDialect } from '../domain/dialect';
+import { syncTripStatus } from './tripStatus';
+import { tripMetrics } from '../domain/metrics';
+import { walkingCommentary, celebrateStretch } from '../domain/commentary';
 import { syncWorkoutCoach, workoutAvailable } from './workoutCoach';
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
@@ -35,7 +39,10 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     void syncWorkoutCoach(active).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     const fixes = data.locations.map(toFix);
     store.append(active.id, fixes);
+    const last = fixes.filter(validFix).at(-1);
+    if (last && Date.now() - last.timestamp <= 30000) store.setSetting('localDialect', localDialect(last));
     store.setSetting('trackingError', null);
+    void syncTripStatus(store.getTrip(active.id)).catch(() => {});
     // Keep raw fixes for the recorded history, but poor GPS cannot advance a
     // stretch or ghost. Do not replay those comparisons for unusable batches.
     if (!fixes.some(validFix)) return;
@@ -56,7 +63,14 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
       store.setSetting(`routeNotified:${current.id}`, eventKey);
       cue = route.state === 'off-route' ? 'Du har gått av ruten. Eg lagrer turen videre. Se kartet for å finne tilbake, eller fortsett uten skygge.' : 'No e du tilbake på ruten. Eg sammenligner fortsatt strekkene, men ikke totaltiden.';
     }
-    if (!cue && completed) cue = `Strekk fullført: ${completed.name}. ${completed.ghostSeconds !== null ? stretchDelta(completed.seconds, completed.ghostSeconds) + ' enn skyggen.' : completed.previousSeconds !== null ? stretchDelta(completed.seconds, completed.previousSeconds) + ' enn sist.' : 'Første registrerte tid.'}${completed.bestSeconds !== null && completed.bestSeconds - completed.seconds >= 5 ? ' Ny beste tid!' : ''}`;
+    if (!cue && completed) cue = `${celebrateStretch(completed.name)} ${completed.ghostSeconds !== null ? stretchDelta(completed.seconds, completed.ghostSeconds) + ' enn skyggen.' : completed.previousSeconds !== null ? stretchDelta(completed.seconds, completed.previousSeconds) + ' enn sist.' : 'Første registrerte tid.'}${completed.bestSeconds !== null && completed.bestSeconds - completed.seconds >= 5 ? ' Ny beste tid!' : ''}`;
+    const metrics = tripMetrics(current, now);
+    const bucket = Math.floor(metrics.elapsed / 300000);
+    const previousBucket = store.setting(`commentaryBucket:${current.id}`, 0);
+    if (bucket > previousBucket) {
+      store.setSetting(`commentaryBucket:${current.id}`, bucket);
+      if (!cue && !ghost && !current.workout && current.audioEnabled) cue = walkingCommentary(current, metrics, now);
+    }
     if (cue && current.audioEnabled) {
       store.setSetting(`eventSpoken:${current.id}`, now);
       void speak(cue, current.id);
@@ -101,6 +115,7 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
   try {
     await Location.startLocationUpdatesAsync(LOCATION_TASK, trackingOptions);
     if (training === '4x4') await Speech.stop();
+    await syncTripStatus(store.getTrip(trip.id)).catch(() => {});
     await syncWorkoutCoach(trip).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     return trip;
   } catch (e) {
@@ -115,6 +130,7 @@ export async function finishTracking() {
   if (!trip) return null;
   // Persist the end timestamp first, so late deliveries never extend the recorded trip.
   store.finish(trip.id);
+  await syncTripStatus(null).catch(() => {});
   await syncWorkoutCoach(null).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke stoppes. Lukk appen for å stoppe lyden.'));
   try { if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) await Location.stopLocationUpdatesAsync(LOCATION_TASK); }
   catch { store.setSetting('trackingError', 'Turen er lagret, men GPS-tjenesten kunne ikke stoppes. Lukk appen for å stoppe tjenesten.'); }
@@ -127,6 +143,7 @@ export async function resumeTracking() {
   const permission = await Location.getBackgroundPermissionsAsync();
   if (!permission.granted) throw new Error('Gi Tråkk bakgrunnstilgang til posisjon i innstillingene først.');
   await Location.startLocationUpdatesAsync(LOCATION_TASK, trackingOptions);
+  await syncTripStatus(getStore().active()).catch(() => {});
   await syncWorkoutCoach(getStore().active());
   getStore().setSetting('trackingError', null);
 }

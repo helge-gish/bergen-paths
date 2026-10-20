@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Map, Camera, GeoJSONSource, Layer, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import type { Coordinate, Fix, Peak, Trail, Trip } from '../domain/types';
-import { cleanPoints, coordinateBounds, segments } from '../domain/geo';
+import { cleanPoints, coordinateBounds, distance, segments } from '../domain/geo';
 import { colors, styles as s } from './theme';
 import { Icon } from './components';
 import { mapSelection, type MapBounds } from '../domain/mapSelection';
@@ -14,11 +14,12 @@ const EMPTY_TRAILS: Trail[] = [];
 const EMPTY_DISCOVERIES: Discovery[] = [];
 const EMPTY_PEAKS: Peak[] = [];
 const EMPTY_AWARDS: Record<string, number> = {};
-type Props = { startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
+type Props = { positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
-export const TrailMap = memo(function TrailMap({ startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, awards = EMPTY_AWARDS, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
+export const TrailMap = memo(function TrailMap({ positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, awards = EMPTY_AWARDS, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330 }: Props) {
+  const mapCenter = focus ?? current.at(-1) ?? reference[0] ?? trips[0]?.points.at(-1) ?? trails[0]?.points[0] ?? selectedDiscovery;
   const camera = useRef<CameraRef>(null);
   const [viewport, setViewport] = useState<MapBounds | null>(null);
   const displayed = useMemo(() => mapSelection(discoveries, viewport ?? (focus ? [focus.longitude - .025, focus.latitude - .012, focus.longitude + .025, focus.latitude + .012] : [-180, -85, 180, 85]), selectedDiscovery), [discoveries, viewport, focus, selectedDiscovery]);
@@ -42,11 +43,12 @@ export const TrailMap = memo(function TrailMap({ startPosition, guideStart = fal
   useEffect(() => {
     if (ready && size.width > 0 && size.height > 0 && bounds) camera.current?.fitBounds(bounds, { padding: { top: 30, right: 30, bottom: 38, left: 30 }, duration: 0 });
   }, [bounds, ready, size]);
-  useEffect(() => { if (focus && !selectedDiscovery && !fitRoute && !fitReference) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute, fitReference]);
+  useEffect(() => { if (ready && focus && !selectedDiscovery && !fitRoute && !fitReference) camera.current?.flyTo({ center: [focus.longitude, focus.latitude], zoom: 14, duration: 700 }); }, [focus, selectedDiscovery, fitRoute, fitReference, ready]);
   useEffect(() => { if (recenter && position) camera.current?.flyTo({ center: [position.longitude, position.latitude], zoom: 16, duration: 500 }); }, [recenter]);
+  if (!mapCenter) return <View style={{ height, borderRadius: 22, backgroundColor: colors.pale, justifyContent: 'center', padding: 24 }}><Icon name="location" /><Text style={s.subheading}>Kartet trenger en posisjon</Text><Text style={s.body}>Slå på GPS og tillat posisjon. Sist kjente turposisjon brukes når den finnes.</Text></View>;
   return <View testID="trail-map" onLayout={({ nativeEvent: { layout } }) => setSize(previous => previous.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height })} style={{ height, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.pale }}>
     <Map dragPan={true} onRegionDidChange={({ nativeEvent }) => { if (!nativeEvent?.bounds) return; const next: MapBounds = [...nativeEvent.bounds]; setViewport(previous => previous?.every((value, i) => value === next[i]) ? previous : next); }} style={{ flex: 1 }} mapStyle="https://tiles.openfreemap.org/styles/liberty" attribution={true} logo={false} onDidFinishLoadingStyle={() => setReady(true)} onDidFailLoadingMap={() => setFailed(true)} onDidFinishLoadingMap={() => setFailed(false)}>
-      <Camera ref={camera} initialViewState={{ center: focus ? [focus.longitude, focus.latitude] : [0, 20], zoom: focus ? 14 : 1.5 }} />
+      <Camera ref={camera} initialViewState={{ center: [mapCenter.longitude, mapCenter.latitude], zoom: 14 }} />
       <GeoJSONSource id="discoveries" data={targets}>
         <Layer id="discovery-paths" type="line" filter={['==', ['geometry-type'], 'LineString']} paint={{ 'line-color': ['case', ['get', 'selected'], colors.coral, ['get', 'collected'], '#426D3A', '#A9B6A0'], 'line-width': ['case', ['get', 'selected'], 5, 2], 'line-opacity': 0.85 }} />
         <Layer id="discovery-dots" type="circle" filter={['==', ['geometry-type'], 'Point']} paint={{ 'circle-radius': 6, 'circle-color': ['case', ['get', 'collected'], colors.ink, colors.yellow], 'circle-stroke-color': colors.paper, 'circle-stroke-width': 2 }} />
@@ -59,7 +61,9 @@ export const TrailMap = memo(function TrailMap({ startPosition, guideStart = fal
       {peaks.map(peak => <Marker key={peak.id} lngLat={[peak.longitude, peak.latitude]} onPress={() => onPeak?.(peak)}><View style={{ alignItems: 'center', padding: 4 }}><View style={{ padding: 5, borderRadius: 20, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.ink }}><Icon name="mountain" size={15} /></View><Text style={{ fontSize: 10, fontWeight: '700', color: colors.ink, backgroundColor: '#F7F5EEDD', paddingHorizontal: 4, borderRadius: 4 }}>{peak.name}</Text></View></Marker>)}
       {ghost && <Marker lngLat={[ghost.longitude, ghost.latitude]}><View style={{ padding: 8, backgroundColor: colors.coral, borderRadius: 25, borderWidth: 2, borderColor: 'white' }}><Icon name="ghost" color="white" size={19} /></View></Marker>}
       {startPosition && <Marker lngLat={[startPosition.longitude, startPosition.latitude]}><View style={{ padding: 7, backgroundColor: colors.ink, borderRadius: 8, borderWidth: 2, borderColor: 'white' }}><Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>START</Text></View></Marker>}
-      {position && <Marker lngLat={[position.longitude, position.latitude]}><View accessibilityLabel="Din posisjon" style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#1565E8', borderWidth: 4, borderColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 8 }}><Text style={{ color: 'white', fontWeight: '900', fontSize: 12 }}>DU</Text></View></Marker>}
+      {segmentStart && <Marker lngLat={[segmentStart.longitude, segmentStart.latitude]}><View accessibilityLabel="Startpunkt for strekket" style={{ transform: [{ translateY: -42 }], backgroundColor: colors.ink, padding: 7, borderRadius: 8, borderWidth: 2, borderColor: 'white' }}><Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>START STREKK</Text></View></Marker>}
+      {segmentEnd && (!segmentStart || distance(segmentStart, segmentEnd) > 10) && <Marker lngLat={[segmentEnd.longitude, segmentEnd.latitude]}><View style={{ backgroundColor: colors.coral, padding: 7, borderRadius: 8 }}><Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>SIST LAGRET</Text></View></Marker>}
+      {position && <Marker lngLat={[position.longitude, position.latitude]}><View accessibilityLabel={positionStale ? "Sist kjente posisjon" : "Din posisjon"} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: positionStale ? '#6D7B72' : '#1565E8', borderWidth: 4, borderColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 8 }}><Text style={{ color: 'white', fontWeight: '900', fontSize: 12 }}>{positionStale ? 'SIST' : 'DU'}</Text></View></Marker>}
     </Map>
     {displayed.limited && <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, right: 8, padding: 8, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Viser et utvalg. Zoom inn for flere detaljer.</Text></View>}
     {failed && <View style={{ position: 'absolute', top: 10, left: 10, right: 10, padding: 10, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Kartbakgrunnen trenger nett. GPS-sporet lagres fortsatt under en aktiv tur.</Text></View>}

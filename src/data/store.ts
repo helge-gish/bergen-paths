@@ -5,6 +5,7 @@ import { distance } from '../domain/geo';
 import type { Fix, Profile, Trail, Trip } from '../domain/types';
 import { trailReference } from '../domain/trailReference';
 import { cleanPoints } from '../domain/geo';
+import { latestPosition, type MapPosition } from '../domain/position';
 type Param = string | number | null;
 export interface Database {
   execSync(sql: string): void;
@@ -20,6 +21,7 @@ PRAGMA busy_timeout = 5000;
 CREATE TABLE IF NOT EXISTS trips (id TEXT PRIMARY KEY, name TEXT NOT NULL, startedAt REAL NOT NULL, endedAt REAL, ghostId TEXT, audioEnabled INTEGER NOT NULL, lastCueAt REAL NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_trip ON trips ((1)) WHERE endedAt IS NULL;
 CREATE TABLE IF NOT EXISTS points (tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE, timestamp REAL NOT NULL, data TEXT NOT NULL, PRIMARY KEY(tripId, timestamp));
+CREATE INDEX IF NOT EXISTS points_timestamp ON points(timestamp);
 CREATE TABLE IF NOT EXISTS trails (id TEXT PRIMARY KEY, tripId TEXT NOT NULL REFERENCES trips(id), name TEXT NOT NULL, createdAt REAL NOT NULL, points TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 PRAGMA user_version = 1;
@@ -50,6 +52,10 @@ export function createStore(db: Database) {
   let trailsKey = '', savedTrails: Trail[] = [];
   const immutableSettings = new Map<string, { raw: string; value: unknown }>();
   const store = {
+    lastPosition(): MapPosition | null {
+      const points = db.getAllSync<{ data: string }>('SELECT data FROM points ORDER BY timestamp DESC LIMIT 100').map(r => JSON.parse(r.data) as Fix);
+      return latestPosition(store.setting<MapPosition | null>('lastMapPosition', null), ...points);
+    },
     active(): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE endedAt IS NULL'); return r ? hydrate(r) : null; },
     getTrip(tripId: string): Trip | null { const r = db.getFirstSync<Row>('SELECT * FROM trips WHERE id = ?', tripId); return r ? hydrate(r) : null; },
     trips(): Trip[] {
@@ -148,7 +154,7 @@ export function createStore(db: Database) {
       db.withTransactionSync(() => {
         const before = store.segmentWindow(tripId), after = { ...before, from: last.timestamp };
         store.setSetting(`segments:${tripId}`, after);
-        store.setSetting(`segmentUndo:${tripId}`, { before, after, trailId: null, expiresAt: now + 10000 });
+        store.setSetting(`segmentUndo:${tripId}`, { before, after, trailId: null, expiresAt: now + 60000 });
       });
     },
     clipSegment(tripId: string, now = Date.now()): Trail {
@@ -166,7 +172,7 @@ export function createStore(db: Database) {
         db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', saved.id, tripId, saved.name, now, JSON.stringify(points));
         const after = { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id };
         store.setSetting(`segments:${tripId}`, after);
-        store.setSetting(`segmentUndo:${tripId}`, { before: window, after, trailId: saved.id, expiresAt: now + 10000 });
+        store.setSetting(`segmentUndo:${tripId}`, { before: window, after, trailId: saved.id, expiresAt: now + 60000 });
       });
       return saved!;
     },

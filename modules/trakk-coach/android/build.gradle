@@ -7,4 +7,18 @@ version = '1.0.0'
 android {
   namespace 'no.trakk.coach'
   defaultConfig { versionCode 1; versionName '1.0.0' }
+  testOptions {
+    unitTests.includeAndroidResources = true
+    unitTests.all {
+      def testCache = new File(rootProject.projectDir.parentFile.parentFile, 'work/robolectric-home')
+      testCache.mkdirs()
+      systemProperty 'user.home', testCache.absolutePath
+      systemProperty 'trakk.coach.plan', new File(rootProject.projectDir.parentFile, 'scripts/android-coach-test/plan.json').absolutePath
+      systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+    }
+  }
+}
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.14.1'
 }

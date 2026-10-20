@@ -234,7 +234,7 @@ test('undo restores a cut boundary and count without dropping recorded GPS; pers
   assert.equal(reopened.segmentWindow(t.id).from,71000);
   reopened.undoSegment(t.id,75000); assert.equal(reopened.segmentWindow(t.id).from,1000);
   reopened.setSegmentStart(t.id,71000);
-  assert.throws(()=>reopened.undoSegment(t.id,82000),/utløpt/);
+  assert.throws(()=>reopened.undoSegment(t.id,132000),/utløpt/);
   raw.close();
 });
 test('only the latest segment action can be undone and finishing closes undo', () => {
@@ -281,4 +281,16 @@ test('free trips stay free and failed empty 4x4 starts leave no trainer settings
   assert.equal(free.workout, null); store.finish(free.id, 2000);
   const workout = store.begin(null, true, 3000, undefined, '4x4'); store.cancelEmpty(workout.id);
   assert.equal(store.active(), null); assert.equal(store.setting(`workout:${workout.id}`, null), null); raw.close();
+});
+
+test('last map location falls back to saved tracks and survives reopening without a home area', () => {
+  const { store, raw, db } = database();
+  assert.equal(store.lastPosition(), null);
+  const t = store.begin(null, false, 1000);
+  store.append(t.id, [point, { ...point, timestamp: 2000, latitude: 60.4 }, { ...point, timestamp: 3000, accuracy: 999 }]);
+  assert.equal(createStore(db).lastPosition()?.latitude, 60.4);
+  store.setSetting('lastMapPosition', { ...point, timestamp: 4000, latitude: 60.5 });
+  assert.equal(createStore(db).lastPosition()?.latitude, 60.5);
+  assert.equal(store.setting('homeArea', null), null);
+  raw.close();
 });

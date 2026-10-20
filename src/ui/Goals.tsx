@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import type { HomeArea } from '../domain/areas';
 import type { Discovery } from '../domain/discoveries';
 const NO_TARGETS: Discovery[] = [];
@@ -8,19 +8,10 @@ import { type Goal } from '../domain/goals';
 import { useCollectionProgress } from './useCollectionProgress';
 import { nearbyRadii } from './useNearbyArea';
 import { Button } from './components';
-import { TrailMap } from './TrailMap';
 import { colors, styles as s } from './theme';
 
-export function AreaPicker({ area, radius, pending, status, onRadius, onLocate }: { area: HomeArea | null; radius: number; pending: boolean; status: string; onRadius: (radius: number) => void; onLocate: () => void }) {
-  return <View style={s.card}>
-    <Text style={s.subheading}>Området rundt deg</Text>
-    <Text style={s.body}>Du velger radius. Sentrum følger posisjonen din, også når du reiser et nytt sted.</Text>
-    {area && <TrailMap focus={area} position={area} height={180} />}
-    <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>{pending && <ActivityIndicator color={colors.ink} />}<Text style={[s.small, { flex: 1 }]}>{status}</Text></View>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{nearbyRadii.map(r => <Pressable accessibilityRole="button" accessibilityLabel={`Radius ${r / 1000} km`} accessibilityState={{ selected: radius === r }} key={r} onPress={() => onRadius(r)} style={[s.chip, { minWidth: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: radius === r ? colors.ink : colors.pale }]}><Text style={{ color: radius === r ? colors.paper : colors.ink }}>{r / 1000} km radius</Text></Pressable>)}</View>
-    <Text style={s.small}>Valgt radius: {radius / 1000} km · lagres automatisk. Brukes til kartdata og nye målforslag. Aktive mål beholder området sitt.</Text>
-    {!area && <Button secondary title={pending ? 'Finner posisjon …' : 'Finn min posisjon'} disabled={pending} onPress={onLocate} />}
-  </View>;
+export function RadiusPicker({ radius, onRadius }: { radius: number; onRadius: (radius: number) => void }) {
+  return <View accessibilityLabel="Radius rundt posisjonen" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{nearbyRadii.map(r => <Pressable accessibilityRole="button" accessibilityLabel={`Radius ${r / 1000} km`} accessibilityState={{ selected: radius === r }} key={r} onPress={() => onRadius(r)} style={[s.chip, { minWidth: 56, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: radius === r ? colors.ink : colors.pale }]}><Text style={{ color: radius === r ? colors.paper : colors.ink }}>{r / 1000} km</Text></Pressable>)}</View>;
 }
 export function Goals({ homeArea, radius, goals, catalog, trips, busy, onToggle, onLoad, onBergen, onArea }: { homeArea: HomeArea | null; radius: number; goals: Goal[]; catalog: Goal[]; trips: Trip[]; busy: boolean; onToggle: (goal: Goal) => void; onLoad: () => void; onBergen: () => void; onArea: () => void }) {
   const [expanded, setExpanded] = useState<string | null>(null);

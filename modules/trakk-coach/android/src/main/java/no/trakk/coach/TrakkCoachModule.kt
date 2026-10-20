@@ -2,6 +2,9 @@ package no.trakk.coach
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -29,12 +32,16 @@ class TrakkCoachModule : Module() {
     AsyncFunction("offer") { text: String, kind: String, promise: Promise ->
       Coach.handler.post { promise.resolve(Coach.offer(text, kind)) }
     }
+    AsyncFunction("updateTripStatus") { json: String? ->
+      val context = requireNotNull(appContext.reactContext).applicationContext
+      Coach.handler.post { TripStatus.update(context, json) }
+    }
     Function("busy") { Coach.busy() }
     Function("error") { Coach.error }
   }
 }
 
-private object Coach {
+internal object Coach {
   val handler = Handler(Looper.getMainLooper())
   private var config: JSONObject? = null
   private var raw: String? = null
@@ -50,6 +57,7 @@ private object Coach {
   @Volatile var error: String? = null
   private var generation = 0
   private var finishing = false
+  private var lastPhase = -1
   private data class Pending(val text: String, val at: Long)
   private val pending = mutableMapOf<String, Pending>()
   @Volatile private var speakingUntil = 0L
@@ -101,6 +109,7 @@ private object Coach {
     val preferences = ctx.getSharedPreferences("trakk-coach", Context.MODE_PRIVATE)
     val id = next.getString("id")
     lastCue = if (preferences.getString("trip", null) == id) preferences.getInt("cue", -1) else -1
+    lastPhase = if (preferences.getString("phaseTrip", null) == id) preferences.getInt("phase", -1) else -1
     if (next.getBoolean("running") && baseElapsed < next.getLong("totalMs")) {
       wake = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "trakk:4x4").apply {
         acquire((next.getLong("totalMs") - baseElapsed + 30_000).coerceAtLeast(1000))
@@ -140,14 +149,21 @@ private object Coach {
       ?: voices.find { it.locale.language in listOf("nb", "nn", "no") }
     if (voice != null) engine?.voice = voice
     else if ((engine?.setLanguage(Locale.forLanguageTag("nb-NO")) ?: -1) < 0) { voiceReady = false; error = "Norsk talestemme mangler. Installer norsk tale i Androids taleinnstillinger." }
-    engine?.setSpeechRate(0.95f)
+    engine?.setSpeechRate(1.02f)
+    engine?.setPitch(1.04f)
+  }
+  private fun localize(text: String): String {
+    var result = text
+    for ((from, to) in listOf("Eg" to "Jeg", "eg" to "jeg", "No" to "Nå", "no" to "nå", "e" to "er", "kordan" to "hvordan")) result = result.replace(Regex("(^|[^A-Za-zÆØÅæøå0-9_])$from(?=$|[^A-Za-zÆØÅæøå0-9_])")) { it.groupValues[1] + to }
+    if (config?.optString("dialect") == "bergen") for ((from, to) in listOf("Jeg" to "Eg", "jeg" to "eg", "Nå" to "No", "nå" to "no", "er" to "e", "hvordan" to "kordan")) result = result.replace(Regex("(^|[^A-Za-zÆØÅæøå0-9_])$from(?=$|[^A-Za-zÆØÅæøå0-9_])")) { it.groupValues[1] + to }
+    return result
   }
   private fun say(text: String, cue: String) {
     if (!ready || !voiceReady || (config?.optBoolean("audio") != true && config?.optBoolean("routeAudio") != true)) return
     error = null
     speakingUntil = SystemClock.elapsedRealtime() + 30_000
     protectedUntil = SystemClock.elapsedRealtime() + 15_000
-    if (engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, cue) == TextToSpeech.ERROR) error = "Tale kunne ikke spilles av. Nedtellingen fungerer fortsatt."
+    if (engine?.speak(localize(text), TextToSpeech.QUEUE_FLUSH, null, cue) == TextToSpeech.ERROR) error = "Tale kunne ikke spilles av. Nedtellingen fungerer fortsatt."
     Log.i("TrakkCoach", "cue=$cue elapsed=${elapsed()} text=$text")
   }
   private fun announceCurrent() {
@@ -164,11 +180,36 @@ private object Coach {
       }
     }
   }
+  private fun vibrateTransition(ms: Long, c: JSONObject) {
+    val phases = c.getJSONArray("phases")
+    var index = -1
+    var at = 0L
+    for (i in 0 until phases.length()) {
+      val start = phases.getJSONObject(i).getLong("start") * 1000
+      if (start <= ms) { index = i; at = start } else break
+    }
+    if (ms >= c.getLong("totalMs")) { index = phases.length(); at = c.getLong("totalMs") }
+    if (index <= lastPhase) return
+    lastPhase = index
+    context!!.getSharedPreferences("trakk-coach", Context.MODE_PRIVATE).edit().putString("phaseTrip", c.getString("id")).putInt("phase", index).commit()
+    // Consume muted/old transitions too: resume or process recovery cannot replay them.
+    if (!c.optBoolean("vibrate", true) || ms - at > 3000 || index < 0) return
+    val kind = if (index < phases.length()) phases.getJSONObject(index).getString("kind") else "complete"
+    val pattern = if (kind == "fast") longArrayOf(0, 180, 100, 180, 100, 350)
+      else if (kind == "complete") longArrayOf(0, 350, 150, 350, 150, 500)
+      else longArrayOf(0, 450, 150, 180)
+    val vibrator = context!!.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    if (vibrator.hasVibrator()) {
+      if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+      else @Suppress("DEPRECATION") vibrator.vibrate(pattern, -1)
+    }
+  }
   private fun tick() {
     if (finishing) return
     val c = config ?: return
     if (!c.getBoolean("running")) { protectedUntil = 0; flushPending(Long.MAX_VALUE); return }
     val ms = elapsed()
+    vibrateTransition(ms, c)
     val cues = c.getJSONArray("cues")
     var latest = -1
     var nextCue = Long.MAX_VALUE
@@ -187,7 +228,7 @@ private object Coach {
       context!!.getSharedPreferences("trakk-coach", Context.MODE_PRIVATE).edit().putString("trip", c.getString("id")).putInt("cue", lastCue).commit()
       val cue = cues.getJSONObject(latest)
       if (c.getBoolean("audio")) {
-        if (ms - cue.getLong("at") <= 2_000) say((cue.getString("text") + " " + takePending(nextCue - ms <= 15_000)).trim(), latest.toString())
+        if (ms - cue.getLong("at") <= 2_000) say((cue.getString("text") + " " + (if (cue.optBoolean("transition")) TripStatus.commentary else "") + " " + takePending(nextCue - ms <= 15_000)).trim(), latest.toString())
         else if (ms < c.getLong("totalMs")) announceCurrent()
       }
     }
