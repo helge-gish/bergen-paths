@@ -62,23 +62,29 @@ try:
     tap('Bruk turnavn: Testtoppen og Testgaten'); time.sleep(1)
     screenshot('trakk-names.png')
     tap('Lukk'); tap('Utforsk'); tap('Start en tur')
-    find('Forslag til turnavn'); tap('Navn på den nye turen')
-    adb('shell', 'input', 'text', 'Familieturen'); adb('shell', 'input', 'keyevent', '4')
-    screenshot('trakk-rewards.png')
-    tap('Ta med en skygge (valgfritt)'); tap('Gå uten skygge'); find('Familieturen')
+    context['screen']()
+    assert 'Forslag til turnavn' not in Path('/tmp/trakk-ui.xml').read_text(), 'Start should not ask for a name'
+    tap('Ta med en skygge (valgfritt)'); tap('Gå uten skygge')
     tap('Start turen min')
     for i in range(3):
         adb('emu', 'geo', 'fix', '6.42', str(60.63 + i * .00005)); time.sleep(3)
-    tap('Avslutt og lagre tur'); tap('Avslutt og lagre'); find('Familieturen')
+    tap('Avslutt og lagre tur'); tap('Avslutt og lagre')
+    tap('Endre turnavn'); tap('Nytt navn')
+    adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')
+    adb('shell', 'input', 'keyevent', *(['67'] * 90))
+    adb('shell', 'input', 'text', 'Familieturen'); adb('shell', 'input', 'keyevent', '4')
+    tap('Lagre navn'); find('Familieturen')
     adb('shell', 'am', 'force-stop', PACKAGE)
     with tempfile.TemporaryDirectory() as temp:
         folder = Path(temp); pull(folder); db = sqlite3.connect(folder / 'trakk.db')
         assert db.execute("SELECT name FROM trips WHERE id='name-fixture'").fetchone()[0] == 'Testtoppen og Testgaten'
         assert db.execute("SELECT COUNT(*) FROM trips WHERE name='Familieturen' AND endedAt IS NOT NULL").fetchone()[0] == 1
         db.close()
-    launch(); tap('Turlogg'); find('Familieturen'); tap('Testtoppen og Testgaten'); find('Forslag til turnavn')
+    launch(); tap('Turlogg'); find('Familieturen'); tap('Testtoppen og Testgaten'); context['screen']()
+    assert 'Forslag til turnavn' not in Path('/tmp/trakk-ui.xml').read_text(), 'Reopened history must be read-only by default'
+    assert 'Nytt navn' not in Path('/tmp/trakk-ui.xml').read_text()
     print('PASS: automatic finish name uses actual visited places; suggestion selection survives restart', flush=True)
-    print('PASS: custom start name survives ghost picker, GPS recording, finish and restart', flush=True)
+    print('PASS: explicit rename after finish persists; reopened history has no suggestions or edit field', flush=True)
 finally:
     Path('/tmp/trakk-crash.log').write_text(adb('logcat', '-b', 'crash', '-d', check=False))
     Path('/tmp/trakk-js.log').write_text(adb('logcat', '-d', '-s', 'ReactNativeJS:V', 'AndroidRuntime:E', check=False))
