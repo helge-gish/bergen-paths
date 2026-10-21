@@ -17,3 +17,10 @@ export const companionRanks = [
 export function companionVariant(saved: unknown): 'male' | 'female' {
   return saved === 'male' ? 'male' : 'female';
 }
+
+// The illustrations are cumulative outfits, using the same unlocks as the shelf.
+// Recalculate from current evidence so deleting trips cannot leave unearned gear on.
+export function companionOutfit(level: number) {
+  const equipment = companionEquipment.filter(item => item.level <= level);
+  return { equipment, stage: Math.max(0, equipment.length - 1) };
+}

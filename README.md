@@ -16,7 +16,7 @@ En Android-først tur-app for registrering, utforsking og samling, bygget med Ex
 - Har et turpass for OSM-stier, topper, utsiktspunkter, hytter/ly, landemerker, kilder og rasteplasser. Stidekning kan samles over flere turer. Oppnådde stempler lagres lokalt; gatestempler vurderes på nytt ved kartoppdatering.
 - Henter kartobjekter automatisk langs lagrede turer mens appen er åpen, med mellomlagring og nye forsøk ved nettfeil. Alle kategorier teller på både vanlige turer og skyggeturer.
 - Følger posisjonen din automatisk med valgt radius, og har målforslag fra OSM og aktiverbare personlige mål med fast innhold.
-- Har en fantasyavatar med mann/dame, animasjon og ranger fra distanse-, stignings- og samlingsmilepæler. Se [mål og sosial pilot](docs/goals-and-social.md).
+- Har en Tråkkvenn med mann/dame, animasjon og synlig opptjent utstyr fra distanse-, stignings- og samlingsmilepæler. Se [mål og sosial pilot](docs/goals-and-social.md).
 - Lagrer turlogg og valgfri vekt lokalt, og eksporterer turer og samling som en JSON-fil uten vekten.
 
 Dette er en første implementasjon. GPS med låst skjerm, tale i bakgrunnen, faktisk batteriforbruk, kartvisning og sensorpresisjon må kontrolleres på en fysisk Android-telefon før appen kan regnes som pålitelig på tur. Retningsbasert kamera-AR finnes i Android-testutgaven; den krever feltprøving. Ingen konto, skysynk, sosial deling eller planteidentifikasjon er implementert.
@@ -53,7 +53,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.3.17](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.17). Gater fullført i nærområdet som hovedmåling, ny Tråkkvenn og synlig utstyrssamling. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.17.md).
+**Android-testversjon:** [Tråkk 0.3.18](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.18). Ryddigere hovedfaner og Tråkkvenn som bærer opptjent utstyr. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.18.md).
 
 Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 

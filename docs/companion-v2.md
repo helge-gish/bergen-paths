@@ -1,20 +1,20 @@
 # Tråkkvennen og lokal spillmodus
 
-Retning fra brukerens ønsker, 21. oktober 2026. Dette er produktretning for v2, ikke funksjoner som er koblet til en nettjeneste i 0.3.17.
+Retning fra brukerens ønsker, 21. oktober 2026. Dette er produktretning for v2, ikke funksjoner som er koblet til en nettjeneste i 0.3.18.
 
 ## Figuren
 
 Tråkkvennen er en liten, vennlig hverdagsvandrer med rund silhuett, regnjakke og solide tursko. Gjenkjennelige farger er terrakotta, mosegrønt og varm krem. Figuren skal passe både en kort tur i nabolaget og en fjelltur. Fantasyportrettet og runetitlene er erstattet i 0.3.17.
 
-Førsteutgaven har to illustrerte varianter, rolig bevegelse, eksisterende nivå/XP og en synlig utstyrssamling. Mann/dame-valget bruker den eksisterende lokale innstillingen. Illustrasjonen er foreløpig én figurflate per variant: utstyret kan ikke tas på i denne utgaven.
+Førsteutgaven har to illustrerte varianter, rolig bevegelse, eksisterende nivå/XP og en synlig utstyrssamling. Mann/dame-valget bruker den eksisterende lokale innstillingen. Fra 0.3.18 tar figuren automatisk på seg opptjent utstyr. Ti illustrerte antrekk dekker begge figurvariantene og de fem utstyrstrinnene. Bildene følger samme nivågrenser som utstyrssamlingen, også ved ny beregning etter sletting av turer.
 
-Neste steg er en faktisk figurbygger med separate lag for kroppsform, ansikt/hår, klær og utstyr. Utstyr har stabile identiteter og plasser: `feet`, `head`, `back`, `hand`, `badge` i `src/domain/companion.ts`. Et fremtidig lagret antrekk skal peke på disse identitetene, ikke på norske visningstitler. Nye fargevalg og kroppsdeler skal kunne legges til uten å flytte eksisterende XP eller prestasjoner. Godkjent kunst må deles i egne lag med felles festepunkter før påkledning kan implementeres ordentlig.
+Neste steg er en faktisk figurbygger med separate lag for kroppsform, ansikt/hår, klær og utstyr. Utstyr har stabile identiteter og plasser: `feet`, `head`, `back`, `hand`, `badge` i `src/domain/companion.ts`. Et fremtidig lagret antrekk skal peke på disse identitetene, ikke på norske visningstitler. Nye fargevalg og kroppsdeler skal kunne legges til uten å flytte eksisterende XP eller prestasjoner. Dagens kumulative antrekk byttes som hele illustrasjoner. Fri kombinasjon i en figurbygger krever egne lag med felles festepunkter.
 
-Utstyr låses opp av faktisk opptjent fremgang. Tursko er grunnutstyr; caps, ryggsekk, turstav og merke følger nivåene 2, 3, 5 og 8. Samlingen er nå synlig; v2 lar brukeren velge blant tilgjengelige deler.
+Utstyr låses opp av faktisk opptjent fremgang. Tursko er grunnutstyr; caps, ryggsekk, turstav og merke følger nivåene 2, 3, 5 og 8. Alt opptjent utstyr vises på figuren automatisk; v2 lar brukeren velge blant tilgjengelige deler.
 
 ## Nærområdet som spillflate
 
-«Gater fullført» er et sentralt mål på utforsking. Telleren må alltid oppgi at den gjelder kartlagte gater innen valgt radius. Ufullstendig datagrunnlag, pågående sjekk og delvis gått må være tydelig. Endret radius eller posisjon endrer utvalget. Historiske turer bidrar uten at en utfordring måtte være aktivert først.
+«Gater gått» er et sentralt mål på utforsking. Telleren må alltid oppgi at den gjelder kartlagte gater innen valgt radius. Ufullstendig datagrunnlag, pågående sjekk og delvis gått må være tydelig. Endret radius eller posisjon endrer utvalget. Historiske turer bidrar uten at en utfordring måtte være aktivert først.
 
 Utfordringer kan bygge på dette: fullfør en påbegynt gate, besøk tre nye steder, eller utforsk et bestemt område sammen. Sammenlignbare utfordringer trenger en felles, versjonert områdedefinisjon; to brukeres bevegelige «nærområde» er ikke automatisk samme konkurranse.
 
