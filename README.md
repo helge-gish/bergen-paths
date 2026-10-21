@@ -53,7 +53,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.3.20](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.20). Logoen er tilbake; gatekortet ligger under Deg og gir mer plass til kartet i Utforsk. Tråkkvennen bærer opptjent utstyr. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.20.md).
+**Android-testversjon:** [Tråkk 0.3.21](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.21). Finn sti viser tidligere turer og pågående turspor sammen med stiene. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.21.md).
 
 Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 

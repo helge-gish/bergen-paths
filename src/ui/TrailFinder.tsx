@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppState, Linking, Pressable, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import type { Discovery } from '../domain/discoveries';
-import type { Fix, Trail } from '../domain/types';
+import type { Coordinate, Fix, Trail, Trip } from '../domain/types';
 import { nearbyTrails, trailChoices, type NearbyTrail } from '../domain/trailFinder';
 import { freshPosition } from '../domain/position';
 import { shortDistance } from '../domain/metrics';
@@ -13,8 +13,8 @@ import { TrailMap } from './TrailMap';
 import { Button } from './components';
 import { colors, styles as s } from './theme';
 
-export function TrailFinder({ items, trails, busy, onRefresh, onMap, onStart, onGhost }: {
-  items: Discovery[]; trails: Trail[]; busy: boolean; onRefresh: () => void;
+export function TrailFinder({ items, trails, trips, current, segmentStart, busy, onRefresh, onMap, onStart, onGhost }: {
+  items: Discovery[]; trails: Trail[]; trips: Trip[]; current: Fix[] | undefined; segmentStart?: Coordinate | null; busy: boolean; onRefresh: () => void;
   onMap: (target: NearbyTrail) => void; onStart?: (target: NearbyTrail) => void; onGhost?: (trail: Trail) => void;
 }) {
   const [position, setPosition] = useState<Fix | null>(() => {
@@ -56,7 +56,7 @@ export function TrailFinder({ items, trails, busy, onRefresh, onMap, onStart, on
       {(['map', 'camera'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: mode === value }} onPress={() => setMode(value)} style={[s.chip, { backgroundColor: mode === value ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: mode === value ? colors.paper : colors.ink }]}>{value === 'map' ? 'Kart' : 'Kamera · AR'}</Text></Pressable>)}
     </View>
     {mode === 'map'
-      ? <TrailMap position={position} positionStale={!live} focus={selected?.coordinate ?? position} selectedDiscovery={selected?.item} discoveries={items} height={340} />
+      ? <TrailMap trips={trips} current={current} segmentStart={segmentStart} position={position} positionStale={!live} focus={selected?.coordinate ?? position} selectedDiscovery={selected?.item} discoveries={items} height={340} />
       : <TrailCamera active={active} position={position} targets={selected ? [selected] : nearby.slice(0, 12)} now={now} onSelect={target => setSelectedId(target.id)} />}
     {error && <View style={s.notice}><Text style={s.body}>{error}</Text><Button secondary title="Prøv GPS igjen" onPress={() => setRetry(value => value + 1)} /><Button secondary title="Åpne tillatelser" onPress={() => void Linking.openSettings()} /></View>}
     {!live && !error && <Text style={s.small}>{position ? 'Viser stier ved sist kjente posisjon. Venter på fersk GPS.' : 'Finner posisjonen din …'}</Text>}
