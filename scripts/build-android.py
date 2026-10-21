@@ -49,6 +49,10 @@ architectures = env.get('TRAKK_ANDROID_ARCHITECTURES', 'arm64-v8a')
 if not re.fullmatch(r'(arm64-v8a|x86_64)(,(arm64-v8a|x86_64))*', architectures):
     raise SystemExit('Unsupported Android architecture list.')
 args = ['./gradlew', ':app:assembleRelease', '--no-daemon', '--max-workers=2', '-PreactNativeArchitectures=' + architectures]
+if env.get('TRAKK_ANDROID_CLEAN') == '1':
+    # Metro's copied drawables can outlive a removed JS asset in an incremental
+    # build. Use a clean app build when replacing bundled artwork.
+    args.insert(1, ':app:clean')
 if env.get('TRAKK_ANDROID_CHECKS') == '1':
     args.append(':trakk-coach:testReleaseUnitTest')
 jvm = '-Xmx4g -XX:MaxMetaspaceSize=1g'
