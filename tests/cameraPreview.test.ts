@@ -212,3 +212,32 @@ test('tap expands readable info in fullscreen, preserves other targets and offer
   await act(() => tree.root.findByProps({ accessibilityLabel: 'Minimer kameraet' }).props.onPress());
   assert.ok(tree.root.findByProps({ testID: 'camera-selection-details' }));
 });
+
+test('approximate compass shows honest direction hints without precise callout anchors; calibration and stale sensor can retry alone', async t => {
+  let emit: (value: any) => void = () => {}, starts = 0, stops = 0;
+  const h = harness(true, { start: async () => { starts++; return true; }, stop: async () => { stops++; }, addListener: (_: string, callback: typeof emit) => { emit = callback; return { remove() {} }; } });
+  const now = 1_000_000, position = { latitude: 60, longitude: 5, timestamp: now, accuracy: 4, altitude: null, altitudeAccuracy: null, speed: null };
+  const target = { id: 'a', name: 'Fjellstien', item: { kind: 'trail' }, meters: 100, bearing: 0, facts: { length: 500, ascent: null } };
+  const props = { ...h.props, position, now, targets: [target] };
+  let tree!: ReactTestRenderer;
+  await act(() => { tree = create(React.createElement(h.Component, props)); });
+  t.after(async () => act(() => tree.unmount()));
+  await layout(tree); await act(() => cameras(tree)[0].props.onCameraReady());
+  const preview = cameras(tree)[0];
+  const reading = { bearing: 0, pitch: 0, timestamp: now, reliable: false, quality: 'unreliable', source: 'rotation', accuracy: 0, errorDegrees: 90 };
+  await act(() => emit(reading));
+  assert.match(content(tree), /Android-status/); assert.match(content(tree), /Kompass: usikkert/);
+  assert.equal(tree.root.findAllByProps({ testID: 'callout-a' }).length, 0);
+  await act(() => tree.root.findByProps({ title: 'Prøv kompass igjen' }).props.onPress());
+  assert.equal(starts, 2); assert.equal(stops, 1); assert.equal(cameras(tree)[0], preview);
+  await act(() => emit({ ...reading, reliable: true, quality: 'approximate', source: 'magnetic', accuracy: 2, errorDegrees: null }));
+  assert.match(content(tree), /Omtrentlig retning/); assert.match(content(tree), /Magnetisk kompass/);
+  assert.ok(tree.root.findByProps({ accessibilityLabel: 'Velg Fjellstien' }));
+  assert.equal(tree.root.findAllByProps({ testID: 'callout-a' }).length, 0);
+  await act(() => emit({ ...reading, reliable: true, quality: 'precise', accuracy: 0, errorDegrees: 10 }));
+  assert.ok(tree.root.findByProps({ testID: 'callout-a' }));
+  await act(() => tree.update(React.createElement(h.Component, { ...props, now: now + 3000 })));
+  assert.equal(tree.root.findAllByProps({ testID: 'callout-a' }).length, 0);
+  assert.ok(tree.root.findByProps({ title: 'Prøv kompass igjen' }));
+  assert.match(content(tree), /Kompass: venter/);
+});

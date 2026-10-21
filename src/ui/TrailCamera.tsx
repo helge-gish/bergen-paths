@@ -82,17 +82,19 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
   const visible = directional.filter(item => item.screen?.visible).slice(0, hasCloseTarget ? 2 : 3);
   const behind = directional.find(item => item.screen && !item.screen.visible);
   const headingFresh = cameraHeadingFresh(heading, now);
+  const approximate = heading?.quality === 'approximate';
   const status = !live ? 'Venter på fersk, nøyaktig GPS …' : sensorError ?? (!headingFresh ? 'Finner kameraretningen …'
     : !heading!.reliable ? 'Retningen er usikker. Nærliggende steder vises uten retning.'
       : Math.abs(heading.pitch) > 55 ? 'Løft mobilen og pek mot horisonten.'
-        : selected ? selectedScreen ? (selectedScreen.visible ? `Klar · ${selected.name} er foran deg.` : `Snu mot ${selectedScreen.delta < 0 ? 'venstre' : 'høyre'} for ${selected.name}.`) : 'Valgt sted er innenfor GPS-usikkerheten. Se plasseringen på kartet.'
-        : visible.length ? null
-          : behind ? `Klar · snu mot ${behind.screen!.delta < 0 ? 'venstre' : 'høyre'} for flere steder.`
+        : selected ? selectedScreen ? (selectedScreen.visible ? `${approximate ? 'Omtrentlig retning' : 'Klar'} · ${selected.name} er foran deg.` : `Snu mot ${selectedScreen.delta < 0 ? 'venstre' : 'høyre'} for ${selected.name}.`) : 'Valgt sted er innenfor GPS-usikkerheten. Se plasseringen på kartet.'
+        : visible.length ? (approximate ? 'Omtrentlig retning · trykk på et navn for å velge.' : null)
+          : behind ? `${approximate ? 'Omtrentlig retning' : 'Klar'} · snu mot ${behind.screen!.delta < 0 ? 'venstre' : 'høyre'} for flere steder.`
             : targets.length ? 'Klar · nærmeste sted er innenfor GPS-usikkerheten.' : 'Klar · ingen stier eller gater i kartdataene her.');
   const fallback = !visible.length ? targets.slice(0, 3) : targets.filter(target => target.meters < Math.max(8, position?.accuracy ?? 8)).slice(0, 1);
   const gpsStatus = usablePosition(position) ? `${live ? 'GPS: klar' : freshPosition(position, now) ? 'GPS: upresis' : 'GPS: sist kjent'} · ±${Math.ceil(position.accuracy)} m · ${Math.max(0, Math.floor((now - position.timestamp) / 1000))} s siden` : 'GPS: venter på posisjon';
-  const compassStatus = sensorError ? 'Kompass: utilgjengelig' : !headingFresh ? 'Kompass: venter' : heading!.reliable ? 'Kompass: klart' : 'Kompass: usikkert';
-  const compactStatus = !active ? 'Pauset' : cameraError ? 'Kamerafeil' : !cameraReady ? 'Åpner kamera …' : !live ? 'GPS usikker' : !headingFresh || !heading!.reliable ? 'Kompass usikkert' : Math.abs(heading!.pitch) > 55 ? 'Løft mobilen' : selectedScreen && !selectedScreen.visible ? (selectedScreen.delta < 0 ? '← Snu mot venstre' : 'Snu mot høyre →') : 'Klar';
+  const compassStatus = sensorError ? 'Kompass: utilgjengelig' : !headingFresh ? 'Kompass: venter' : heading!.reliable ? (approximate ? 'Kompass: omtrentlig retning' : 'Kompass: klart') : 'Kompass: usikkert';
+  const compactStatus = !active ? 'Pauset' : cameraError ? 'Kamerafeil' : !cameraReady ? 'Åpner kamera …' : !live ? 'GPS usikker' : sensorError ? 'Kompass utilgjengelig' : !headingFresh ? 'Venter på kompass' : !heading!.reliable ? 'Kompass usikkert' : Math.abs(heading!.pitch) > 55 ? 'Løft mobilen' : selectedScreen && !selectedScreen.visible ? (selectedScreen.delta < 0 ? '← Snu mot venstre' : 'Snu mot høyre →') : approximate ? 'Omtrentlig retning' : 'Klar';
+  const sensorDetails = heading ? `${heading.source === 'magnetic' ? 'Magnetisk kompass' : 'Rotasjonssensor'} · Android-status ${heading.accuracy ?? 'ukjent'}${heading.errorDegrees != null ? ` · ±${Math.round(heading.errorDegrees)}°` : ''} · ${Math.max(0, Math.floor((now - heading.timestamp) / 1000))} s siden${heading.magneticMicrotesla != null ? `\nMagnetfelt: ${Math.round(heading.magneticMicrotesla)} µT · status ${heading.magneticAccuracy ?? 'ukjent'}` : ''}` : 'Ingen retningsmåling mottatt.';
   return <View style={{ gap: fullscreen ? 0 : 10, ...(fullscreen ? { flex: 1 } : {}) }}><View collapsable={false} onLayout={e => { const { width, height } = e.nativeEvent.layout; setSize({ width, height: height || 380 }); }} style={{ ...(fullscreen ? { flex: 1, minHeight: 120 } : { height: 380 }), borderRadius: fullscreen ? 0 : 20, overflow: 'hidden', backgroundColor: '#172821' }}>
     {active && width > 0 && !cameraError && <CameraView style={{ width, height }} facing="back" mode="picture" mute onCameraReady={() => { setCameraReady(true); setCameraError(null); }} onMountError={() => setCameraError('Kameraet kunne ikke åpnes. Prøv igjen eller sjekk kameratilgangen.')} />}
     <View collapsable={false} pointerEvents="box-none" accessibilityElementsHidden={!!detailsOpen} importantForAccessibility={detailsOpen ? 'no-hide-descendants' : 'auto'} style={[StyleSheet.absoluteFillObject, { zIndex: 2 }]}>
@@ -106,18 +108,18 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
       const cardWidth = Math.min(190, width - 48);
       const left = i % 2 ? Math.max(8, width - cardWidth - 8) : 8;
       const anchorY = Math.min(height - (hasCloseTarget ? 118 : 24), top + 116);
-      const tint = chosen ? '#F4D796' : target.item.kind === 'street' ? '#DFE8E4' : '#94F4DC';
+      const tint = chosen || approximate ? '#F4D796' : target.item.kind === 'street' ? '#DFE8E4' : '#94F4DC';
       return <View key={target.id} pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
-        <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFillObject}>
+        {!approximate && <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFillObject}>
           <Polyline testID={`callout-${target.id}`} points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke="#102A24" strokeWidth={4} />
           <Polyline points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke={tint} strokeWidth={2} strokeDasharray="5 5" />
           <Circle cx={anchorX} cy={anchorY} r={7} fill="#102A24AA" stroke={tint} strokeWidth={2} />
           <Circle cx={anchorX} cy={anchorY} r={2} fill={tint} />
-        </Svg>
+        </Svg>}
         <Pressable accessibilityRole="button" accessibilityLabel={`Velg ${target.name}`} accessibilityState={{ selected: chosen }} onPress={() => onSelect(target)} style={{ position: 'absolute', left, top, width: cardWidth, minHeight: 78, borderRadius: 10, backgroundColor: '#102A24F2', borderLeftWidth: chosen ? 4 : 2, borderWidth: 1, borderColor: tint, padding: 9 }}>
           <Text numberOfLines={2} style={{ color: 'white', fontSize: 14, fontWeight: '700' }}>{target.name}</Text>
           <Text style={{ color: tint, fontSize: 12 }}>{shortDistance(target.meters)} · luftlinje</Text>
-          <Text numberOfLines={1} style={{ color: '#DFE8E4', fontSize: 11, marginTop: 3 }}>{cameraPlaceType(target)}</Text>
+          <Text numberOfLines={1} style={{ color: '#DFE8E4', fontSize: 11, marginTop: 3 }}>{approximate ? '≈ ' : ''}{cameraPlaceType(target)}</Text>
         </Pressable>
       </View>;
     })}
@@ -136,11 +138,11 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
     </View>
     {(!fullscreen || (showStatus && !detailsOpen)) && <View accessibilityLiveRegion="polite" style={{ gap: 8, ...(fullscreen ? { position: 'absolute', top: 60, left: 8, right: 8, padding: 14, borderRadius: 12, backgroundColor: '#F7F5EE', zIndex: 5 } : {}) }}>
       <Text style={s.body}>{!active ? 'Kameraet er pauset.' : cameraError ?? (!cameraReady ? 'Åpner kameraet …' : status ?? 'Klar · trykk på et navn for å velge.')}</Text>
-      {active && cameraReady && !cameraError && <Text style={s.small}>{gpsStatus}{'\n'}{compassStatus}</Text>}
+      {active && cameraReady && !cameraError && <Text style={s.small}>{gpsStatus}{'\n'}{compassStatus}{'\n'}{sensorDetails}</Text>}
       <Text style={s.small}>Retningsvisning · ikke en presis linje på bakken</Text>
       {active && cameraError && <Button secondary title="Prøv kamera igjen" onPress={onRetry} />}
       {active && cameraReady && !cameraError && !live && <Button secondary title="Oppdater GPS" onPress={onRetryGps} />}
-      {active && cameraReady && !cameraError && sensorError && <Button secondary title="Prøv kompass igjen" onPress={() => setSensorAttempt(value => value + 1)} />}
+      {active && cameraReady && !cameraError && (sensorError || !headingFresh || !heading?.reliable) && <Button secondary title="Prøv kompass igjen" onPress={() => setSensorAttempt(value => value + 1)} />}
       {cameraError && <Button secondary title="Åpne kameratillatelse" onPress={() => void Linking.openSettings()} />}
       {fullscreen && <Button secondary title="Lukk status" onPress={() => setShowStatus(false)} />}
     </View>}

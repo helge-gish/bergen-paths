@@ -9,7 +9,7 @@ import type { Coordinate, Fix, Trail } from './types';
 
 export type TrailChoice = { id: string; name: string; item: Discovery; saved?: Trail; facts: TrailFacts };
 export type NearbyTrail = TrailChoice & { coordinate: Coordinate; meters: number; bearing: number };
-export type CameraHeading = { bearing: number; pitch: number; reliable: boolean; timestamp: number };
+export type CameraHeading = { bearing: number; pitch: number; reliable: boolean; timestamp: number; quality?: 'precise' | 'approximate' | 'unreliable'; source?: 'rotation' | 'magnetic'; accuracy?: number; errorDegrees?: number | null; magneticAccuracy?: number; magneticMicrotesla?: number | null };
 const outlines = new WeakMap<Discovery, { paths: Coordinate[][]; south: number; north: number; west: number; east: number }>();
 export function trailChoices(items: Discovery[], saved: Trail[]): TrailChoice[] {
   return [
