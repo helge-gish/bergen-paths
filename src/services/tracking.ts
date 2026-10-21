@@ -8,12 +8,12 @@ import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { speak } from './voice';
-import { startGate } from '../domain/startGate';
+import { startGate, startPointGate } from '../domain/startGate';
 import { matchRoute } from '../domain/routeMatch';
 import { stretchResults, stretchDelta } from '../domain/stretchRuns';
 import { getStore } from '../data/native';
 import { ghostComparison, voiceCue } from '../domain/ghost';
-import type { Fix } from '../domain/types';
+import type { Coordinate, Fix } from '../domain/types';
 import { validFix } from '../domain/geo';
 export const LOCATION_TASK = 'trakk-location-v1';
 const trackingOptions: Location.LocationTaskOptions = {
@@ -80,7 +80,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     }
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
-export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | '4x4' = 'free') {
+export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | '4x4' = 'free', requiredStart?: Coordinate) {
   if (training === '4x4' && !workoutAvailable) throw new Error('4×4-betaen krever Android-appen.');
   if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg et annet strekk eller en tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
@@ -97,14 +97,14 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
   }
   const store = getStore();
   let initial: Fix | null = null;
-  if (ghostId) {
+  if (ghostId || requiredStart) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       initial = toFix(await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('GPS bruker litt tid. Gå under åpen himmel og prøv start igjen.')), 15000); })]));
     } finally { if (timer) clearTimeout(timer); }
-    const reference = store.getReference(ghostId);
-    if (!reference) throw new Error('Skyggen finnes ikke lenger.');
-    const gate = startGate(reference, initial, Date.now());
+    const reference = ghostId ? store.getReference(ghostId) : null;
+    if (ghostId && !reference) throw new Error('Skyggen finnes ikke lenger.');
+    const gate = reference ? startGate(reference, initial, Date.now()) : startPointGate(requiredStart, initial, Date.now());
     if (!gate.ready) throw new Error(gate.message);
   }
   const trip = store.begin(ghostId, audioEnabled, Date.now(), name, training);

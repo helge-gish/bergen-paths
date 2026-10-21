@@ -31,7 +31,7 @@ test('Finn sti renders saved and growing live tracks without fresh GPS, across f
     'react-native': { ...native, AppState: { currentState: 'background', addEventListener: () => ({ remove() {} }) } },
     'expo-location': {}, '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
     '../data/native': { getStore: () => ({ lastPosition: () => points[2] }) }, '../services/tracking': { toFix: (value: Fix) => value },
-    './TrailCamera': { TrailCamera: 'TrailCamera' }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
+    './TrailCamera': { TrailCamera: (props: any) => React.createElement('TrailCamera', props, props.detailsOpen ? props.details : null) }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
   });
   let tree!: ReactTestRenderer;
   const props = { items: [], trails: [], trips: [saved], current: undefined, busy: false, onRefresh() {}, onMap() {} };
@@ -103,7 +103,7 @@ test('finder keeps asking for GPS while stationary and supplies named streets to
     'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: async () => ({ granted: true }), watchPositionAsync: async (options: unknown, callback: typeof receive) => { requests.push(options); receive = callback; return { remove() { removed++; } }; } },
     '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
     '../data/native': { getStore: () => ({ lastPosition: () => point }) }, '../services/tracking': { toFix: (value: Fix) => value },
-    './TrailCamera': { TrailCamera: 'TrailCamera' }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
+    './TrailCamera': { TrailCamera: (props: any) => React.createElement('TrailCamera', props, props.detailsOpen ? props.details : null) }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
   });
   let tree!: ReactTestRenderer;
   await act(() => { tree = create(React.createElement(TrailFinder, { items: [street], trails: [], trips: [], current: undefined, busy: false, onRefresh() {}, onMap() {}, onStart() {} })); });
@@ -119,6 +119,11 @@ test('finder keeps asking for GPS while stationary and supplies named streets to
   assert.equal(camera().props.position.timestamp, now + 1000);
   await act(() => camera().props.onSelect(camera().props.targets[0]));
   assert.ok(tree.root.findByProps({ title: 'Velg gate og start tur' }));
+  assert.equal(camera().props.detailsOpen, true);
+  assert.equal(camera().props.selected.name, street.name);
+  await act(() => camera().props.onCloseDetails());
+  assert.equal(camera().props.detailsOpen, false);
+  assert.equal(camera().props.targets.length, 1);
   await act(() => camera().props.onRetryGps());
   assert.equal(requests.length, 2); assert.equal(removed, 1);
 });

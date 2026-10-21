@@ -69,3 +69,22 @@ test('camera includes named streets and does not place targets inside the GPS un
   assert.equal(cameraPositionReady(fix(), now + 30000), true);
   assert.equal(cameraPositionReady(fix(), now + 30001), false);
 });
+
+test('camera reserves street landmarks without excluding walks or an explicit distant selection', async () => {
+  const { cameraChoicesNear, cameraPlaceType } = await import('../src/domain/trailFinder');
+  const targets = Array.from({ length: 20 }, (_, i) => ({ ...nearbyTrails(trailChoices([item()], []), fix())[0], id: `${i}`, meters: i * 10, item: item(`${i}`, { kind: i < 10 ? 'street' : 'trail' }) }));
+  const result = cameraChoicesNear(targets, '19');
+  assert.equal(result.length, 12);
+  assert.equal(result[0].item.kind, 'trail');
+  assert.ok(result.some(x => x.id === '19'));
+  assert.ok(result.some(x => x.item.kind === 'street'));
+  assert.match(cameraPlaceType(targets[0]), /orienteringspunkt/);
+  assert.equal(cameraPlaceType({ ...targets[0], saved: trail([fix(), fix(1)]) }), 'Ditt strekk');
+});
+test('finder starts at a mapped endpoint or the original saved start, never at an arbitrary middle projection', async () => {
+  const { trailStart } = await import('../src/domain/trailFinder');
+  const mapped = nearbyTrails(trailChoices([item()], []), fix(19))[0];
+  assert.deepEqual(trailStart(mapped), fix(20));
+  const saved = nearbyTrails(trailChoices([], [trail([fix(), fix(1), fix(2)])]), fix(2))[0];
+  assert.deepEqual(trailStart(saved), fix());
+});

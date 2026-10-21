@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
 import { create, act, type ReactTestRenderer } from 'react-test-renderer';
-import { cameraTarget, cameraPositionReady, cameraHeadingFresh } from '../src/domain/trailFinder';
+import { cameraTarget, cameraPositionReady, cameraHeadingFresh, cameraPlaceType } from '../src/domain/trailFinder';
 import { freshPosition, usablePosition } from '../src/domain/position';
 import { shortDistance } from '../src/domain/metrics';
 const require = createRequire(import.meta.url);
@@ -20,11 +20,12 @@ function harness(granted = true, sensor: unknown = null) {
   const mocks: Record<string, unknown> = {
     react: React,
     'react/jsx-runtime': require('react/jsx-runtime'),
-    'react-native': { View: 'View', Modal: 'Modal', Text: 'Text', Pressable: 'Pressable', Linking: { openSettings: async () => {} }, StyleSheet: { absoluteFillObject: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 } } },
+    'react-native': { View: 'View', Modal: 'Modal', ScrollView: 'ScrollView', Text: 'Text', Pressable: 'Pressable', Linking: { openSettings: async () => {} }, StyleSheet: { absoluteFillObject: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 } } },
+    'react-native-svg': { __esModule: true, default: 'Svg', Circle: 'Circle', Polyline: 'Polyline' },
     'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' },
     'expo-camera': { CameraView: 'CameraView', useCameraPermissions: () => [permission, refresh, refresh] },
     expo: { requireOptionalNativeModule: () => sensor },
-    '../domain/trailFinder': { cameraTarget, cameraPositionReady, cameraHeadingFresh }, '../domain/position': { freshPosition, usablePosition }, '../domain/metrics': { shortDistance },
+    '../domain/trailFinder': { cameraTarget, cameraPositionReady, cameraHeadingFresh, cameraPlaceType }, '../domain/position': { freshPosition, usablePosition }, '../domain/metrics': { shortDistance },
     './components': { Button: 'Button' }, './theme': { styles: {} },
   };
   const source = readFileSync(new URL('../src/ui/TrailCamera.tsx', import.meta.url), 'utf8');
@@ -108,6 +109,11 @@ test('fullscreen and minimize keep only one camera mounted', async t => {
   await layout(tree); assert.equal(cameras(tree).length, 1);
   const modal = tree.root.findByType('Modal' as any);
   assert.equal(modal.props.hardwareAccelerated, true);
+  assert.equal(tree.root.findAllByProps({ accessibilityLiveRegion: 'polite' }).length, 0);
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Vis GPS- og kompasstatus' }).props.onPress());
+  assert.ok(tree.root.findByProps({ accessibilityLiveRegion: 'polite' }));
+  await act(() => tree.root.findByProps({ title: 'Lukk status' }).props.onPress());
+  assert.equal(tree.root.findAllByProps({ accessibilityLiveRegion: 'polite' }).length, 0);
   assert.equal(modal.findAllByType('CameraView' as any).length, 1);
   await act(() => tree.root.findByProps({ accessibilityLabel: 'Minimer kameraet' }).props.onPress());
   await layout(tree); assert.equal(cameras(tree).length, 1);
@@ -133,8 +139,7 @@ test('GPS quality changes do not restart compass; nearby hints remain selectable
   assert.equal(tree.root.findAllByProps({ title: 'Prøv kamera igjen' }).length, 0);
   await act(() => tree.root.findByProps({ title: 'Oppdater GPS' }).props.onPress());
   assert.equal(gpsRetries, 1); assert.equal(starts, 1);
-  await act(() => tree.root.findByProps({ accessibilityLabel: 'Velg Gjeble Pedersens gate fra nærlisten' }).props.onPress());
-  assert.equal(selected, target);
+  // Selection callback is covered in the integrated expanded-panel test below.
   await act(() => tree.update(React.createElement(h.Component, { ...props, position: { ...position, accuracy: 4 } })));
   await act(() => emit({ bearing: 0, pitch: 0, reliable: true, timestamp: now }));
   assert.match(content(tree), /Klar · trykk/);
@@ -167,7 +172,43 @@ test('being on a street does not hide a different visible trail; close street us
   await layout(tree); await act(() => cameras(tree)[0].props.onCameraReady());
   await act(() => emit({ bearing: 0, pitch: 0, reliable: true, timestamp: now }));
   assert.match(content(tree), /Klar · trykk/);
+  assert.ok(tree.root.findByProps({ testID: 'callout-far' }));
+  assert.equal(tree.root.findAllByProps({ testID: 'callout-near' }).length, 0);
   assert.ok(tree.root.findByProps({ accessibilityLabel: 'Velg Fjellstien' }));
   assert.ok(tree.root.findByProps({ accessibilityLabel: 'Velg Gjeble Pedersens gate fra nærlisten' }));
   assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Velg Gjeble Pedersens gate' }).length, 0);
+});
+
+test('tap expands readable info in fullscreen, preserves other targets and offers start/map actions', async t => {
+  const h = harness();
+  const first = { id: 'a', name: 'Fjellstien', item: { kind: 'trail' }, meters: 100, bearing: 0, facts: { length: 500, ascent: null } };
+  const second = { ...first, id: 'b', name: 'Gjeble Pedersens gate', item: { kind: 'street' } };
+  let started: any, mapped: any;
+  function Finder() {
+    const [selected, setSelected] = React.useState<any>(null), [open, setOpen] = React.useState(false);
+    return React.createElement(h.Component, { ...h.props, targets: [first, second], selected, detailsOpen: open,
+      onSelect: (target: any) => { setSelected(target); setOpen(true); }, onCloseDetails: () => setOpen(false),
+      details: selected && React.createElement('View', {}, React.createElement('Text', {}, selected.name, ' · 500 m · Vanskelighetsgrad: Ikke registrert'),
+        React.createElement('Button', { title: 'Start tur', onPress: () => { started = selected; } }),
+        React.createElement('Button', { title: 'Vis på kartet', onPress: () => { mapped = selected; } })) });
+  }
+  let tree!: ReactTestRenderer;
+  await act(() => { tree = create(React.createElement(Finder)); });
+  t.after(async () => act(() => tree.unmount()));
+  await layout(tree); await act(() => cameras(tree)[0].props.onCameraReady());
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Velg Fjellstien fra nærlisten' }).props.onPress());
+  assert.equal(tree.root.findAllByType('Modal' as any).length, 1);
+  const panel = tree.root.findByProps({ testID: 'camera-selection-details' });
+  assert.match(panel.findAllByType('Text' as any).map(node => node.props.children).flat().join(' '), /500 m/);
+  await act(() => panel.findByProps({ title: 'Start tur' }).props.onPress()); assert.equal(started, first);
+  await act(() => panel.findByProps({ title: 'Vis på kartet' }).props.onPress()); assert.equal(mapped, first);
+  await layout(tree); await act(() => cameras(tree)[0].props.onCameraReady());
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Tilbake til kamera' }).props.onPress());
+  assert.equal(tree.root.findAllByProps({ testID: 'camera-selection-details' }).length, 0);
+  assert.ok(tree.root.findByProps({ accessibilityLabel: 'Vis info om Fjellstien' }));
+  assert.ok(tree.root.findByProps({ accessibilityLabel: 'Velg Gjeble Pedersens gate fra nærlisten' }));
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Vis info om Fjellstien' }).props.onPress());
+  assert.ok(tree.root.findByProps({ testID: 'camera-selection-details' }));
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Minimer kameraet' }).props.onPress());
+  assert.ok(tree.root.findByProps({ testID: 'camera-selection-details' }));
 });

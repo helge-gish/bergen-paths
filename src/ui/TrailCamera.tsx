@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Polyline } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { requireOptionalNativeModule } from 'expo';
 import type { Fix } from '../domain/types';
-import { cameraTarget, cameraPositionReady, cameraHeadingFresh, type CameraHeading, type NearbyTrail } from '../domain/trailFinder';
+import { cameraTarget, cameraPositionReady, cameraHeadingFresh, cameraPlaceType, type CameraHeading, type NearbyTrail } from '../domain/trailFinder';
 import { freshPosition, usablePosition } from '../domain/position';
 import { shortDistance } from '../domain/metrics';
 import { Button } from './components';
@@ -16,25 +17,31 @@ const headingSensor = requireOptionalNativeModule<{
   addListener(name: 'heading', listener: (heading: CameraHeading) => void): { remove(): void };
 }>('TrakkCameraHeading');
 
-export function TrailCamera(props: { active: boolean; position: Fix | null; targets: NearbyTrail[]; now: number; onSelect: (target: NearbyTrail) => void; onRetryGps: () => void }) {
+type CameraProps = { active: boolean; position: Fix | null; targets: NearbyTrail[]; now: number; onSelect: (target: NearbyTrail) => void; onRetryGps: () => void;
+  selected?: NearbyTrail | null; details?: ReactNode; detailsOpen?: boolean; onCloseDetails?: () => void;
+};
+export function TrailCamera(props: CameraProps) {
   const [attempt, setAttempt] = useState(0);
   const [full, setFull] = useState(false);
-  const session = <TrailCameraSession key={attempt} {...props} fullscreen={full} onRetry={() => setAttempt(value => value + 1)} />;
+  const session = <TrailCameraSession key={attempt} {...props} onSelect={target => { setFull(true); props.onSelect(target); }} fullscreen={full} onRetry={() => setAttempt(value => value + 1)} />;
   return <View style={{ gap: 8 }}>
     <Pressable accessibilityRole="button" accessibilityLabel="Åpne kamera i fullskjerm" onPress={() => setFull(true)} style={{ alignSelf: 'flex-end', minHeight: 44, padding: 10 }}><Text style={s.chipText}>Fullskjerm ⛶</Text></Pressable>
     {!full ? session : <View style={{ height: 380 }} />}
     {full && <Modal visible hardwareAccelerated animationType="fade" onRequestClose={() => setFull(false)}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F7F5EE', paddingHorizontal: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 8 }}><Text style={s.subheading}>Finn sti · Kamera</Text><Pressable accessibilityRole="button" accessibilityLabel="Minimer kameraet" onPress={() => setFull(false)} style={{ minHeight: 44, padding: 12 }}><Text style={s.chipText}>Minimer ↙</Text></Pressable></View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#102A24' }}>
+        <View style={{ flex: 1 }}>
         {session}
+        <Pressable accessibilityRole="button" accessibilityLabel="Minimer kameraet" onPress={() => setFull(false)} style={{ position: 'absolute', zIndex: 10, top: 8, right: 8, minHeight: 44, padding: 12, borderRadius: 12, backgroundColor: '#F7F5EEF2' }}><Text style={s.chipText}>Minimer ↙</Text></Pressable>
+        </View>
       </SafeAreaView>
     </Modal>}
   </View>;
 }
 
-function TrailCameraSession({ fullscreen, onRetry, active, position, targets, now, onSelect, onRetryGps }: { fullscreen: boolean; onRetry: () => void; active: boolean; position: Fix | null; targets: NearbyTrail[]; now: number; onSelect: (target: NearbyTrail) => void; onRetryGps: () => void }) {
+function TrailCameraSession({ fullscreen, onRetry, active, position, targets, now, onSelect, onRetryGps, selected, details, detailsOpen, onCloseDetails }: CameraProps & { fullscreen: boolean; onRetry: () => void }) {
   const [permission, requestPermission, refreshPermission] = useCameraPermissions();
   useEffect(() => { if (active) void refreshPermission(); }, [active, refreshPermission]);
+  const [showStatus, setShowStatus] = useState(false);
   const [heading, setHeading] = useState<CameraHeading | null>(null);
   const [sensorError, setSensorError] = useState<string | null>(null);
   const [sensorAttempt, setSensorAttempt] = useState(0);
@@ -69,35 +76,65 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
   }, [active, permission?.granted, hasCoordinates, sensorAttempt]);
   if (!permission?.granted) return <View style={s.card}><Text style={s.subheading}>Se stiene gjennom kameraet</Text><Text style={s.body}>Retning og navn legges over kamerabildet. Ingen bilder eller lyd tas opp.</Text><Button title={permission?.canAskAgain === false ? 'Åpne kameratillatelse' : 'Tillat kamera'} onPress={() => permission?.canAskAgain === false ? void Linking.openSettings() : void requestPermission().catch(() => setCameraError('Kunne ikke be om kameratilgang.'))} />{cameraError && <Text style={s.small}>{cameraError}</Text>}</View>;
   const directional = targets.map(target => ({ target, screen: cameraTarget(target, heading, position, now) }));
-  const visible = directional.filter(item => item.screen?.visible).slice(0, 3);
+  directional.sort((a, b) => Number(b.target.id === selected?.id) - Number(a.target.id === selected?.id));
+  const selectedScreen = selected ? cameraTarget(selected, heading, position, now) : null;
+  const hasCloseTarget = targets.some(target => target.meters < Math.max(8, position?.accuracy ?? 8));
+  const visible = directional.filter(item => item.screen?.visible).slice(0, hasCloseTarget ? 2 : 3);
   const behind = directional.find(item => item.screen && !item.screen.visible);
   const headingFresh = cameraHeadingFresh(heading, now);
   const status = !live ? 'Venter på fersk, nøyaktig GPS …' : sensorError ?? (!headingFresh ? 'Finner kameraretningen …'
     : !heading!.reliable ? 'Retningen er usikker. Nærliggende steder vises uten retning.'
       : Math.abs(heading.pitch) > 55 ? 'Løft mobilen og pek mot horisonten.'
+        : selected ? selectedScreen ? (selectedScreen.visible ? `Klar · ${selected.name} er foran deg.` : `Snu mot ${selectedScreen.delta < 0 ? 'venstre' : 'høyre'} for ${selected.name}.`) : 'Valgt sted er innenfor GPS-usikkerheten. Se plasseringen på kartet.'
         : visible.length ? null
           : behind ? `Klar · snu mot ${behind.screen!.delta < 0 ? 'venstre' : 'høyre'} for flere steder.`
             : targets.length ? 'Klar · nærmeste sted er innenfor GPS-usikkerheten.' : 'Klar · ingen stier eller gater i kartdataene her.');
   const fallback = !visible.length ? targets.slice(0, 3) : targets.filter(target => target.meters < Math.max(8, position?.accuracy ?? 8)).slice(0, 1);
   const gpsStatus = usablePosition(position) ? `${live ? 'GPS: klar' : freshPosition(position, now) ? 'GPS: upresis' : 'GPS: sist kjent'} · ±${Math.ceil(position.accuracy)} m · ${Math.max(0, Math.floor((now - position.timestamp) / 1000))} s siden` : 'GPS: venter på posisjon';
   const compassStatus = sensorError ? 'Kompass: utilgjengelig' : !headingFresh ? 'Kompass: venter' : heading!.reliable ? 'Kompass: klart' : 'Kompass: usikkert';
-  return <View style={{ gap: 10, ...(fullscreen ? { flex: 1 } : {}) }}><View collapsable={false} onLayout={e => { const { width, height } = e.nativeEvent.layout; setSize({ width, height: height || 380 }); }} style={{ ...(fullscreen ? { flex: 1, minHeight: 120 } : { height: 380 }), borderRadius: 20, overflow: 'hidden', backgroundColor: '#172821' }}>
+  const compactStatus = !active ? 'Pauset' : cameraError ? 'Kamerafeil' : !cameraReady ? 'Åpner kamera …' : !live ? 'GPS usikker' : !headingFresh || !heading!.reliable ? 'Kompass usikkert' : Math.abs(heading!.pitch) > 55 ? 'Løft mobilen' : selectedScreen && !selectedScreen.visible ? (selectedScreen.delta < 0 ? '← Snu mot venstre' : 'Snu mot høyre →') : 'Klar';
+  return <View style={{ gap: fullscreen ? 0 : 10, ...(fullscreen ? { flex: 1 } : {}) }}><View collapsable={false} onLayout={e => { const { width, height } = e.nativeEvent.layout; setSize({ width, height: height || 380 }); }} style={{ ...(fullscreen ? { flex: 1, minHeight: 120 } : { height: 380 }), borderRadius: fullscreen ? 0 : 20, overflow: 'hidden', backgroundColor: '#172821' }}>
     {active && width > 0 && !cameraError && <CameraView style={{ width, height }} facing="back" mode="picture" mute onCameraReady={() => { setCameraReady(true); setCameraError(null); }} onMountError={() => setCameraError('Kameraet kunne ikke åpnes. Prøv igjen eller sjekk kameratilgangen.')} />}
-    <View collapsable={false} pointerEvents="box-none" style={[StyleSheet.absoluteFillObject, { zIndex: 2 }]}>
+    <View collapsable={false} pointerEvents="box-none" accessibilityElementsHidden={!!detailsOpen} importantForAccessibility={detailsOpen ? 'no-hide-descendants' : 'auto'} style={[StyleSheet.absoluteFillObject, { zIndex: 2 }]}>
 
+    {selected && !detailsOpen && <Pressable accessibilityRole="button" accessibilityLabel={`Vis info om ${selected.name}`} onPress={() => onSelect(selected)} style={{ position: 'absolute', top: fullscreen ? 60 : 8, left: 8, right: 8, minHeight: 44, padding: 10, borderRadius: 12, backgroundColor: '#F7F5EEF5' }}><Text numberOfLines={1} style={s.chipText}>Valgt: {selected.name} · Info</Text></Pressable>}
     <View pointerEvents="none" style={{ position: 'absolute', left: '49%', top: '45%' }}><Text style={{ color: 'white', fontSize: 30 }}>+</Text></View>
-    {active && cameraReady && !cameraError && visible.map(({ target, screen }, i) => <Pressable key={target.id} accessibilityRole="button" accessibilityLabel={`Velg ${target.name}`} onPress={() => onSelect(target)} style={{ position: 'absolute', left: Math.max(8, Math.min(width - 168, screen!.fraction * width - 80)), top: 30 + i * Math.min(88, Math.max(0, (height - 120) / 3)), width: 160, borderRadius: 12, backgroundColor: '#183D32ED', borderWidth: 1, borderColor: 'white', padding: 9 }}>
-      <Text numberOfLines={2} style={{ color: 'white', fontWeight: '700' }}>{target.name}</Text><Text style={{ color: '#E9EDE2', fontSize: 12 }}>{shortDistance(target.meters)} · luftlinje</Text><Text numberOfLines={1} style={{ color: '#F4D796', fontSize: 11, marginTop: 3 }}>{shortDistance(target.facts.length)} {target.saved ? 'strekk' : 'kartlagt'}{target.facts.ascent !== null ? ` · ↑${Math.round(target.facts.ascent)} m` : ''}</Text>
-    </Pressable>)}
+    {active && cameraReady && !cameraError && visible.map(({ target, screen }, i) => {
+      const chosen = target.id === selected?.id;
+      const anchorX = Math.max(12, Math.min(width - 12, screen!.fraction * width));
+      const top = (selected ? (fullscreen ? 114 : 66) : (fullscreen ? 64 : 16)) + i * 94;
+      const cardWidth = Math.min(190, width - 48);
+      const left = i % 2 ? Math.max(8, width - cardWidth - 8) : 8;
+      const anchorY = Math.min(height - (hasCloseTarget ? 118 : 24), top + 116);
+      const tint = chosen ? '#F4D796' : target.item.kind === 'street' ? '#DFE8E4' : '#94F4DC';
+      return <View key={target.id} pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
+        <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFillObject}>
+          <Polyline testID={`callout-${target.id}`} points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke="#102A24" strokeWidth={4} />
+          <Polyline points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke={tint} strokeWidth={2} strokeDasharray="5 5" />
+          <Circle cx={anchorX} cy={anchorY} r={7} fill="#102A24AA" stroke={tint} strokeWidth={2} />
+          <Circle cx={anchorX} cy={anchorY} r={2} fill={tint} />
+        </Svg>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Velg ${target.name}`} accessibilityState={{ selected: chosen }} onPress={() => onSelect(target)} style={{ position: 'absolute', left, top, width: cardWidth, minHeight: 78, borderRadius: 10, backgroundColor: '#102A24F2', borderLeftWidth: chosen ? 4 : 2, borderWidth: 1, borderColor: tint, padding: 9 }}>
+          <Text numberOfLines={2} style={{ color: 'white', fontSize: 14, fontWeight: '700' }}>{target.name}</Text>
+          <Text style={{ color: tint, fontSize: 12 }}>{shortDistance(target.meters)} · luftlinje</Text>
+          <Text numberOfLines={1} style={{ color: '#DFE8E4', fontSize: 11, marginTop: 3 }}>{cameraPlaceType(target)}</Text>
+        </Pressable>
+      </View>;
+    })}
     {active && cameraReady && !cameraError && fallback.length > 0 && <View testID="camera-proximity" style={{ position: 'absolute', left: 10, right: 10, bottom: 10, padding: 10, borderRadius: 12, backgroundColor: '#F7F5EEF5', gap: 4 }}>
       <Text style={s.chipText}>{freshPosition(position, now) ? 'I nærheten · uten retningsplassering' : 'Ved sist kjente posisjon'}</Text>
       {fallback.map(target => <Pressable key={target.id} accessibilityRole="button" accessibilityLabel={`Velg ${target.name} fra nærlisten`} onPress={() => onSelect(target)} style={{ minHeight: 44, justifyContent: 'center', paddingVertical: 4 }}>
-        <Text numberOfLines={1} style={s.subheading}>{target.name}</Text><Text style={s.small}>{target.item.kind === 'street' ? 'Gate' : target.item.kind === 'steps' ? 'Trapp' : 'Sti'} · ca. {shortDistance(Math.round(target.meters / 10) * 10)} i luftlinje</Text>
+        <Text numberOfLines={1} style={s.subheading}>{target.name}</Text><Text style={s.small}>{cameraPlaceType(target)} · ca. {shortDistance(Math.round(target.meters / 10) * 10)} i luftlinje</Text>
       </Pressable>)}
     </View>}
     </View>
+    {fullscreen && !detailsOpen && <Pressable accessibilityRole="button" accessibilityLabel="Vis GPS- og kompasstatus" onPress={() => setShowStatus(value => !value)} style={{ position: 'absolute', top: 8, left: 8, right: 136, minHeight: 44, padding: 12, borderRadius: 12, backgroundColor: '#102A24ED', zIndex: 3 }}><Text numberOfLines={1} style={{ color: '#DAF5E9', fontWeight: '700' }}>{compactStatus} ⓘ</Text></Pressable>}
+    {detailsOpen && selected && details && <View testID="camera-selection-details" style={[StyleSheet.absoluteFillObject, { zIndex: 3, backgroundColor: '#F7F5EE' }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Tilbake til kamera" onPress={onCloseDetails} style={{ minHeight: 56, padding: 12, paddingRight: fullscreen ? 136 : 12 }}><Text style={s.chipText}>← Kamera</Text></Pressable>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24 }}>{details}</ScrollView>
+    </View>}
     </View>
-    <View accessibilityLiveRegion="polite" style={{ gap: 8 }}>
+    {(!fullscreen || (showStatus && !detailsOpen)) && <View accessibilityLiveRegion="polite" style={{ gap: 8, ...(fullscreen ? { position: 'absolute', top: 60, left: 8, right: 8, padding: 14, borderRadius: 12, backgroundColor: '#F7F5EE', zIndex: 5 } : {}) }}>
       <Text style={s.body}>{!active ? 'Kameraet er pauset.' : cameraError ?? (!cameraReady ? 'Åpner kameraet …' : status ?? 'Klar · trykk på et navn for å velge.')}</Text>
       {active && cameraReady && !cameraError && <Text style={s.small}>{gpsStatus}{'\n'}{compassStatus}</Text>}
       <Text style={s.small}>Retningsvisning · ikke en presis linje på bakken</Text>
@@ -105,7 +142,8 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
       {active && cameraReady && !cameraError && !live && <Button secondary title="Oppdater GPS" onPress={onRetryGps} />}
       {active && cameraReady && !cameraError && sensorError && <Button secondary title="Prøv kompass igjen" onPress={() => setSensorAttempt(value => value + 1)} />}
       {cameraError && <Button secondary title="Åpne kameratillatelse" onPress={() => void Linking.openSettings()} />}
-    </View>
+      {fullscreen && <Button secondary title="Lukk status" onPress={() => setShowStatus(false)} />}
+    </View>}
   </View>;
 }
 

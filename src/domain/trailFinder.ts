@@ -4,7 +4,7 @@ import { streetRows } from './neighborhood';
 import type { Discovery } from './discoveries';
 import { discoveryRows } from './discoveryRows';
 import { needsDiscoveryName } from './discoveryGroups';
-import { bearing, cleanPoints, project, relativeBearing, segments } from './geo';
+import { bearing, cleanPoints, distance, project, relativeBearing, segments } from './geo';
 import type { Coordinate, Fix, Trail } from './types';
 
 export type TrailChoice = { id: string; name: string; item: Discovery; saved?: Trail; facts: TrailFacts };
@@ -23,6 +23,22 @@ export function trailChoices(items: Discovery[], saved: Trail[]): TrailChoice[] 
 }
 export function cameraStreetChoices(items: Discovery[]): TrailChoice[] {
   return streetRows(items).map(row => ({ id: row.id, name: row.item.name, item: row.item, facts: trailFacts(row.members) }));
+}
+// Reserve room for nearby street names as orientation landmarks, while keeping
+// paths, stairs and saved segments as the main choices. Input is distance-sorted.
+export function cameraChoicesNear(nearby: NearbyTrail[], selectedId: string | null = null): NearbyTrail[] {
+  const walks = nearby.filter(target => target.item.kind !== 'street');
+  const streets = nearby.filter(target => target.item.kind === 'street');
+  const result = [...walks.slice(0, 9), ...streets.slice(0, 3)];
+  const selected = nearby.find(target => target.id === selectedId);
+  if (selected && !result.some(target => target.id === selected.id)) {
+    if (result.length >= 12) result.pop();
+    result.push(selected);
+  }
+  return result;
+}
+export function cameraPlaceType(target: NearbyTrail): string {
+  return target.saved ? 'Ditt strekk' : target.item.kind === 'street' ? 'Gate · orienteringspunkt' : target.item.kind === 'steps' ? 'Trapp' : 'Sti';
 }
 function outline(item: Discovery) {
   const cached = outlines.get(item);
@@ -71,4 +87,12 @@ export function cameraTarget(target: NearbyTrail, heading: CameraHeading | null,
   const delta = relativeBearing(target.bearing, heading.bearing);
   // Directional HUD with an approximate field of view, not terrain registration.
   return { delta, visible: Math.abs(delta) <= 30, fraction: .5 + Math.tan(delta * Math.PI / 180) / (2 * Math.tan(Math.PI / 6)) };
+}
+
+// Map ways can be split at arbitrary nodes. This is a proposed start, not a
+// verified public entrance. Saved segments retain their original start.
+export function trailStart(target: NearbyTrail): Coordinate | undefined {
+  if (target.saved) return cleanPoints(target.saved.points)[0];
+  const endpoints = (target.item.streetPaths ?? [target.item.geometry]).flatMap(path => path.length > 1 ? [path[0], path[path.length - 1]] : []);
+  return endpoints.sort((a, b) => distance(a, target.coordinate) - distance(b, target.coordinate))[0];
 }

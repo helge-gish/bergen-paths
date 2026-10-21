@@ -1,7 +1,9 @@
 import { cleanPoints, distance, validFix } from './geo';
-import type { Fix, Trip } from './types';
+import type { Coordinate, Fix, Trip } from './types';
 export function startGate(reference: Trip, fix: Fix | null, now: number) {
-  const start = cleanPoints(reference.points)[0];
+  return startPointGate(cleanPoints(reference.points)[0], fix, now);
+}
+export function startPointGate(start: Coordinate | undefined, fix: Fix | null, now: number) {
   const meters = start && fix ? distance(start, fix) : null;
   const fresh = !!fix && validFix(fix) && fix.accuracy <= 20 && now - fix.timestamp <= 15000 && fix.timestamp <= now + 2000;
   return { start, meters, ready: !!start && fresh && meters !== null && meters <= 25,
