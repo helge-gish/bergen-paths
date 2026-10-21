@@ -1,7 +1,7 @@
 import { inArea } from '../src/domain/areas';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { neighborhoodStreets, streetRows } from '../src/domain/neighborhood';
+import { neighborhoodStreets, streetRows, neighborhoodRouteRows } from '../src/domain/neighborhood';
 import { collectionProgress, type Discovery, type Progress } from '../src/domain/discoveries';
 import type { Fix, Trip } from '../src/domain/types';
 import { parseStreets } from '../src/domain/streets';
@@ -44,5 +44,47 @@ test('fast viewport rejection preserves the exact circular street selection', ()
     const exact=rows.filter(row=>inArea(row.item,area)).map(row=>row.id).sort();
     const result=neighborhoodStreets(rows,area,{}).remaining.map(row=>row.id).sort();
     assert.deepEqual(result,exact);
+  }
+});
+
+test('path and stair counters group connected named parts separately and retain requirements outside the radius', () => {
+  const a = { ...street('a', 'Skredderdalen'), kind: 'trail' as const, geometry: [point(0), point(10)] };
+  const b = { ...a, id: 'b', geometry: [point(10), point(110)] };
+  const stair = { ...a, id: 'stair', kind: 'steps' as const };
+  const far = { ...a, id: 'far', geometry: [point(200), point(210)], latitude: point(200).latitude };
+  const items = [a, b, a, stair, far];
+  const rows = neighborhoodRouteRows(items, 'trail');
+  assert.equal(rows.length, 2);
+  const partial = neighborhoodStreets(rows, area, { a: done });
+  assert.equal(partial.total, 1); assert.equal(partial.complete.length, 0); assert.equal(partial.checked, 0);
+  assert.equal(partial.partial.length, 1);
+  assert.equal(neighborhoodStreets(rows, area, { a: done, b: done }).complete.length, 1);
+  assert.equal(neighborhoodStreets(neighborhoodRouteRows(items, 'steps'), area, { a: done, b: done }).complete.length, 0);
+  assert.equal(neighborhoodStreets(neighborhoodRouteRows(items, 'steps'), area, { stair: done }).complete.length, 1);
+  assert.equal(neighborhoodStreets(rows, null, { a: done, b: done }).total, 0);
+});
+test('unnamed continuation counts once, but a branching path network does not become one giant target', () => {
+  const a = { ...street('a'), name: 'Sti uten navn', unnamed: true, kind: 'trail' as const, geometry: [point(0), point(10)] };
+  const b = { ...a, id: 'b', geometry: [point(10), point(20)] };
+  const c = { ...a, id: 'c', geometry: [point(20), point(30)] };
+  const rows = neighborhoodRouteRows([a, b, c, a], 'trail');
+  assert.equal(rows.length, 1); assert.equal(rows[0].members.length, 3);
+  assert.deepEqual(rows[0].item.streetPaths, [a.geometry, b.geometry, c.geometry]);
+  assert.equal(neighborhoodStreets(rows, area, { a: done, b: done }).complete.length, 0);
+  const branch = { ...a, id: 'branch', geometry: [point(10), { ...point(10), longitude: 5.341 }] };
+  assert.equal(neighborhoodRouteRows([a, b, c, branch], 'trail').length, 3);
+  const disconnected = { ...a, id: 'away', geometry: [point(50), point(60)] };
+  assert.equal(neighborhoodRouteRows([a, b, disconnected], 'trail').length, 2);
+});
+test('real saved GPS drives trail and stair counters; deletion and active walks grant no completion', () => {
+  const points = Array.from({ length: 11 }, (_, i) => point(i));
+  const items: Discovery[] = ['trail', 'steps'].map(kind => ({ ...street(kind), kind: kind as 'trail' | 'steps', geometry: points, ...(kind === 'steps' ? { streetPaths: [points], streetEnds: [points[0], points.at(-1)!] } : {}) }));
+  const trip: Trip = { id: 't', name: 'Tur', startedAt: 1000, endedAt: 200000, ghostId: null, audioEnabled: false, lastCueAt: 0, points };
+  for (const kind of ['trail', 'steps'] as const) {
+    const rows = neighborhoodRouteRows(items, kind);
+    assert.equal(neighborhoodStreets(rows, area, collectionProgress(items, [trip])).complete.length, 1);
+    assert.equal(neighborhoodStreets(rows, area, collectionProgress(items, [{ ...trip, points: points.slice(0, 5) }])).partial.length, 1);
+    assert.equal(neighborhoodStreets(rows, area, collectionProgress(items, [])).complete.length, 0);
+    assert.equal(neighborhoodStreets(rows, area, collectionProgress(items, [{ ...trip, endedAt: null }])).complete.length, 0);
   }
 });

@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { component } from './support/component';
+import * as neighborhood from '../src/domain/neighborhood';
 import { neighborhoodStreets, streetRows } from '../src/domain/neighborhood';
 import * as rows from '../src/domain/discoveryRows';
 const { NeighborhoodCard, NeighborhoodDetails } = component('src/ui/Neighborhood.tsx', {
   'react-native': { View:'View',Text:'Text',Pressable:'Pressable' },
-  '../domain/discoveryRows':rows,
+  '../domain/discoveryRows':rows, '../domain/neighborhood':neighborhood,
   './DiscoveryRows':{ DiscoveryRows:({rows,renderItem}:any)=>React.createElement(React.Fragment,null,...rows.map(renderItem)) },
   './components':{Button:'Button',Icon:'Icon'},'./theme':{colors:{},styles:{}},
 });
@@ -16,7 +17,7 @@ const items=[{...area,id:'a',name:'Testgaten',kind:'street' as const,geometry:[a
 test('main metric exposes incomplete checks and errors, not a finished zero or hundred percent', async t=>{
  let tree!:ReactTestRenderer;
  const result=neighborhoodStreets(streetRows(items),area,{});
- const props={result,area,pending:true,error:null,live:false,onPress(){}};
+ const props={results:{street:result,steps:neighborhoodStreets([],area,{}),trail:neighborhoodStreets([],area,{})},area,pending:true,error:null,live:false,onPress(){}};
  await act(()=>{tree=create(React.createElement(NeighborhoodCard,props));});
  t.after(async()=>act(()=>tree.unmount()));
  assert.match(JSON.stringify(tree.toJSON()),/Sjekker lagrede turer/);
@@ -31,10 +32,10 @@ test('street drilldown filters completed streets and opens the actual mapped str
  let tree!:ReactTestRenderer, selected:any;
  const progress={a:{fraction:1,collected:true,firstVisit:1}};
  const result=neighborhoodStreets(streetRows(items),area,progress);
- await act(()=>{tree=create(React.createElement(NeighborhoodDetails,{result,area,pending:false,error:null,live:true,progress,syncError:null,busy:false,onSync(){},onRetry(){},onMap(item:any){selected=item;}}));});
+ await act(()=>{tree=create(React.createElement(NeighborhoodDetails,{results:{street:result,steps:neighborhoodStreets([],area,{}),trail:neighborhoodStreets([],area,{})},initialKind:'street',area,pending:false,error:null,live:true,progress,syncError:null,busy:false,onSync(){},onRetry(){},onMap(item:any){selected=item;}}));});
  t.after(async()=>act(()=>tree.unmount()));
  const controls=tree.root.findAllByType('Pressable' as any);
- await act(()=>controls[2].props.onPress());
+ await act(()=>controls.find(n=>n.findAllByType('Text' as any).some(text=>Array.isArray(text.props.children)&&text.props.children[0]==='Fullført'))!.props.onPress());
  await act(()=>tree.root.findByProps({accessibilityLabel:'Vis Testgaten i kartet'}).props.onPress());
  assert.equal(selected,items[0]);
 });

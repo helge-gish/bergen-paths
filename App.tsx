@@ -1,4 +1,4 @@
-import { streetRows, neighborhoodStreets } from './src/domain/neighborhood';
+import { streetRows, neighborhoodStreets, neighborhoodRouteRows, type NeighborhoodKind } from './src/domain/neighborhood';
 import { NeighborhoodCard, NeighborhoodDetails } from './src/ui/Neighborhood';
 import { activePeg, pegPlace, pegRelation } from './src/domain/activePeg';
 import { fallbackStretchName, stretchName } from './src/domain/stretchNames';
@@ -152,6 +152,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const [modal, setModal] = useState<'neighborhood' | 'peg' | 'compass' | 'ghost' | 'start' | 'trail' | 'collection' | 'goals' | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<string | null>(null), [ghostId, setGhostId] = useState<string | null>(null);
   const [selectedTrailId, setSelectedTrailId] = useState<string | null>(null);
+  const [neighborhoodKind, setNeighborhoodKind] = useState<NeighborhoodKind>('street');
   const [selectedDiscovery, setSelectedDiscovery] = useState<Discovery | null>(null);
   const [finishedTripId, setFinishedTripId] = useState<string | null>(null);
   const [training, setTraining] = useState<'free' | '4x4'>('free');
@@ -183,7 +184,8 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const collection = useCollectionProgress(data.discoveries, data.trips, savedProgress);
   const progress = collection.progress;
   const streets = useMemo(() => streetRows(data.discoveries), [data.discoveries]);
-  const neighborhood = useMemo(() => neighborhoodStreets(streets, nearby.area, progress), [streets, nearby.area, progress]);
+  const pathRows = useMemo(() => ({ steps: neighborhoodRouteRows(data.discoveries, 'steps'), trail: neighborhoodRouteRows(data.discoveries, 'trail') }), [data.discoveries]);
+  const neighborhood = useMemo(() => ({ street: neighborhoodStreets(streets, nearby.area, progress), steps: neighborhoodStreets(pathRows.steps, nearby.area, progress), trail: neighborhoodStreets(pathRows.trail, nearby.area, progress) }), [streets, pathRows, nearby.area, progress]);
   useEffect(() => {
     if (collection.pending || collection.error) return;
     const awards = Object.fromEntries(Object.entries(progress).filter(([, p]) => p.collected).map(([id, p]) => [id, p.firstVisit ?? Date.now()]));
@@ -363,7 +365,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
       </>}
 
       {tab === 'profile' && <>
-        <NeighborhoodCard result={neighborhood} area={nearby.area} pending={collection.pending} error={collection.error} live={nearby.live} onPress={() => setModal('neighborhood')} />
+        <NeighborhoodCard results={neighborhood} area={nearby.area} pending={collection.pending} error={collection.error} live={nearby.live} onPress={kind => { setNeighborhoodKind(kind); setModal('neighborhood'); }} />
         <View style={[s.card, s.row]}><Metric value={`${Math.floor(totals.elapsed / 3_600_000)} t`} label="ute på tur" /><Metric value={`${data.trails.length}`} label="lagrede strekk" /><Metric value={`${findCount}`} label="funn" /></View>
         <Button accessibilityLabel="Åpne samlingen min" secondary title={`Samlingen min · ${findCount} funn`} icon="check" onPress={() => setModal('collection')} />
         <Button accessibilityLabel="Åpne mine mål" secondary title={`Mine mål · ${data.goals.length} aktive`} icon="mountain" onPress={() => setModal('goals')} />
@@ -393,7 +395,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   {modal === 'collection' && <Sheet title="Samlingen min" onClose={() => setModal(null)}>
     <Discoveries onRename={renameDiscovery} items={data.discoveries} progress={progress} checking={collection.pending} checked={collection.processed} error={collection.error} onRetry={collection.retry} syncError={data.syncError} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setModal(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
   </Sheet>}
-  {modal === 'neighborhood' && <Sheet title="Gatene rundt deg" onClose={() => setModal(null)}><NeighborhoodDetails result={neighborhood} area={nearby.area} pending={collection.pending} error={collection.error} live={nearby.live} progress={progress} syncError={data.syncError} busy={busy || syncing} onSync={syncDiscoveries} onRetry={collection.retry} onMap={item => { setModal(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} /></Sheet>}
+  {modal === 'neighborhood' && <Sheet title="Nærområdet ditt" onClose={() => setModal(null)}><NeighborhoodDetails results={neighborhood} initialKind={neighborhoodKind} area={nearby.area} pending={collection.pending} error={collection.error} live={nearby.live} progress={progress} syncError={data.syncError} busy={busy || syncing} onSync={syncDiscoveries} onRetry={collection.retry} onMap={item => { setModal(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} /></Sheet>}
   {modal === 'goals' && <Sheet title="Mine mål" onClose={() => { goalSearch.cancel(); setModal(null); }}><Goals homeArea={nearby.area} radius={nearby.radius} goals={data.goals} catalog={data.catalog} trips={data.trips} loading={goalSearch.loading} error={goalSearch.error} onCancel={goalSearch.cancel} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => { goalSearch.cancel(); setModal(null); setTab('explore'); }} /></Sheet>}
   {modal === 'compass' && <Sheet camera title="Finn sti" onClose={() => setModal(null)}><TrailFinder items={data.discoveries} trails={data.trails} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} busy={busy || syncing} onRefresh={syncDiscoveries} onMap={target => { setFinderStart(null); setSelectedDiscovery({ ...target.item, name: target.name }); setFocus(target.coordinate); setTab('explore'); setModal(null); }} onStart={active ? undefined : target => { const point = trailStart(target); setFinderStart(point ? { id: target.id, point, saved: !!target.saved } : null); setStartReady(false); setGhostId(null); setSelectedDiscovery({ ...target.item, name: target.name }); setFocus(target.coordinate); setTab('explore'); setModal('start'); }} onGhost={active ? undefined : trail => repeatWithGhost(trailReference(trail))} /></Sheet>}
   {modal === 'ghost' && <Sheet title="Velg din skygge" onClose={() => setModal('start')}><Text style={s.body}>Velg et lagret strekk eller en tidligere tur og start nær samme sted. Skyggen følger den gamle tidslinjen, også gjennom pausene.</Text><Button secondary title="Gå uten skygge" onPress={() => { setGhostId(null); setModal('start'); }} />{!references.length && <Empty title="Først setter du et spor" icon="ghost">Etter den første turen kan du gå sammen med skyggen din.</Empty>}{references.filter(t => cleanPoints(t.points).length > 1).map(t => <Pressable accessibilityRole="button" key={t.id} style={s.card} onPress={() => repeatWithGhost(t)}><Text style={s.subheading}>{t.name}</Text><Text style={s.small}>{date(t.startedAt)} · {durationLabel((t.endedAt ?? t.startedAt) - t.startedAt)}</Text></Pressable>)}</Sheet>}
