@@ -13,8 +13,8 @@ import { TrailMap } from './TrailMap';
 import { Button } from './components';
 import { colors, styles as s } from './theme';
 
-export function TrailFinder({ items, trails, trips, current, segmentStart, busy, onRefresh, onMap, onStart, onGhost }: {
-  items: Discovery[]; trails: Trail[]; trips: Trip[]; current: Fix[] | undefined; segmentStart?: Coordinate | null; busy: boolean; onRefresh: () => void;
+export function TrailFinder({ items, trails, trips, current, segmentStart, busy, onRefresh, onMap, onStart, onGhost, embedded = false }: {
+  embedded?: boolean; items: Discovery[]; trails: Trail[]; trips: Trip[]; current: Fix[] | undefined; segmentStart?: Coordinate | null; busy: boolean; onRefresh: () => void;
   onMap: (target: NearbyTrail) => void; onStart?: (target: NearbyTrail) => void; onGhost?: (trail: Trail) => void;
 }) {
   const [position, setPosition] = useState<Fix | null>(() => {
@@ -23,7 +23,7 @@ export function TrailFinder({ items, trails, trips, current, segmentStart, busy,
   });
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [error, setError] = useState<string | null>(null), [retry, setRetry] = useState(0);
-  const [mode, setMode] = useState<'map' | 'camera'>('map');
+  const [mode, setMode] = useState<'map' | 'camera'>(embedded ? 'camera' : 'map');
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -64,23 +64,24 @@ export function TrailFinder({ items, trails, trips, current, segmentStart, busy,
     </View>;
   const select = (target: NearbyTrail) => { setSelectedId(target.id); setDetailsOpen(true); };
   return <View style={{ gap: 16 }}>
-    <Text style={s.body}>Finn en sti i nærheten og start turen derfra.</Text>
-    <View style={{ flexDirection: 'row', gap: 8 }}>
+    {!embedded && <Text style={s.body}>Finn en sti i nærheten og start turen derfra.</Text>}
+    {!embedded && <View style={{ flexDirection: 'row', gap: 8 }}>
       {(['map', 'camera'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: mode === value }} onPress={() => setMode(value)} style={[s.chip, { backgroundColor: mode === value ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: mode === value ? colors.paper : colors.ink }]}>{value === 'map' ? 'Kart' : 'Kamera · AR'}</Text></Pressable>)}
-    </View>
+    </View>}
     {mode === 'map'
       ? <TrailMap trips={trips} current={current} segmentStart={segmentStart} position={position} positionStale={!live} focus={selected?.coordinate ?? position} selectedDiscovery={selected?.item} discoveries={items} height={340} />
       : <TrailCamera active={active} position={position} targets={cameraChoicesNear(nearby, selectedId)} selected={selected} details={selectionDetails} detailsOpen={detailsOpen} onCloseDetails={() => setDetailsOpen(false)} now={now} onSelect={select} onRetryGps={() => setRetry(value => value + 1)} />}
     {error && <View style={s.notice}><Text style={s.body}>{error}</Text><Button secondary title="Prøv GPS igjen" onPress={() => setRetry(value => value + 1)} /><Button secondary title="Åpne tillatelser" onPress={() => void Linking.openSettings()} /></View>}
     {mode === 'map' && !live && !error && <Text style={s.small}>{position ? 'Viser stier ved sist kjente posisjon. Venter på fersk GPS.' : 'Finner posisjonen din …'}</Text>}
     {mode === 'map' && selectionDetails}
-    <Text style={s.subheading}>{mode === 'camera' ? 'Stier og gater nær deg' : 'Stier nær deg'}</Text>
+    {!embedded && <><Text style={s.subheading}>{mode === 'camera' ? 'Stier og gater nær deg' : 'Stier nær deg'}</Text>
     {listed.slice(0, 12).map(target => <Pressable key={target.id} accessibilityRole="button" accessibilityLabel={`Velg ${target.name}`} accessibilityState={{ selected: target.id === selectedId }} onPress={() => select(target)} style={[s.card, { padding: 14, borderColor: target.id === selectedId ? colors.coral : colors.pale }]}>
       <Text style={s.subheading}>{target.name}</Text><Text style={s.small}>{shortDistance(target.meters)} i luftlinje · {target.saved ? 'Ditt strekk' : target.item.kind === 'street' ? 'Gate · orienteringspunkt' : target.item.kind === 'steps' ? 'Kartlagt trapp' : 'Kartlagt sti'}</Text>
     </Pressable>)}
+    </>}
     {position && !listed.length && <Text style={s.body}>Ingen treff i de nedlastede kartdataene innen 3 km. Hent kartdata for området rundt deg.</Text>}
-    <Button secondary title={busy ? 'Henter stier …' : 'Hent stier rundt meg'} onPress={onRefresh} disabled={busy || !live} />
-    <Text style={s.small}>Avstanden er i luftlinje, ikke en anbefalt vei gjennom terrenget. Listen bruker OpenStreetMap og egne strekk. Merkede fotruter fra Kartverket vises som et eget lag på kartet.</Text>
+    {(!embedded || !listed.length) && <Button secondary title={busy ? 'Henter stier …' : 'Hent stier rundt meg'} onPress={onRefresh} disabled={busy || !live} />}
+    {!embedded && <Text style={s.small}>Avstanden er i luftlinje, ikke en anbefalt vei gjennom terrenget. Listen bruker OpenStreetMap og egne strekk. Merkede fotruter fra Kartverket vises som et eget lag på kartet.</Text>}
   </View>;
 }
 

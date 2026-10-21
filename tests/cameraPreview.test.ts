@@ -213,7 +213,7 @@ test('tap expands readable info in fullscreen, preserves other targets and offer
   assert.ok(tree.root.findByProps({ testID: 'camera-selection-details' }));
 });
 
-test('approximate compass shows honest direction hints without precise callout anchors; calibration and stale sensor can retry alone', async t => {
+test('approximate compass draws dashed hints with uncertainty rings; calibration and stale sensor can retry alone', async t => {
   let emit: (value: any) => void = () => {}, starts = 0, stops = 0;
   const h = harness(true, { start: async () => { starts++; return true; }, stop: async () => { stops++; }, addListener: (_: string, callback: typeof emit) => { emit = callback; return { remove() {} }; } });
   const now = 1_000_000, position = { latitude: 60, longitude: 5, timestamp: now, accuracy: 4, altitude: null, altitudeAccuracy: null, speed: null };
@@ -234,8 +234,11 @@ test('approximate compass shows honest direction hints without precise callout a
   assert.match(content(tree), /Omtrentlig retning/); assert.match(content(tree), /Magnetisk kompass/);
   assert.ok(tree.root.findByProps({ accessibilityLabel: 'Velg Fjellstien' }));
   assert.equal(tree.root.findAllByProps({ testID: 'callout-a' }).length, 0);
+  assert.ok(tree.root.findByProps({ testID: 'approximate-callout-a' }));
+  assert.equal(tree.root.findByProps({ testID: 'uncertainty-a' }).props.r, 18);
   await act(() => emit({ ...reading, reliable: true, quality: 'precise', accuracy: 0, errorDegrees: 10 }));
   assert.ok(tree.root.findByProps({ testID: 'callout-a' }));
+  assert.equal(tree.root.findAllByProps({ testID: 'approximate-callout-a' }).length, 0);
   await act(() => tree.update(React.createElement(h.Component, { ...props, now: now + 3000 })));
   assert.equal(tree.root.findAllByProps({ testID: 'callout-a' }).length, 0);
   assert.ok(tree.root.findByProps({ title: 'Prøv kompass igjen' }));

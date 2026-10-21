@@ -29,13 +29,14 @@ export function MapKey({ track, history, reference, expanded, onToggle }: { trac
     </View>}
   </View>;
 }
-export function MapTrailCard({ item, onClose }: { item: Discovery; onClose: () => void }) {
+export function MapTrailCard({ item, onClose, onStart }: { item: Discovery; onClose: () => void; onStart?: () => void }) {
   const facts = useMemo(() => trailFacts([item]), [item]);
   const kind = mapTrailKind(item);
   const label = kind === 'steps' ? 'Trapp' : kind === 'footway' ? 'Gangvei' : 'Sti / småsti';
   return <View accessibilityLiveRegion="polite" style={{ padding: 14, gap: 6, backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.line }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><View style={{ flex: 1 }}><Text style={s.subheading}>{needsDiscoveryName(item) ? label : item.name}</Text><Text style={s.small}>{label} · {shortDistance(facts.length)} kartlagt del</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Lukk stiinfo" onPress={onClose} style={{ padding: 12, minHeight: 44 }}><Text style={s.subheading}>×</Text></Pressable></View>
     <Text style={s.small}>Vanskelighetsgrad: {facts.grade ?? 'Ikke registrert'}{facts.grade ? ' (SAC)' : ''} · Høydemeter: ikke registrert</Text>
+    {onStart && <Pressable accessibilityRole="button" accessibilityLabel="Velg sti og start tur" onPress={onStart} style={{ minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: colors.paper, fontWeight: '700' }}>Velg sti og start tur →</Text></Pressable>}
     <Text style={s.small}>Lengden gjelder den markerte stidelen, ikke en komplett tur. Kartdata: OpenStreetMap.</Text>
   </View>;
 }

@@ -110,16 +110,18 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
       const anchorY = Math.min(height - (hasCloseTarget ? 118 : 24), top + 116);
       const tint = chosen || approximate ? '#F4D796' : target.item.kind === 'street' ? '#DFE8E4' : '#94F4DC';
       return <View key={target.id} pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
-        {!approximate && <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFillObject}>
-          <Polyline testID={`callout-${target.id}`} points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke="#102A24" strokeWidth={4} />
+        <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFillObject}>
+          <Polyline testID={`${approximate ? 'approximate-callout' : 'callout'}-${target.id}`} points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke="#102A24" strokeWidth={4} />
           <Polyline points={`${left + cardWidth / 2},${top + 78} ${left + cardWidth / 2},${top + 88} ${anchorX},${anchorY}`} fill="none" stroke={tint} strokeWidth={2} strokeDasharray="5 5" />
-          <Circle cx={anchorX} cy={anchorY} r={7} fill="#102A24AA" stroke={tint} strokeWidth={2} />
-          <Circle cx={anchorX} cy={anchorY} r={2} fill={tint} />
-        </Svg>}
+          {approximate
+            ? <Circle testID={`uncertainty-${target.id}`} cx={anchorX} cy={anchorY} r={18} fill="#F4D79618" stroke={tint} strokeWidth={1.5} strokeDasharray="3 5" />
+            : <Circle cx={anchorX} cy={anchorY} r={7} fill="#102A24AA" stroke={tint} strokeWidth={2} />}
+          <Polyline points={`${anchorX - 6},${anchorY - 9} ${anchorX},${anchorY} ${anchorX + 6},${anchorY - 9}`} fill="none" stroke={tint} strokeWidth={2.5} />
+        </Svg>
         <Pressable accessibilityRole="button" accessibilityLabel={`Velg ${target.name}`} accessibilityState={{ selected: chosen }} onPress={() => onSelect(target)} style={{ position: 'absolute', left, top, width: cardWidth, minHeight: 78, borderRadius: 10, backgroundColor: '#102A24F2', borderLeftWidth: chosen ? 4 : 2, borderWidth: 1, borderColor: tint, padding: 9 }}>
           <Text numberOfLines={2} style={{ color: 'white', fontSize: 14, fontWeight: '700' }}>{target.name}</Text>
           <Text style={{ color: tint, fontSize: 12 }}>{shortDistance(target.meters)} · luftlinje</Text>
-          <Text numberOfLines={1} style={{ color: '#DFE8E4', fontSize: 11, marginTop: 3 }}>{approximate ? '≈ ' : ''}{cameraPlaceType(target)}</Text>
+          <Text numberOfLines={1} style={{ color: '#DFE8E4', fontSize: 11, marginTop: 3 }}>{approximate ? '≈ Omtrentlig · ' : ''}{cameraPlaceType(target)}</Text>
         </Pressable>
       </View>;
     })}

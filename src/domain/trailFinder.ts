@@ -91,7 +91,7 @@ export function cameraTarget(target: NearbyTrail, heading: CameraHeading | null,
 
 // Map ways can be split at arbitrary nodes. This is a proposed start, not a
 // verified public entrance. Saved segments retain their original start.
-export function trailStart(target: NearbyTrail): Coordinate | undefined {
+export function trailStart(target: Pick<NearbyTrail, 'saved' | 'item' | 'coordinate'>): Coordinate | undefined {
   if (target.saved) return cleanPoints(target.saved.points)[0];
   const endpoints = (target.item.streetPaths ?? [target.item.geometry]).flatMap(path => path.length > 1 ? [path[0], path[path.length - 1]] : []);
   return endpoints.sort((a, b) => distance(a, target.coordinate) - distance(b, target.coordinate))[0];

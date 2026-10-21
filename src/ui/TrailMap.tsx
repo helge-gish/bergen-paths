@@ -19,7 +19,7 @@ const EMPTY_TRIPS: Trip[] = [];
 const EMPTY_TRAILS: Trail[] = [];
 const EMPTY_DISCOVERIES: Discovery[] = [];
 const EMPTY_PEAKS: Peak[] = [];
-type Props = { positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
+type Props = { onStartTrail?: (item: Discovery) => void; positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
@@ -33,7 +33,7 @@ export const TrailMap = memo(function TrailMap(props: Props) {
   const [keyOpen, setKeyOpen] = useState(false);
   useEffect(() => { setInspected(null); }, [props.selectedDiscovery?.id]);
   const pick = (item: Discovery) => { setInspected(item); setKeyOpen(false); };
-  const details = <View style={{ paddingHorizontal: 6, paddingBottom: 6 }}>{inspected && <MapTrailCard item={inspected} onClose={() => setInspected(null)} />}<MapKey track={!!props.current?.length} history={!!props.trips?.length} reference={!!props.reference?.length} expanded={keyOpen} onToggle={() => setKeyOpen(value => !value)} /></View>;
+  const details = <View style={{ paddingHorizontal: 6, paddingBottom: 6 }}>{inspected && <MapTrailCard item={inspected} onStart={props.onStartTrail ? () => { setFull(false); props.onStartTrail!(inspected); } : undefined} onClose={() => setInspected(null)} />}<MapKey track={!!props.current?.length} history={!!props.trips?.length} reference={!!props.reference?.length} expanded={keyOpen} onToggle={() => setKeyOpen(value => !value)} /></View>;
   const choose = (value: MapBackground) => { setBackground(value); getStore().setSetting('mapBackground', value); };
   const shared = { ...props, inspected, onPick: pick, background, onBackground: choose, restoredView: view.current, onView: (value: ViewState) => { view.current = value; } };
   return <>
