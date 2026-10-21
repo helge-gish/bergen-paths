@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Tråkk",
+    "name": "Tr\u00e5kk",
     "slug": "trakk",
     "platforms": [
       "android",
       "ios"
     ],
-    "version": "0.3.15",
+    "version": "0.3.16",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "trakk",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "no.trakk.app",
-      "versionCode": 20,
+      "versionCode": 21,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED"
@@ -36,8 +36,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Tråkk bruker posisjonen din til å tegne turen og finne stier i nærheten.",
-          "locationAlwaysAndWhenInUsePermission": "Tråkk registrerer turen også når skjermen er låst. Registreringen stopper når du avslutter turen.",
+          "locationWhenInUsePermission": "Tr\u00e5kk bruker posisjonen din til \u00e5 tegne turen og finne stier i n\u00e6rheten.",
+          "locationAlwaysAndWhenInUsePermission": "Tr\u00e5kk registrerer turen ogs\u00e5 n\u00e5r skjermen er l\u00e5st. Registreringen stopper n\u00e5r du avslutter turen.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true
@@ -46,7 +46,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Tråkk bruker kameraet til å vise retningen til stier rundt deg. Ingen bilder lagres.",
+          "cameraPermission": "Tr\u00e5kk bruker kameraet til \u00e5 vise retningen til stier rundt deg. Ingen bilder lagres.",
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false
         }

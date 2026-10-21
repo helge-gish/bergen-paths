@@ -42,7 +42,8 @@ import { TrailFinder } from './src/ui/TrailFinder';
 import { Discoveries } from './src/ui/Discoveries';
 import { type Discovery, type Progress } from './src/domain/discoveries';
 import { useCollectionProgress } from './src/ui/useCollectionProgress';
-import { fetchPeaks } from './src/services/osm';
+import { useGoalSearch } from './src/ui/useGoalSearch';
+import { fetchDiscoveries, fetchPeaks } from './src/services/osm';
 import { exportLog } from './src/services/export';
 
 type Tab = 'explore' | 'history' | 'profile';
@@ -142,6 +143,7 @@ function SavedTrailDetails({ trail, onClose, onGhost, onTrip, onChange, canRenam
 function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   const insets = useSafeAreaInsets();
   const [data, setData] = useState(initialData), [tab, setTab] = useState<Tab>('explore');
+  const goalSearch = useGoalSearch();
   const [busyMessage, setBusyMessage] = useState('Arbeider …');
   const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<'peg' | 'compass' | 'ghost' | 'start' | 'trail' | 'collection' | 'goals' | null>(null);
@@ -255,30 +257,45 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     await syncCollections(getStore());
     Alert.alert('Samlingen er oppdatert', streetError ? `Stier og steder er hentet. Gatekartet venter: ${streetError}` : 'Alle lagrede turer sjekkes mot kartdataene. Du trenger ikke velge kategori før turen.');
   }, 'Henter kartdata for området …');
-  const loadGoals = () => attempt(async () => {
+  const loadGoals = () => goalSearch.run('nearby', async signal => {
     const area = nearby.area ? { ...nearby.area } : await here();
-    const streetError = await loadArea(getStore(), area, area.radius);
-    // Freeze a place label with the goal; it must not keep saying "here" after travel.
-    let labelTimer: ReturnType<typeof setTimeout> | undefined;
+    if (signal.aborted) throw signal.reason;
+    // Freeze the goal's place label; "where you are now" would become wrong
+    // after travelling. Native geocoding must not hold the search open.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    area.name = `område valgt ${date(Date.now())}`;
     try {
-      const places = await Promise.race([Location.reverseGeocodeAsync(area), new Promise<null>(resolve => { labelTimer = setTimeout(() => resolve(null), 3000); })]);
+      const places = await Promise.race([Location.reverseGeocodeAsync(area), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 3000); })]);
       const place = places?.[0];
-      area.name = place?.district || place?.city || place?.subregion || `område valgt ${date(Date.now())}`;
-    } catch { area.name = `område valgt ${date(Date.now())}`; }
-    finally { clearTimeout(labelTimer); }
-    const suggestions = areaGoals(area, getStore().setting<Discovery[]>('osmDiscoveries', []));
-    getStore().setSetting('goalCatalog', [...data.catalog.filter(g => g.curated), ...suggestions]);
-    if (streetError) Alert.alert('Steder hentet, gatekart venter', streetError);
-    else if (!suggestions.length) Alert.alert('Ingen mål funnet', 'Dette området mangler kartlagte turmål. Prøv en større radius eller hent mål når du er et annet sted.');
-  }, 'Henter kartdata og lager målforslag …');
-  const loadBergenGoal = () => attempt(async () => {
-    // Query only the seven peaks, near their documented locations; no global name matching.
-    const items = await fetchPeaks({ latitude: 60.383, longitude: 5.32 }, 6500);
-    mergeIntoStore(getStore(), items);
+      area.name = place?.district || place?.city || place?.subregion || area.name;
+    } catch { /* The fixed date/coordinates identify the area without geocoding. */ }
+    finally { clearTimeout(timer); }
+    if (signal.aborted) throw signal.reason;
+    const cached = getStore().setting<Discovery[]>('osmDiscoveries', []);
+    // Suggestions are local first. Do not wait for a full municipal street
+    // download or unrelated background collection sync to finish.
+    let suggestions = areaGoals(area, cached);
+    if (suggestions.length) return { suggestions, items: [] as Discovery[] };
+    const items = await fetchDiscoveries(area, area.radius, signal);
+    suggestions = areaGoals(area, items);
+    if (!suggestions.length) throw new Error('Ingen mål funnet i området. Prøv en større radius.');
+    return { suggestions, items };
+  }, ({ suggestions, items }) => {
+    const store = getStore();
+    if (items.length) mergeIntoStore(store, items);
+    store.setSetting('goalCatalog', [...store.setting<Goal[]>('goalCatalog', []).filter(g => g.curated), ...suggestions]);
+    refresh();
+  });
+  const loadBergenGoal = () => goalSearch.run('bergen', async signal => {
+    const items = await fetchPeaks({ latitude: 60.383, longitude: 5.32 }, 6500, signal);
     const goal = bergenGoal(items);
     if (!goal) throw new Error('Kartkilden fant ikke alle syv topper. Prøv igjen senere; et ufullstendig mål blir ikke aktivert.');
-    getStore().setSetting('goalCatalog', [...data.catalog.filter(g => !g.curated), goal]);
-  }, 'Henter de syv fjelltoppene …');
+    return { goal, items };
+  }, ({ goal, items }) => {
+    const store = getStore(); mergeIntoStore(store, items);
+    store.setSetting('goalCatalog', [...store.setting<Goal[]>('goalCatalog', []).filter(g => !g.curated), goal]);
+    refresh();
+  });
   const toggleGoal = (goal: Goal) => {
     const goals = data.goals.some(g => g.id === goal.id) ? data.goals.filter(g => g.id !== goal.id) : [...data.goals, goal];
     getStore().setSetting('goals', goals); setData(previous => ({ ...previous, goals }));
@@ -299,7 +316,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
           <Button secondary title={nearby.needsSettings ? 'Åpne posisjonstillatelser' : nearby.pending ? 'Finner GPS …' : 'Finn posisjonen min'} disabled={!nearby.needsSettings && (nearby.pending || busy)} onPress={() => nearby.needsSettings ? void Linking.openSettings() : void attempt(async () => { setFocus(await here()); setRecenter(n => n + 1); }, 'Finner GPS …')} />
         </View>}
         <View style={{ gap: 8 }}><Text style={s.small}>Radius rundt deg</Text><RadiusPicker radius={nearby.radius} onRadius={nearby.setRadius} /></View>
-        <View style={{ gap: 9 }}>{(position || focus || !!metrics?.points.length) && <TrailMap segmentStart={peg?.point} positionStale={active && metrics?.points.length ? now - metrics.points.at(-1)!.timestamp > 30000 : !nearby.live} recenter={recenter} fitReference={!!ghost} selectedDiscovery={selectedDiscovery} trips={data.trips} trails={data.trails} discoveries={data.discoveries} awards={data.awards} current={metrics?.points} reference={ghost?.points} ghost={comparison?.position} position={metrics?.points.at(-1) ?? position} focus={metrics?.points.at(-1) ?? focus ?? position} height={active ? 280 : 335} />}{selectedDiscovery && <Pressable accessibilityRole="button" onPress={() => setSelectedDiscovery(null)}><Text style={s.small}>{selectedDiscovery.name} · markert i korall · Lukk ×</Text></Pressable>}<View style={s.between}><Text style={[s.small, { flex: 1 }]}>{nearby.live || (metrics?.points.length && now - metrics.points.at(-1)!.timestamp <= 30000) ? 'Blå DU er deg. Korall er skyggen.' : nearby.area ? 'SIST viser sist kjente posisjon.' : 'Slå på GPS for å finne deg.'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Finn min posisjon" onPress={locate} disabled={busy} style={{ padding: 6 }}><Icon name="location" size={20} /></Pressable></View></View>
+        <View style={{ gap: 9 }}>{(position || focus || !!metrics?.points.length) && <TrailMap segmentStart={peg?.point} positionStale={active && metrics?.points.length ? now - metrics.points.at(-1)!.timestamp > 30000 : !nearby.live} recenter={recenter} fitReference={!!ghost} selectedDiscovery={selectedDiscovery} trips={data.trips} trails={data.trails} discoveries={data.discoveries} awards={data.awards} current={metrics?.points} reference={ghost?.points} ghost={comparison?.position} position={metrics?.points.at(-1) ?? position} focus={metrics?.points.at(-1) ?? focus ?? position} height={active ? 280 : 335} />}{selectedDiscovery && <Pressable accessibilityRole="button" onPress={() => setSelectedDiscovery(null)}><Text style={s.small}>{selectedDiscovery.name} · markert i korall · Lukk ×</Text></Pressable>}<View style={s.between}><Text style={[s.small, { flex: 1 }]}>{nearby.live || (metrics?.points.length && now - metrics.points.at(-1)!.timestamp <= 30000) ? 'Blå DU er deg. Trykk på en fremhevet sti for info.' : nearby.area ? 'SIST viser sist kjente posisjon.' : 'Slå på GPS for å finne deg.'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Finn min posisjon" onPress={locate} disabled={busy} style={{ padding: 6 }}><Icon name="location" size={20} /></Pressable></View></View>
         {active && activeStretches.at(-1) && now - activeStretches.at(-1)!.endedAt < 30000 && <View accessibilityLiveRegion="polite" style={s.notice}><Text style={s.subheading}>✓ Strekk fullført: {activeStretches.at(-1)!.name}</Text><Text style={s.body}>{activeStretches.at(-1)!.ghostSeconds !== null ? `${stretchDelta(activeStretches.at(-1)!.seconds, activeStretches.at(-1)!.ghostSeconds!)} enn skyggen` : activeStretches.at(-1)!.previousSeconds !== null ? `${stretchDelta(activeStretches.at(-1)!.seconds, activeStretches.at(-1)!.previousSeconds!)} enn sist` : 'Første registrerte tid'}</Text></View>}
           {ghost && route?.deviated && <View style={s.notice}><Text style={s.subheading}>{route.state === 'off-route' ? 'Du har gått av ruten' : route.label}</Text><Text style={s.body}>Turen lagres fortsatt. Følg den korallfargede ruten tilbake, eller fortsett fritt. Totaltiden sammenlignes ikke etter et avvik; fullførte strekk teller fortsatt.</Text></View>}
         {active && metrics ? <>
@@ -371,7 +388,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
   {modal === 'collection' && <Sheet title="Samlingen min" onClose={() => setModal(null)}>
     <Discoveries onRename={renameDiscovery} items={data.discoveries} progress={progress} checking={collection.pending} checked={collection.processed} error={collection.error} onRetry={collection.retry} syncError={data.syncError} busy={busy || syncing} onSync={syncDiscoveries} onMap={item => { setModal(null); setSelectedDiscovery(item); setFocus(item); setTab('explore'); }} />
   </Sheet>}
-  {modal === 'goals' && <Sheet title="Mine mål" onClose={() => setModal(null)}><Goals homeArea={nearby.area} radius={nearby.radius} goals={data.goals} catalog={data.catalog} trips={data.trips} busy={busy || syncing} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => { setModal(null); setTab('explore'); }} /></Sheet>}
+  {modal === 'goals' && <Sheet title="Mine mål" onClose={() => { goalSearch.cancel(); setModal(null); }}><Goals homeArea={nearby.area} radius={nearby.radius} goals={data.goals} catalog={data.catalog} trips={data.trips} loading={goalSearch.loading} error={goalSearch.error} onCancel={goalSearch.cancel} onToggle={toggleGoal} onLoad={loadGoals} onBergen={loadBergenGoal} onArea={() => { goalSearch.cancel(); setModal(null); setTab('explore'); }} /></Sheet>}
   {modal === 'compass' && <Sheet camera title="Finn sti" onClose={() => setModal(null)}><TrailFinder items={data.discoveries} trails={data.trails} busy={busy || syncing} onRefresh={syncDiscoveries} onMap={target => { setSelectedDiscovery({ ...target.item, name: target.name }); setFocus(target.coordinate); setTab('explore'); setModal(null); }} onStart={active ? undefined : target => { setGhostId(null); setSelectedDiscovery({ ...target.item, name: target.name }); setFocus(target.coordinate); setTab('explore'); setModal('start'); }} onGhost={active ? undefined : trail => repeatWithGhost(trailReference(trail))} /></Sheet>}
   {modal === 'ghost' && <Sheet title="Velg din skygge" onClose={() => setModal('start')}><Text style={s.body}>Velg et lagret strekk eller en tidligere tur og start nær samme sted. Skyggen følger den gamle tidslinjen, også gjennom pausene.</Text><Button secondary title="Gå uten skygge" onPress={() => { setGhostId(null); setModal('start'); }} />{!references.length && <Empty title="Først setter du et spor" icon="ghost">Etter den første turen kan du gå sammen med skyggen din.</Empty>}{references.filter(t => cleanPoints(t.points).length > 1).map(t => <Pressable accessibilityRole="button" key={t.id} style={s.card} onPress={() => repeatWithGhost(t)}><Text style={s.subheading}>{t.name}</Text><Text style={s.small}>{date(t.startedAt)} · {durationLabel((t.endedAt ?? t.startedAt) - t.startedAt)}</Text></Pressable>)}</Sheet>}
   {modal === 'trail' && selectedTrail && <SavedTrailDetails canRename={!active || !isGhostTrip(active)} onChange={refresh} trail={selectedTrail} onClose={() => setModal(null)} onGhost={() => repeatWithGhost(trailReference(selectedTrail))} onTrip={() => { setModal(null); setFinishedTripId(null); setSelectedTrip(selectedTrail.tripId); }} />}

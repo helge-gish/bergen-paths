@@ -13,6 +13,6 @@ export function mapStyle(background: MapBackground, publicKey = '') {
   return {
     version: 8 as const,
     sources: { topo: { type: 'raster' as const, tiles: [TOPO_TILES], tileSize: 256, maxzoom: 18, attribution: '© <a href="https://www.kartverket.no/">Kartverket</a>' } },
-    layers: [{ id: 'topo', type: 'raster' as const, source: 'topo' }],
+    layers: [{ id: 'topo', type: 'raster' as const, source: 'topo', paint: { 'raster-saturation': -.4, 'raster-contrast': -.1 } }],
   };
 }

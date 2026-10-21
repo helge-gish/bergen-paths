@@ -5,9 +5,12 @@ import { parseOsm } from '../domain/discoveries';
 export function validCenter(center: Coordinate) {
   if (!Number.isFinite(center.latitude) || !Number.isFinite(center.longitude) || Math.abs(center.latitude) > 90 || Math.abs(center.longitude) > 180) throw new Error('Velg en gyldig posisjon.');
 }
-export async function overpass(query: string): Promise<{ elements: any[] }> {
+export async function overpass(query: string, signal?: AbortSignal): Promise<{ elements: any[] }> {
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (signal?.aborted) throw signal.reason ?? new Error('Avbrutt');
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 75_000);
+    const cancel = () => controller.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
     try {
       const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Trakk/0.3.0 (https://github.com/helge-gish/bergen-paths)' }, body: `data=${encodeURIComponent(query)}`, signal: controller.signal });
       if (!response.ok) {
@@ -20,11 +23,11 @@ export async function overpass(query: string): Promise<{ elements: any[] }> {
       if (data.remark) throw new Error('Karttjenesten fikk ikke fullført hele gatekartet / områdesøket. Prøv igjen senere.');
       if (!Array.isArray(data.elements)) throw new Error('Uventet svar fra kartkilden.');
       return data;
-    } finally { clearTimeout(timer); }
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', cancel); }
   }
   throw new Error('Karttjenesten svarer ikke.');
 }
-export async function fetchDiscoveries(center: Coordinate, radius = 3000) {
+export async function fetchDiscoveries(center: Coordinate, radius = 3000, signal?: AbortSignal) {
   validCenter(center);
   if (!Number.isFinite(radius) || radius < 100 || radius > 15000) throw new Error('Velg et område mellom 100 m og 15 km.');
   const area = `(around:${Math.round(radius)},${center.latitude.toFixed(5)},${center.longitude.toFixed(5)})`;
@@ -35,13 +38,13 @@ nwr[tourism~"^(viewpoint|alpine_hut|wilderness_hut|picnic_site|attraction)$"]${a
 nwr[amenity=shelter]${area};
 nwr[historic~"^(monument|memorial|ruins)$"]${area};
 node[natural~"^(spring|water)$"]${area};
-);out center geom;`);
+);out center geom;`, signal);
   return parseOsm(data, Date.now());
 }
-export async function fetchPeaks(center: Coordinate, radius: number) {
+export async function fetchPeaks(center: Coordinate, radius: number, signal?: AbortSignal) {
   validCenter(center);
   if (!Number.isFinite(radius) || radius < 100 || radius > 15000) throw new Error('Ugyldig søkeradius.');
-  return parseOsm(await overpass(`[out:json][timeout:30];nwr[natural=peak](around:${Math.round(radius)},${center.latitude.toFixed(5)},${center.longitude.toFixed(5)});out center geom;`), Date.now());
+  return parseOsm(await overpass(`[out:json][timeout:30];nwr[natural=peak](around:${Math.round(radius)},${center.latitude.toFixed(5)},${center.longitude.toFixed(5)});out center geom;`, signal), Date.now());
 }
 export type StreetRegion = { id: number; name: string };
 export async function streetRegion(center: Coordinate): Promise<StreetRegion> {
