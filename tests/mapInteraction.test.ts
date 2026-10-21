@@ -92,3 +92,33 @@ test('tap opens honest trail info; selection and camera position survive fullscr
   assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Lukk stiinfo' }).length, 0);
   assert.equal(source().props.data.features[0].properties.selected, false);
 });
+
+test('finder keeps asking for GPS while stationary and supplies named streets to camera mode', async t => {
+  const now = Date.now();
+  const point: Fix = { latitude: 60, longitude: 5, timestamp: now, accuracy: 4, altitude: null, altitudeAccuracy: null, speed: null };
+  const street = { id: 'gate', name: 'Gjeble Pedersens gate', kind: 'street', latitude: 60, longitude: 5, geometry: [point, { ...point, latitude: 60.001 }], fetchedAt: now, sourceUrl: '' };
+  const requests: any[] = []; let receive: (value: Fix) => void = () => {}, removed = 0;
+  const { TrailFinder } = component('src/ui/TrailFinder.tsx', {
+    'react-native': { ...native, AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
+    'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: async () => ({ granted: true }), watchPositionAsync: async (options: unknown, callback: typeof receive) => { requests.push(options); receive = callback; return { remove() { removed++; } }; } },
+    '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
+    '../data/native': { getStore: () => ({ lastPosition: () => point }) }, '../services/tracking': { toFix: (value: Fix) => value },
+    './TrailCamera': { TrailCamera: 'TrailCamera' }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
+  });
+  let tree!: ReactTestRenderer;
+  await act(() => { tree = create(React.createElement(TrailFinder, { items: [street], trails: [], trips: [], current: undefined, busy: false, onRefresh() {}, onMap() {}, onStart() {} })); });
+  t.after(async () => act(() => tree.unmount()));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].distanceInterval, 0); assert.equal(requests[0].timeInterval, 1000);
+  assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Velg Gjeble Pedersens gate' }).length, 0);
+  const mode = tree.root.findAllByType('Pressable' as any).find(node => node.findAllByType('Text' as any).some(text => text.props.children === 'Kamera · AR'))!;
+  await act(() => mode.props.onPress());
+  const camera = () => tree.root.findByType('TrailCamera' as any);
+  assert.equal(camera().props.targets[0].name, 'Gjeble Pedersens gate');
+  await act(() => receive({ ...point, timestamp: now + 1000 }));
+  assert.equal(camera().props.position.timestamp, now + 1000);
+  await act(() => camera().props.onSelect(camera().props.targets[0]));
+  assert.ok(tree.root.findByProps({ title: 'Velg gate og start tur' }));
+  await act(() => camera().props.onRetryGps());
+  assert.equal(requests.length, 2); assert.equal(removed, 1);
+});

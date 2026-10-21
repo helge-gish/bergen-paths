@@ -1,5 +1,6 @@
 import { trailFacts, type TrailFacts } from './trailFacts';
-import { usablePosition } from './position';
+import { freshPosition, usablePosition } from './position';
+import { streetRows } from './neighborhood';
 import type { Discovery } from './discoveries';
 import { discoveryRows } from './discoveryRows';
 import { needsDiscoveryName } from './discoveryGroups';
@@ -19,6 +20,9 @@ export function trailChoices(items: Discovery[], saved: Trail[]): TrailChoice[] 
     }),
     ...discoveryRows(items.filter(item => item.kind === 'trail' || item.kind === 'steps')).map(row => ({ id: row.id, name: needsDiscoveryName(row.item) ? '' : row.item.name, item: row.item, facts: trailFacts(row.members) })),
   ];
+}
+export function cameraStreetChoices(items: Discovery[]): TrailChoice[] {
+  return streetRows(items).map(row => ({ id: row.id, name: row.item.name, item: row.item, facts: trailFacts(row.members) }));
 }
 function outline(item: Discovery) {
   const cached = outlines.get(item);
@@ -51,10 +55,19 @@ export function nearbyTrails(choices: TrailChoice[], position: Fix, radius = 300
   }
   return result.sort((a, b) => a.meters - b.meters || a.id.localeCompare(b.id));
 }
+export function cameraPositionReady(position: Fix | null, now: number): position is Fix {
+  return freshPosition(position, now) && position!.accuracy <= 25;
+}
+export function cameraHeadingFresh(heading: CameraHeading | null, now: number): heading is CameraHeading {
+  return !!heading && Number.isFinite(heading.timestamp) && Number.isFinite(heading.bearing) && Number.isFinite(heading.pitch)
+    && now - heading.timestamp <= 2500 && heading.timestamp <= now + 1000;
+}
 export function cameraTarget(target: NearbyTrail, heading: CameraHeading | null, position: Fix | null, now: number) {
-  if (!heading?.reliable || !Number.isFinite(heading.timestamp) || !Number.isFinite(target.bearing) || !Number.isFinite(target.meters) || !Number.isFinite(heading.bearing) || !Number.isFinite(heading.pitch) || now - heading.timestamp > 2500 || heading.timestamp > now + 1000
-    || !usablePosition(position) || position.accuracy > 25 || now - position.timestamp > 15000 || position.timestamp > now + 5000) return null;
-  if (Math.abs(heading.pitch) > 55 || target.meters < 8) return null;
+  if (!cameraHeadingFresh(heading, now) || !heading.reliable || !Number.isFinite(target.bearing) || !Number.isFinite(target.meters)
+    || !cameraPositionReady(position, now)) return null;
+  // A nearby line can lie anywhere within the GPS uncertainty. Show it in the
+  // proximity list rather than inventing a camera direction from near-zero range.
+  if (Math.abs(heading.pitch) > 55 || target.meters < Math.max(8, position.accuracy)) return null;
   const delta = relativeBearing(target.bearing, heading.bearing);
   // Directional HUD with an approximate field of view, not terrain registration.
   return { delta, visible: Math.abs(delta) <= 30, fraction: .5 + Math.tan(delta * Math.PI / 180) / (2 * Math.tan(Math.PI / 6)) };

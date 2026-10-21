@@ -30,7 +30,7 @@ test('AR wraps north, hides poor GPS, stale heading and camera aimed at ground',
   assert.equal(cameraTarget(target, heading, fix(), now)?.visible, true);
   assert.ok(Math.abs(cameraTarget(target, heading, fix(), now)!.delta - 1) < .1);
   for (const patch of [{ reliable: false }, { pitch: -90 }, { timestamp: now - 3000 }, { timestamp: NaN }]) assert.equal(cameraTarget(target, { ...heading, ...patch }, fix(), now), null);
-  for (const patch of [{ accuracy: 80 }, { accuracy: NaN }, { accuracy: -1 }, { timestamp: now - 16000 }, { longitude: 200 }]) assert.equal(cameraTarget(target, heading, fix(0, patch), now), null);
+  for (const patch of [{ accuracy: 80 }, { accuracy: NaN }, { accuracy: -1 }, { timestamp: now - 30001 }, { longitude: 200 }]) assert.equal(cameraTarget(target, heading, fix(0, patch), now), null);
   assert.equal(cameraTarget({ ...target, meters: 3 }, heading, fix(), now), null);
   assert.equal(cameraTarget(target, { ...heading, bearing: 180 }, fix(), now)?.visible, false);
 });
@@ -53,4 +53,19 @@ test('satellite requires configured provider and missing key falls back to topo'
   assert.equal(mapBackground(null, true), 'satellite');
   assert.equal(typeof mapStyle('satellite', ''), 'object');
   assert.match(String(mapStyle('satellite', 'public-key')), /hybrid\/style.json\?key=public-key/);
+});
+
+test('camera includes named streets and does not place targets inside the GPS uncertainty', async () => {
+  const { cameraStreetChoices, cameraPositionReady } = await import('../src/domain/trailFinder');
+  const street = item('street', { kind: 'street', name: 'Gjeble Pedersens gate', geometry: [fix(0), fix(10)] });
+  const choices = cameraStreetChoices([street, street, item()]);
+  assert.equal(choices.length, 1);
+  assert.equal(choices[0].name, 'Gjeble Pedersens gate');
+  const target = nearbyTrails(choices, fix())[0];
+  assert.equal(target.meters, 0);
+  const heading = { bearing: 0, pitch: 0, reliable: true, timestamp: now };
+  assert.equal(cameraTarget(target, heading, fix(), now), null);
+  assert.equal(cameraTarget({ ...target, meters: 12 }, heading, fix(0, { accuracy: 20 }), now), null);
+  assert.equal(cameraPositionReady(fix(), now + 30000), true);
+  assert.equal(cameraPositionReady(fix(), now + 30001), false);
 });

@@ -1,6 +1,6 @@
 {
   "name": "trakk",
-  "version": "0.3.21",
+  "version": "0.3.22",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~55.0.12",
