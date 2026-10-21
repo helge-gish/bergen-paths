@@ -5,7 +5,8 @@
   "android": {
     "modules": [
       "no.trakk.coach.TrakkCoachModule",
-      "no.trakk.coach.CameraHeadingModule"
+      "no.trakk.coach.CameraHeadingModule",
+      "no.trakk.coach.GroundArModule"
     ]
   }
 }

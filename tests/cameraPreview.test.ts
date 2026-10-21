@@ -8,6 +8,7 @@ import React from 'react';
 import { create, act, type ReactTestRenderer } from 'react-test-renderer';
 import { cameraTarget, cameraPositionReady, cameraHeadingFresh, cameraPlaceType } from '../src/domain/trailFinder';
 import { freshPosition, usablePosition } from '../src/domain/position';
+import { groundGuide } from '../src/domain/groundAr';
 import { shortDistance } from '../src/domain/metrics';
 const require = createRequire(import.meta.url);
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,6 +27,7 @@ function harness(granted = true, sensor: unknown = null) {
     'expo-camera': { CameraView: 'CameraView', useCameraPermissions: () => [permission, refresh, refresh] },
     expo: { requireOptionalNativeModule: () => sensor },
     '../domain/trailFinder': { cameraTarget, cameraPositionReady, cameraHeadingFresh, cameraPlaceType }, '../domain/position': { freshPosition, usablePosition }, '../domain/metrics': { shortDistance },
+    './GroundCamera': { GroundCamera: (props: any) => React.createElement('CameraView', { ...props, onCameraReady: props.onReady, onMountError: props.onError }), installGroundAr: async () => false }, '../domain/groundAr': { groundGuide },
     './components': { Button: 'Button' }, './theme': { styles: {} },
   };
   const source = readFileSync(new URL('../src/ui/TrailCamera.tsx', import.meta.url), 'utf8');
@@ -243,4 +245,32 @@ test('approximate compass draws dashed hints with uncertainty rings; calibration
   assert.equal(tree.root.findAllByProps({ testID: 'callout-a' }).length, 0);
   assert.ok(tree.root.findByProps({ title: 'Prøv kompass igjen' }));
   assert.match(content(tree), /Kompass: venter/);
+});
+
+test('ground anchor status follows native tracking and target identity; stale GPS falls back to proximity without promising an anchor', async t => {
+  let emit: (value: any) => void = () => {};
+  const h = harness(true, { start: async () => true, stop: async () => {}, addListener: (_: string, callback: typeof emit) => { emit = callback; return { remove() {} }; } });
+  const now = 1_000_000, position = { latitude: 60, longitude: 5, timestamp: now, accuracy: 4, altitude: null, altitudeAccuracy: null, speed: null };
+  const target = { id: 'a', name: 'Fjellstien', item: { kind: 'trail' }, meters: 100, bearing: 0, facts: { length: 500, ascent: null } };
+  const props = { ...h.props, position, now, selected: target, targets: [target] };
+  let tree!: ReactTestRenderer;
+  await act(() => { tree = create(React.createElement(h.Component, props)); });
+  t.after(async () => act(() => tree.unmount()));
+  await layout(tree); await act(() => cameras(tree)[0].props.onCameraReady());
+  await act(() => emit({ bearing: 0, pitch: -65, reliable: true, quality: 'approximate', timestamp: now }));
+  assert.equal(cameras(tree)[0].props.guide.id, 'a');
+  await act(() => cameras(tree)[0].props.onGroundState({ state: 'searching', reason: 'For mørkt til å feste i underlaget', ready: true }));
+  assert.match(content(tree), /For mørkt/);
+  assert.doesNotMatch(content(tree), /Løft mobilen/);
+  assert.equal(tree.root.findAllByProps({ testID: 'approximate-callout-a' }).length, 0);
+  await act(() => cameras(tree)[0].props.onGroundState({ state: 'anchored', targetId: 'a', reason: 'Lokal retningspil', ready: true }));
+  assert.match(content(tree), /Pil mot/);
+  assert.equal(tree.root.findAllByProps({ testID: 'approximate-callout-a' }).length, 0);
+  await act(() => tree.update(React.createElement(h.Component, { ...props, detailsOpen: true, details: React.createElement('Text', {}, 'Stiinfo') })));
+  assert.equal(cameras(tree)[0].props.guide, null);
+  assert.ok(tree.root.findByProps({ title: 'Vis retning i kamera' }));
+  await act(() => tree.update(React.createElement(h.Component, { ...props, now: now + 31000 })));
+  assert.equal(cameras(tree)[0].props.guide, null);
+  assert.equal(tree.root.findAllByProps({ testID: 'ground-guide-status' }).length, 0);
+  assert.ok(tree.root.findByProps({ testID: 'camera-proximity' }));
 });
