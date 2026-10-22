@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Polyline } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermissions } from 'expo-camera';
@@ -10,6 +10,7 @@ import { freshPosition, usablePosition } from '../domain/position';
 import { shortDistance } from '../domain/metrics';
 import { Button } from './components';
 import { styles as s } from './theme';
+import { ReadingPanel, ReadingButton } from './ReadingPanel';
 import { GroundCamera, installGroundAr } from './GroundCamera';
 import { groundGuide, type GroundState } from '../domain/groundAr';
 
@@ -145,7 +146,7 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
     {fullscreen && !detailsOpen && <Pressable accessibilityRole="button" accessibilityLabel="Vis GPS- og kompasstatus" onPress={() => setShowStatus(value => !value)} style={{ position: 'absolute', top: 8, left: 8, right: 136, minHeight: 44, padding: 12, borderRadius: 12, backgroundColor: '#102A24ED', zIndex: 3 }}><Text numberOfLines={1} style={{ color: '#DAF5E9', fontWeight: '700' }}>{compactStatus} ⓘ</Text></Pressable>}
     {detailsOpen && selected && details && <View testID="camera-selection-details" style={[StyleSheet.absoluteFillObject, { zIndex: 3, backgroundColor: '#F7F5EE' }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Tilbake til kamera" onPress={onCloseDetails} style={{ minHeight: 56, padding: 12, paddingRight: fullscreen ? 136 : 12 }}><Text style={s.chipText}>← Kamera</Text></Pressable>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24, gap: 10 }}><Button title="Vis retning i kamera" onPress={onCloseDetails ?? (() => {})} />{details}</ScrollView>
+      <ReadingPanel><ReadingButton title="Vis retning i kamera" onPress={onCloseDetails ?? (() => {})} />{details}</ReadingPanel>
     </View>}
     </View>
     {(!fullscreen || (showStatus && !detailsOpen)) && <View accessibilityLiveRegion="polite" style={{ gap: 8, ...(fullscreen ? { position: 'absolute', top: 60, left: 8, right: 8, padding: 14, borderRadius: 12, backgroundColor: '#F7F5EE', zIndex: 5 } : {}) }}>

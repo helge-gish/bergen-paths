@@ -53,7 +53,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.3.27](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.27). Første utgave med lokale ARCore-bakkeankre: velg et sted i kameraet, åpne retningsvisning og pek mot bakken. Vanlig kamera er reserve når ARCore ikke er tilgjengelig. Retningen mot målet er fortsatt omtrentlig; Geospatial er ikke aktivert. Installer som oppdatering for å beholde turene. Se [bruk, endringer og kontroll](docs/release-0.3.27.md).
+**Android-testversjon:** [Tråkk 0.3.28](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.28). AR-infopanelet får husket lesestørrelse med A−/A+ og to fingre. Valgt element viser luftlinjeavstand direkte på kartet, og «Min posisjon» er tydelig også i fullskjerm. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.28.md).
 
 Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 

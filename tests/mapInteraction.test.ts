@@ -16,11 +16,16 @@ import type { Fix, Trip } from '../src/domain/types';
 const native = { View: 'View', Text: 'Text', Pressable: 'Pressable', Modal: 'Modal', ScrollView: 'ScrollView', useWindowDimensions: () => ({ height: 800 }), Linking: { openURL: () => {} } };
 const theme = { colors: { ink: '#123', paper: '#fff' }, styles: {} };
 const details = component('src/ui/MapDetails.tsx', { 'react-native': native, '../domain/mapPresentation': presentation, '../domain/trailFacts': facts, '../domain/metrics': metrics, '../domain/discoveryGroups': groups, './theme': theme });
+const cameraMoves: any[] = [];
+const Camera = React.forwardRef((props: any, ref) => {
+  React.useImperativeHandle(ref, () => ({ flyTo: (value: any) => cameraMoves.push(value), fitBounds() {} }));
+  return React.createElement('Camera', props);
+});
 const { TrailMap } = component('src/ui/TrailMap.tsx', {
   'react-native': native, 'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' }, 'react-native-svg': { SvgUri: 'SvgUri' },
   '../data/native': { getStore: () => ({ setting: () => null, setSetting: () => {} }) }, '../domain/mapStyles': styles,
-  '@maplibre/maplibre-react-native': { Map: 'Map', Camera: 'Camera', GeoJSONSource: 'GeoJSONSource', RasterSource: 'RasterSource', Layer: 'Layer', Marker: 'Marker' },
-  '../domain/geo': geo, './theme': theme, './components': { Icon: 'Icon' }, '../domain/mapSelection': selection, '../domain/mapPresentation': presentation, './MapDetails': details,
+  '@maplibre/maplibre-react-native': { Map: 'Map', Camera, GeoJSONSource: 'GeoJSONSource', RasterSource: 'RasterSource', Layer: 'Layer', Marker: 'Marker' },
+  '../domain/geo': geo, '../domain/metrics': metrics, './theme': theme, './components': { Icon: 'Icon' }, '../domain/mapSelection': selection, '../domain/mapPresentation': presentation, './MapDetails': details,
 });
 
 test('Finn sti renders saved and growing live tracks without fresh GPS, across fullscreen and camera switches', async t => {
@@ -31,6 +36,7 @@ test('Finn sti renders saved and growing live tracks without fresh GPS, across f
     'react-native': { ...native, AppState: { currentState: 'background', addEventListener: () => ({ remove() {} }) } },
     'expo-location': {}, '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
     '../data/native': { getStore: () => ({ lastPosition: () => points[2] }) }, '../services/tracking': { toFix: (value: Fix) => value },
+    './ReadingPanel': { ReadingText: 'Text', ReadingButton: 'Button' },
     './TrailCamera': { TrailCamera: (props: any) => React.createElement('TrailCamera', props, props.detailsOpen ? props.details : null) }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
   });
   let tree!: ReactTestRenderer;
@@ -103,6 +109,7 @@ test('finder keeps asking for GPS while stationary and supplies named streets to
     'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: async () => ({ granted: true }), watchPositionAsync: async (options: unknown, callback: typeof receive) => { requests.push(options); receive = callback; return { remove() { removed++; } }; } },
     '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
     '../data/native': { getStore: () => ({ lastPosition: () => point }) }, '../services/tracking': { toFix: (value: Fix) => value },
+    './ReadingPanel': { ReadingText: 'Text', ReadingButton: 'Button' },
     './TrailCamera': { TrailCamera: (props: any) => React.createElement('TrailCamera', props, props.detailsOpen ? props.details : null) }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
   });
   let tree!: ReactTestRenderer;
@@ -138,6 +145,7 @@ test('Explore switches map/AR without losing map view or growing track; hiding s
     'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: async () => ({ granted: true }), watchPositionAsync: async () => { watches++; return { remove() { removed++; } }; } },
     '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
     '../data/native': { getStore: () => ({ lastPosition: () => point }) }, '../services/tracking': { toFix: (value: Fix) => value },
+    './ReadingPanel': { ReadingText: 'Text', ReadingButton: 'Button' },
     './TrailCamera': { TrailCamera: (props: any) => React.createElement('TrailCamera', props, props.detailsOpen ? props.details : null) }, './TrailMap': { TrailMap }, './components': { Button: 'Button' }, './theme': theme,
   });
   let mapped: any, started: any;
@@ -201,4 +209,36 @@ test('map trail start action closes fullscreen before handing off; absent while 
   await act(() => tree.update(React.createElement(TrailMap, { ...props, onStartTrail: undefined })));
   assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Velg sti og start tur' }).length, 0);
   assert.match(JSON.stringify(tree.toJSON()), /Fjellstien/);
+});
+
+test('selected distance stays in the fullscreen viewport; recenter preserves selection and refreshes stale GPS', async t => {
+  const item = { id: 'steps/nearby', name: 'Trappen ved Bontelabo', kind: 'steps', latitude: 60, longitude: 5, geometry: [{ latitude: 60, longitude: 5 }, { latitude: 60.001, longitude: 5 }], fetchedAt: 0, sourceUrl: '' };
+  const here = { latitude: 60.0005, longitude: 5.0004 };
+  let requests = 0, tree!: ReactTestRenderer;
+  const props = { position: here, selectedDiscovery: item, onLocate: () => requests++ };
+  await act(() => { tree = create(React.createElement(TrailMap, props)); });
+  t.after(async () => act(() => tree.unmount()));
+  // React children contain owner references, so inspect host text instead.
+  const label = () => tree.root.findByProps({ testID: 'map-selected-distance' }).findAllByType('Text' as any).map(n => n.props.children).join(' ');
+  assert.match(label(), /Trappen ved Bontelabo.*Ca. 20 m unna · luftlinje/);
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Åpne kart i fullskjerm' }).props.onPress());
+  assert.match(label(), /20 m unna/);
+  cameraMoves.length = 0;
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Finn min posisjon i kartet' }).props.onPress());
+  assert.deepEqual(Array.from(cameraMoves.at(-1).center), [here.longitude, here.latitude]);
+  assert.equal(requests, 0);
+  assert.equal(tree.root.findByProps({ id: 'discoveries' }).props.data.features[0].properties.selected, true);
+  await act(() => tree.update(React.createElement(TrailMap, { ...props, position: { ...here, longitude: 5.004 }, positionStale: true })));
+  assert.match(label(), /220 m unna.*Fra sist kjente posisjon/);
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Finn min posisjon i kartet' }).props.onPress());
+  assert.equal(requests, 1);
+  assert.deepEqual(Array.from(cameraMoves.at(-1).center), [5.004, here.latitude]);
+  await act(() => tree.update(React.createElement(TrailMap, { ...props, locating: true })));
+  assert.equal(tree.root.findByProps({ accessibilityLabel: 'Finn min posisjon i kartet' }).props.disabled, false);
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Finn min posisjon i kartet' }).props.onPress());
+  assert.equal(requests, 1); // Can recenter on the known fix during an ongoing GPS request.
+  await act(() => tree.root.findAllByProps({ accessibilityLabel: 'Minimer kartet' })[0].props.onPress());
+  assert.match(label(), /20 m unna/);
+  await act(() => tree.update(React.createElement(TrailMap, { ...props, position: null })));
+  assert.match(label(), /Trenger posisjon for avstand/);
 });

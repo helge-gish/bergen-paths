@@ -12,14 +12,15 @@ import { colors, styles as s } from './theme';
 import { Icon } from './components';
 import { mapSelection, type MapBounds } from '../domain/mapSelection';
 import type { Discovery } from '../domain/discoveries';
-import { mapFeatures, mapInk, mapItems, pickedMapTrail } from '../domain/mapPresentation';
+import { distanceToMapItem, mapFeatures, mapInk, mapItems, pickedMapTrail } from '../domain/mapPresentation';
+import { shortDistance } from '../domain/metrics';
 import { MapKey, MapTrailCard } from './MapDetails';
 const EMPTY_POINTS: Fix[] = [];
 const EMPTY_TRIPS: Trip[] = [];
 const EMPTY_TRAILS: Trail[] = [];
 const EMPTY_DISCOVERIES: Discovery[] = [];
 const EMPTY_PEAKS: Peak[] = [];
-type Props = { onStartTrail?: (item: Discovery) => void; positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
+type Props = { onLocate?: () => void; locating?: boolean; onStartTrail?: (item: Discovery) => void; positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
@@ -46,7 +47,7 @@ export const TrailMap = memo(function TrailMap(props: Props) {
   </>;
 });
 type SurfaceProps = Props & { inspected: Discovery | null; onPick: (item: Discovery) => void; fullscreen?: boolean; onExpand: () => void; background: MapBackground; onBackground: (value: MapBackground) => void; restoredView: ViewState | null; onView: (view: ViewState) => void };
-function MapSurface({ inspected, onPick, positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330, fullscreen = false, onExpand, background, onBackground, restoredView, onView }: SurfaceProps) {
+function MapSurface({ inspected, onPick, onLocate, locating = false, positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330, fullscreen = false, onExpand, background, onBackground, restoredView, onView }: SurfaceProps) {
   const mapCenter = focus ?? position ?? current.at(-1) ?? reference[0] ?? trips[0]?.points.at(-1) ?? trails[0]?.points[0] ?? selectedDiscovery;
   const camera = useRef<CameraRef>(null);
   const restored = useRef(restoredView);
@@ -55,6 +56,7 @@ function MapSurface({ inspected, onPick, positionStale = false, segmentStart, se
   const [viewport, setViewport] = useState<MapBounds | null>(null);
   const paths = useMemo(() => mapItems(discoveries), [discoveries]);
   const highlighted = inspected ?? selectedDiscovery;
+  const selectedDistance = useMemo(() => highlighted ? distanceToMapItem(position, highlighted) : null, [position, highlighted]);
   const displayed = useMemo(() => mapSelection(paths, viewport ?? (focus ? [focus.longitude - .025, focus.latitude - .012, focus.longitude + .025, focus.latitude + .012] : [-180, -85, 180, 85]), highlighted), [paths, viewport, focus, highlighted]);
   const [failed, setFailed] = useState(false), [ready, setReady] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -108,12 +110,24 @@ function MapSurface({ inspected, onPick, positionStale = false, segmentStart, se
       {(satelliteKey ? ['topo', 'satellite'] as MapBackground[] : []).map(value => <MapControl key={value} title={value === 'topo' ? 'Turkart' : 'Satellitt'} selected={background === value} onPress={() => onBackground(value)} />)}
       <View style={{ flex: 1 }} /><MapControl title={fullscreen ? '↙' : '⛶'} label={fullscreen ? 'Minimer kartet' : 'Åpne kart i fullskjerm'} onPress={onExpand} />
     </View>
-    {position && <View style={{ position: 'absolute', right: 10, bottom: 38 }}><MapControl title="◎" label="Finn min posisjon i kartet" onPress={() => { userMoved.current = false; camera.current?.flyTo({ center: [position.longitude, position.latitude], zoom: 16, duration: 400 }); }} /></View>}
+    {(position || onLocate) && <View style={{ position: 'absolute', right: 10, bottom: 38 }}><MapControl title={locating ? 'Finner GPS …' : '◎ Min posisjon'} label="Finn min posisjon i kartet" disabled={locating && !position} onPress={() => {
+      // Keep the selected element while returning to a useful walking zoom.
+      userMoved.current = true;
+      if (position) camera.current?.flyTo({ center: [position.longitude, position.latitude], zoom: 16, duration: 400 });
+      if ((!position || positionStale) && !locating && onLocate) onLocate();
+    }} /></View>}
     {background === 'satellite' && <Pressable accessibilityRole="link" accessibilityLabel="MapTiler" onPress={() => void Linking.openURL('https://www.maptiler.com/copyright/')} style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'white', padding: 3 }}><SvgUri uri="https://api.maptiler.com/resources/logo.svg" width={90} height={24} /></Pressable>}
-    {displayed.limited && <View pointerEvents="none" style={{ position: 'absolute', top: 58, left: 8, right: 8, padding: 8, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Viser et utvalg. Zoom inn for flere detaljer.</Text></View>}
-    {failed && <View style={{ position: 'absolute', top: 58, left: 10, right: 10, padding: 10, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Kartbakgrunnen kunne ikke lastes. GPS-sporet lagres fortsatt.</Text><MapControl title="Prøv reservekart" onPress={() => onBackground('overview')} /></View>}
+    <View pointerEvents="box-none" style={{ position: 'absolute', top: 60, left: 10, right: 10, gap: 6 }}>
+      {highlighted && <View testID="map-selected-distance" pointerEvents="none" style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: colors.paper, borderLeftWidth: 4, borderLeftColor: colors.coral, elevation: 3 }}>
+        <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: colors.ink }}>{highlighted.name || (highlighted.kind === 'steps' ? 'Valgt trapp' : 'Valgt sti')}</Text>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>{selectedDistance === null ? (position ? 'Avstand ikke tilgjengelig' : 'Trenger posisjon for avstand') : `Ca. ${shortDistance(selectedDistance)} unna · luftlinje`}</Text>
+        {positionStale && position && <Text style={{ fontSize: 12, color: colors.muted }}>Fra sist kjente posisjon</Text>}
+      </View>}
+      {displayed.limited && <View pointerEvents="none" style={{ padding: 8, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Viser et utvalg. Zoom inn for flere detaljer.</Text></View>}
+      {failed && <View style={{ padding: 10, borderRadius: 10, backgroundColor: colors.paper }}><Text style={s.small}>Kartbakgrunnen kunne ikke lastes. GPS-sporet lagres fortsatt.</Text><MapControl title="Prøv reservekart" onPress={() => onBackground('overview')} /></View>}
+    </View>
   </View>;
  }
-function MapControl({ title, label, selected = false, onPress }: { title: string; label?: string; selected?: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label ?? title} accessibilityState={{ selected }} onPress={onPress} style={{ minWidth: 44, minHeight: 44, paddingHorizontal: 10, borderRadius: 12, backgroundColor: selected ? colors.ink : colors.paper, justifyContent: 'center', alignItems: 'center', elevation: 3 }}><Text style={{ color: selected ? colors.paper : colors.ink, fontWeight: '700', fontSize: 13 }}>{title}</Text></Pressable>;
+function MapControl({ title, label, selected = false, disabled = false, onPress }: { title: string; label?: string; selected?: boolean; disabled?: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label ?? title} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} style={{ minWidth: 44, minHeight: 48, paddingHorizontal: 12, opacity: disabled ? .6 : 1, borderRadius: 12, backgroundColor: selected ? colors.ink : colors.paper, justifyContent: 'center', alignItems: 'center', elevation: 3 }}><Text style={{ color: selected ? colors.paper : colors.ink, fontWeight: '700', fontSize: 13 }}>{title}</Text></Pressable>;
 }

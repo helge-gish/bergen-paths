@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapFeatures, mapItems, pickedMapTrail } from '../src/domain/mapPresentation';
+import { distanceToMapItem, mapFeatures, mapItems, pickedMapTrail } from '../src/domain/mapPresentation';
 import type { Discovery } from '../src/domain/discoveries';
 import { mapSelection } from '../src/domain/mapSelection';
 const trail: Discovery = { id: 'way/1', name: 'Stien', kind: 'trail', osmHighway: 'path', latitude: 60, longitude: 5, geometry: [{ latitude: 60, longitude: 5 }, { latitude: 60.001, longitude: 5 }], fetchedAt: 0, sourceUrl: '' };
@@ -27,4 +27,21 @@ test('path, footway and stairs retain distinct styles and disconnected branches 
   assert.deepEqual(features.map(f => f.properties?.kind), ['path', 'footway', 'steps', 'steps']);
   assert.equal(features.length, 4);
   assert.ok(features.slice(2).every(f => f.properties?.selected && f.properties.targetId === 'steps'));
+});
+
+test('distance is to the nearest mapped segment, never the centroid or a bridge across missing geometry', () => {
+  const point = { latitude: 60.0005, longitude: 5.0002 };
+  const metres = distanceToMapItem(point, { ...trail, latitude: 61 });
+  assert.ok(metres !== null && metres > 10 && metres < 12);
+  const disconnected = { ...trail, streetPaths: [
+    [{ latitude: 60, longitude: 4.99 }, { latitude: 60, longitude: 4.995 }],
+    [{ latitude: 60, longitude: 5.005 }, { latitude: 60, longitude: 5.01 }],
+  ] };
+  assert.ok(distanceToMapItem({ latitude: 60, longitude: 5 }, disconnected)! > 270);
+  const invalid = { ...trail, geometry: [disconnected.streetPaths[0][1], { latitude: NaN, longitude: 5 }, disconnected.streetPaths[1][0]] };
+  assert.ok(distanceToMapItem({ latitude: 60, longitude: 5 }, invalid)! > 270);
+  assert.equal(distanceToMapItem(null, trail), null);
+  assert.equal(distanceToMapItem({ latitude: 91, longitude: 5 }, trail), null);
+  assert.equal(distanceToMapItem(point, { ...trail, geometry: [] }), null);
+  assert.ok(distanceToMapItem(point, { ...trail, kind: 'peak', geometry: [] })! > 50);
 });

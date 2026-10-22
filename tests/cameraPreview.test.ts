@@ -27,6 +27,7 @@ function harness(granted = true, sensor: unknown = null) {
     'expo-camera': { CameraView: 'CameraView', useCameraPermissions: () => [permission, refresh, refresh] },
     expo: { requireOptionalNativeModule: () => sensor },
     '../domain/trailFinder': { cameraTarget, cameraPositionReady, cameraHeadingFresh, cameraPlaceType }, '../domain/position': { freshPosition, usablePosition }, '../domain/metrics': { shortDistance },
+    './ReadingPanel': { ReadingPanel: (props: any) => React.createElement('ScrollView', {}, props.children), ReadingButton: 'Button' },
     './GroundCamera': { GroundCamera: (props: any) => React.createElement('CameraView', { ...props, onCameraReady: props.onReady, onMountError: props.onError }), installGroundAr: async () => false }, '../domain/groundAr': { groundGuide },
     './components': { Button: 'Button' }, './theme': { styles: {} },
   };

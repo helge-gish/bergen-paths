@@ -210,6 +210,10 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') check(); }); return () => sub.remove();
   }, [active?.id, refresh]);
   const metrics = useMemo(() => active ? tripMetrics(active, now) : null, [active, now]);
+  const trackPosition = metrics?.points.at(-1);
+  const useTrackPosition = !!trackPosition && trackPosition.timestamp >= (nearby.lastSeen ?? 0);
+  const mapPosition = useTrackPosition ? trackPosition : position ?? trackPosition;
+  const mapPositionStale = useTrackPosition ? now - trackPosition!.timestamp > 30000 : !nearby.live;
   const peg = useMemo(() => active ? activePeg(active.startedAt, data.segmentWindow?.from, metrics?.points ?? []) : null, [active?.id, active?.startedAt, data.segmentWindow?.from, metrics?.points]);
   const pegName = useMemo(() => pegPlace(peg?.point ?? null, data.discoveries), [peg?.point?.latitude, peg?.point?.longitude, data.discoveries]);
   const pegWhere = pegName ?? pegRelation(peg?.point ?? null, metrics?.points.at(-1) ?? null, now) ?? (peg?.point ? 'Vis startmerket i kartet' : 'Venter på første GPS-punkt');
@@ -261,7 +265,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
     ]);
   };
   const here = nearby.locate;
-  const locate = () => { if (active?.points.length) { setRecenter(n => n + 1); return; } void attempt(async () => { setFocus(await here()); setRecenter(n => n + 1); }, 'Finner posisjonen din …'); };
+  const locate = () => { if (mapPosition && !mapPositionStale) { setRecenter(n => n + 1); return; } void attempt(async () => { setFocus(await here()); setRecenter(n => n + 1); }, 'Finner posisjonen din …'); };
   const syncDiscoveries = () => attempt(async () => {
     const center = nearby.area ?? await here();
     const streetError = await loadArea(getStore(), center, center.radius);
@@ -336,7 +340,7 @@ function Trakk({ initialData }: { initialData: ReturnType<typeof snapshot> }) {
         </View>}
         <View style={[s.between, { flexWrap: 'wrap' }]}><RadiusPicker radius={nearby.radius} onRadius={nearby.setRadius} /><Pressable accessibilityRole="button" accessibilityLabel="Finn min posisjon" onPress={locate} disabled={busy} style={{ padding: 12 }}><Icon name="location" size={22} /></Pressable></View>
         <ExploreSurface mode={exploreMode} onMode={setExploreMode} enabled={!modal && !detail}
-          map={<View style={{ gap: 9 }}><TrailMap onStartTrail={active ? undefined : item => chooseTrail({ id: item.id, name: item.name, item, coordinate: metrics?.points.at(-1) ?? position ?? item })} segmentStart={peg?.point} positionStale={active && metrics?.points.length ? now - metrics.points.at(-1)!.timestamp > 30000 : !nearby.live} recenter={recenter} fitReference={!!ghost} selectedDiscovery={selectedDiscovery} trips={data.trips} trails={data.trails} discoveries={data.discoveries} awards={data.awards} current={metrics?.points} reference={ghost?.points} ghost={comparison?.position} position={metrics?.points.at(-1) ?? position} focus={metrics?.points.at(-1) ?? focus ?? position} height={active ? 280 : 335} />{selectedDiscovery && <Pressable accessibilityRole="button" onPress={() => setSelectedDiscovery(null)}><Text style={s.small}>{selectedDiscovery.name} · markert i korall · Lukk ×</Text></Pressable>}</View>}
+          map={<View style={{ gap: 9 }}><TrailMap onLocate={locate} locating={nearby.pending || busy} onStartTrail={active ? undefined : item => chooseTrail({ id: item.id, name: item.name, item, coordinate: metrics?.points.at(-1) ?? position ?? item })} segmentStart={peg?.point} positionStale={mapPositionStale} recenter={recenter} fitReference={!!ghost} selectedDiscovery={selectedDiscovery} trips={data.trips} trails={data.trails} discoveries={data.discoveries} awards={data.awards} current={metrics?.points} reference={ghost?.points} ghost={comparison?.position} position={mapPosition} focus={useTrackPosition ? trackPosition : focus ?? mapPosition} height={active ? 280 : 335} />{selectedDiscovery && <Pressable accessibilityRole="button" onPress={() => setSelectedDiscovery(null)}><Text style={s.small}>{selectedDiscovery.name} · markert i korall · Lukk ×</Text></Pressable>}</View>}
           camera={<TrailFinder embedded items={data.discoveries} trails={data.trails} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} busy={busy || syncing} onRefresh={syncDiscoveries} onMap={target => { setSelectedDiscovery({ ...target.item, name: target.name }); setFocus(target.coordinate); setExploreMode('map'); }} onStart={active ? undefined : chooseTrail} onGhost={active ? undefined : trail => repeatWithGhost(trailReference(trail))} />}
         />
         {active && activeStretches.at(-1) && now - activeStretches.at(-1)!.endedAt < 30000 && <View accessibilityLiveRegion="polite" style={s.notice}><Text style={s.subheading}>✓ Strekk fullført: {activeStretches.at(-1)!.name}</Text><Text style={s.body}>{activeStretches.at(-1)!.ghostSeconds !== null ? `${stretchDelta(activeStretches.at(-1)!.seconds, activeStretches.at(-1)!.ghostSeconds!)} enn skyggen` : activeStretches.at(-1)!.previousSeconds !== null ? `${stretchDelta(activeStretches.at(-1)!.seconds, activeStretches.at(-1)!.previousSeconds!)} enn sist` : 'Første registrerte tid'}</Text></View>}

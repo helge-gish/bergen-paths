@@ -8,6 +8,7 @@ import { freshPosition } from '../domain/position';
 import { shortDistance } from '../domain/metrics';
 import { getStore } from '../data/native';
 import { toFix } from '../services/tracking';
+import { ReadingText, ReadingButton } from './ReadingPanel';
 import { TrailCamera } from './TrailCamera';
 import { TrailMap } from './TrailMap';
 import { Button } from './components';
@@ -55,12 +56,12 @@ export function TrailFinder({ items, trails, trips, current, segmentStart, busy,
   useEffect(() => { if (selectedId && !selected) { setSelectedId(null); setDetailsOpen(false); } }, [selectedId, selected]);
   const live = freshPosition(position, now) && position!.accuracy <= 25;
   const selectionDetails = selected && <View style={[s.card, { borderColor: colors.coral }]}>
-      <Text style={s.small}>{cameraPlaceType(selected)}</Text><Text accessibilityRole="header" style={s.subheading}>{selected.name}</Text><Text style={s.small}>{shortDistance(selected.meters)} til nærmeste kartlagte punkt · luftlinje</Text>
+      <ReadingText style={s.small}>{cameraPlaceType(selected)}</ReadingText><ReadingText accessibilityRole="header" style={s.subheading}>{selected.name}</ReadingText><ReadingText style={s.small}>{shortDistance(selected.meters)} til nærmeste kartlagte punkt · luftlinje</ReadingText>
       <TrailInfo target={selected} />
-      {onStart && <Button title={selected.item.kind === 'street' ? 'Velg gate og start tur' : 'Velg sti og start tur'} onPress={() => onStart(selected)} />}
-      <Button secondary title="Vis på kartet" onPress={() => onMap(selected)} />
-      {selected.saved && onGhost && <Button secondary icon="ghost" title="Gå strekket med skygge" onPress={() => onGhost(selected.saved!)} />}
-      <Pressable accessibilityRole="button" onPress={() => { setSelectedId(null); setDetailsOpen(false); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={s.small}>Fjern valg</Text></Pressable>
+      {onStart && <ReadingButton title={selected.item.kind === 'street' ? 'Velg gate og start tur' : 'Velg sti og start tur'} onPress={() => onStart(selected)} />}
+      <ReadingButton secondary title="Vis på kartet" onPress={() => onMap(selected)} />
+      {selected.saved && onGhost && <ReadingButton secondary icon="ghost" title="Gå strekket med skygge" onPress={() => onGhost(selected.saved!)} />}
+      <Pressable accessibilityRole="button" onPress={() => { setSelectedId(null); setDetailsOpen(false); }} style={{ minHeight: 44, justifyContent: 'center' }}><ReadingText style={s.small}>Fjern valg</ReadingText></Pressable>
     </View>;
   const select = (target: NearbyTrail) => { setSelectedId(target.id); setDetailsOpen(true); };
   return <View style={{ gap: 16 }}>
@@ -89,11 +90,11 @@ function TrailInfo({ target }: { target: NearbyTrail }) {
   const f = target.facts;
   return <View style={{ gap: 8 }}>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-      <View style={[s.chip, { backgroundColor: colors.pale }]}><Text style={s.chipText}>{shortDistance(f.length)}</Text><Text style={s.small}>{f.saved ? 'Lagret strekk' : 'Kartlagte deler'}</Text></View>
-      <View style={[s.chip, { backgroundColor: colors.pale }]}><Text style={s.chipText}>{f.ascent === null ? 'Ukjent' : `↑ ${Math.round(f.ascent)} m · ↓ ${Math.round(f.descent!)} m`}</Text><Text style={s.small}>Høydemeter{f.ascent !== null ? ' · GPS-estimat' : ''}</Text></View>
+      <View style={[s.chip, { backgroundColor: colors.pale, maxWidth: '100%', flexShrink: 1 }]}><ReadingText style={s.chipText}>{shortDistance(f.length)}</ReadingText><ReadingText style={s.small}>{f.saved ? 'Lagret strekk' : 'Kartlagte deler'}</ReadingText></View>
+      <View style={[s.chip, { backgroundColor: colors.pale, maxWidth: '100%', flexShrink: 1 }]}><ReadingText style={s.chipText}>{f.ascent === null ? 'Ukjent' : `↑ ${Math.round(f.ascent)} m · ↓ ${Math.round(f.descent!)} m`}</ReadingText><ReadingText style={s.small}>Høydemeter{f.ascent !== null ? ' · GPS-estimat' : ''}</ReadingText></View>
     </View>
-    {target.item.kind !== 'street' && <Text style={s.body}>Vanskelighetsgrad: {f.grade ?? 'Ikke registrert'}{f.partialGrade ? ' · delvis gradert' : ''}</Text>}
-    {f.grade && <Text style={s.small}>SAC-grad fra OpenStreetMap, høyeste registrerte grad blant delene. Dette er ikke norsk fargegradering.</Text>}
-    <Text style={s.small}>{f.saved ? 'Lengde og høyde gjelder ditt lagrede spor, i retningen det ble gått.' : target.item.kind === 'street' ? 'Lengden gjelder kartlagte deler av gaten.' : 'Lengden er summen av tilgjengelige stideler, ikke nødvendigvis en sammenhengende tur fra start til mål.'}{f.hasGaps ? ' Sporet har GPS-hull; lengde og høyde kan være ufullstendige.' : ''}</Text>
+    {target.item.kind !== 'street' && <ReadingText style={s.body}>Vanskelighetsgrad: {f.grade ?? 'Ikke registrert'}{f.partialGrade ? ' · delvis gradert' : ''}</ReadingText>}
+    {f.grade && <ReadingText style={s.small}>SAC-grad fra OpenStreetMap, høyeste registrerte grad blant delene. Dette er ikke norsk fargegradering.</ReadingText>}
+    <ReadingText style={s.small}>{f.saved ? 'Lengde og høyde gjelder ditt lagrede spor, i retningen det ble gått.' : target.item.kind === 'street' ? 'Lengden gjelder kartlagte deler av gaten.' : 'Lengden er summen av tilgjengelige stideler, ikke nødvendigvis en sammenhengende tur fra start til mål.'}{f.hasGaps ? ' Sporet har GPS-hull; lengde og høyde kan være ufullstendige.' : ''}</ReadingText>
   </View>;
 }

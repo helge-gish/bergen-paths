@@ -1,7 +1,23 @@
 import type { Feature, FeatureCollection } from 'geojson';
 import type { Discovery } from './discoveries';
 import type { Coordinate } from './types';
-import { project } from './geo';
+import { distance, project } from './geo';
+
+const validCoordinate = (p: Coordinate) => Number.isFinite(p.latitude) && Math.abs(p.latitude) <= 90 && Number.isFinite(p.longitude) && Math.abs(p.longitude) <= 180;
+/** Nearest mapped part, without joining separate paths or skipping bad vertices. */
+export function distanceToMapItem(position: Coordinate | null | undefined, item: Discovery): number | null {
+  if (!position || !validCoordinate(position)) return null;
+  let nearest = Infinity;
+  const paths = item.streetPaths ?? [item.geometry];
+  for (const path of paths) for (let i = 0; i < path.length; i++) {
+    if (!validCoordinate(path[i])) continue;
+    nearest = Math.min(nearest, distance(position, path[i]));
+    if (i && validCoordinate(path[i - 1])) nearest = Math.min(nearest, project(position, path[i - 1], path[i]).distance);
+  }
+  // POIs have a location; an unmapped line's centre is not its nearest point.
+  if (nearest === Infinity && !['street', 'trail', 'steps'].includes(item.kind) && validCoordinate(item)) nearest = distance(position, item);
+  return Number.isFinite(nearest) ? nearest : null;
+}
 
 // Track colours describe recorded movement, never collection/achievement state.
 export const mapInk = { track: '#1565E8', history: '#79539C', path: '#80532F', footway: '#80532F', selected: '#BF644A' };
