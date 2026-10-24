@@ -80,3 +80,9 @@ Neste kodeleveranse prioriterer en liten, sammenhengende og morsom ULTIMA X-del 
 Brukerens senere avklaring 24. oktober: [Meyermarken battle royale](meyermarken-battle-royale.md) blir spill nummer to som skal utfordre SDK-et. Eksisterende Herebound-figur, egenskaper, hjelpere og relevant eid utstyr skal brukes i spillet. Ingen automatisk nullstilling til identiske startfigurer.
 
 Etter den første ULTIMA X-feltprøven kommer en liten serverstyrt flerspillerprøve før vi stabiliserer det brede MCP-/forfatterlaget. Dette endrer den tidligere rekkefølgen mellom trinn 6 og 7: battle royale trenger autoritative økter, kister, forbruk, kampstatus og resultat før den kan testes som et faktisk flerspillerspill. Den nye spillpakken skal ikke innføre en separat figur eller inventarmodell.
+
+## Leveransestatus 0.2.0
+
+Vertens `FieldMap`, `FieldScene` og `FieldCamera` bruker generiske spillpakker. Isolert native-modul ligger i `apps/herebound/modules/herebound-ar`; kun registry importerer ULTIMA X. SDK-et eier feltvalidering, avdekking, handlinger og atomiske kostnader/belønninger. Vertens sesjon leverer fersk fysisk GPS og et kortvarig AR-møte; de gjenopprettes aldri som tillitsbevis fra lagring.
+
+`Character.credits` er felles myntbalanse; eldre `gold` migreres. `GamePack.currency` gir lokalt navn og fast heltallskurs, mens priser og transaksjoner lagres i felles enhet. Spill lager ikke parallelle pengebøker. `fieldGames` skiller fysisk utforsking fra simulatorjournalen; inventar og figur er bevisst felles lokal testdata. Serverautoritet er et senere trinn.

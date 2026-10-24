@@ -50,3 +50,5 @@ __pycache__/
 # Standalone Herebound native build output
 /apps/herebound/android/
 /apps/herebound/ios/
+/apps/herebound/modules/*/android/build/
+/apps/herebound/modules/*/android/.cxx/

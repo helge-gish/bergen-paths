@@ -1,5 +1,6 @@
-import type { Account, Action, Command, Encounter, GamePack, GameRegistry, Item, Point, Snapshot } from './types';
-import { canEnter } from './presence';
+import type { Account, Action, Command, Encounter, GamePack, GameRegistry, Item, Point, PositionFix, Snapshot } from './types';
+import { canEnter, freshPosition } from './presence';
+import { progressFor, revealAt } from './exploration';
 import { validPoint, metersBetween } from './geo';
 export { validPoint, metersBetween } from './geo';
 
@@ -12,6 +13,7 @@ export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item
       !validPoint(pack.start?.position) || !pack.start.name?.trim() || !(pack.start.radiusMeters > 0 && pack.start.radiusMeters <= 200) ||
       metersBetween(pack.start.position, pack.area.center) + pack.start.radiusMeters > pack.area.radiusMeters ||
       typeof pack.simulationOnly !== 'boolean' || !Array.isArray(pack.items) || !Array.isArray(pack.encounters)) throw new Error('Spillpakken støtter ikke denne Herebound-versjonen.');
+  if (pack.currency && (!pack.currency.name?.trim() || !Number.isSafeInteger(pack.currency.unitsPerCredit) || pack.currency.unitsPerCredit < 1 || pack.currency.unitsPerCredit > 1000)) throw new Error('Ugyldig valutaomregning.');
   const helperIds = new Set<string>();
   for (const helper of pack.helpers) {
     if (!id(helper.id) || !helper.id.startsWith(pack.id + ':') || helperIds.has(helper.id) || !helper.name?.trim() || !count(helper.carryGrams)) throw new Error('Ugyldig hjelper.');
@@ -31,6 +33,13 @@ export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item
     if (!id(e.id) || encounterIds.has(e.id) || !validPoint(e.position) || !e.name.trim() || !(e.radiusMeters > 0 && e.radiusMeters <= 200) ||
       metersBetween(e.position, pack.area.center) + e.radiusMeters > pack.area.radiusMeters) throw new Error('Møtestedet er utenfor spillområdet eller ugyldig.');
     encounterIds.add(e.id);
+    if (e.interaction) {
+      const r = e.interaction;
+      if (!id(r.id) || !r.label?.trim() || !id(r.clue?.id) || !r.clue.title?.trim() || !r.clue.text?.trim() || !count(r.xp) || r.xp > 100 || (r.requires && !clueIds.has(r.requires))) throw new Error('Ugyldig møtehandling.');
+      const costs = new Set<string>();
+      for (const c of r.costs) { if (!itemIds.has(c.itemId) || costs.has(c.itemId) || !Number.isInteger(c.amount) || c.amount < 1 || c.amount > 99) throw new Error('Ugyldig kostnad.'); costs.add(c.itemId); }
+      if (r.reward && (!itemIds.has(r.reward.itemId) || !Number.isInteger(r.reward.amount) || r.reward.amount < 1 || r.reward.amount > 99)) throw new Error('Ugyldig belønning.');
+    }
     if (e.recruit && (!helperIds.has(e.recruit.helperId) || (e.recruit.requires && !clueIds.has(e.recruit.requires)))) throw new Error('Ugyldig rekruttering.');
     const topics = new Set<string>(), stock = new Set<string>();
     for (const t of e.topics) {
@@ -65,14 +74,14 @@ export function newAccount(name: string): Account {
   const clean = name.trim();
   if (!clean || clean.length > 30) throw new Error('Bruk et navn på 1–30 tegn.');
   return { schemaVersion: 1, namespace: 'local-test', revision: 0, currentGame: null,
-    character: { name: clean, level: 1, xp: 0, gold: 20, attributes: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }, inventory: {}, helpers: {} },
+    character: { name: clean, level: 1, xp: 0, credits: 20, attributes: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }, inventory: {}, helpers: {} },
     items: {}, inventoryEvents: [], games: {}, receipts: {} };
 }
 export const stockKey = (encounterId: string, itemId: string) => `${encounterId}/${itemId}`;
 export function nearby(pack: GamePack, position: Point, e: Encounter) {
   return validPoint(position) && metersBetween(position, pack.area.center) <= pack.area.radiusMeters && metersBetween(position, e.position) <= e.radiusMeters;
 }
-export function applyCommand(account: Account, registry: GameRegistry, command: Command, now = Date.now()): Snapshot {
+export function applyCommand(account: Account, registry: GameRegistry, command: Command, now = Date.now(), physicalFix: PositionFix | null = null, arEncounter: string | null = null): Snapshot {
   if (!id(command.id)) throw new Error('Ugyldig handling.');
   const fingerprint = JSON.stringify(command.action), receipt = account.receipts[command.id];
   if (receipt) {
@@ -83,33 +92,58 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
   // JSON keeps state serializable on web and Hermes; structuredClone is not
   // assumed to exist in the phone runtime.
   const next: Account = JSON.parse(JSON.stringify(account));
+  for (const item of registry.items.values()) if (!next.items[item.id]) next.items[item.id] = { ...item };
   const a: Action = command.action;
   let message = '';
   if (a.type === 'leave') { next.currentGame = null; message = 'Fremgangen er bevart.'; }
   else if (a.type === 'enter') {
     const pack = registry.get(a.gameId);
     if (!pack) throw new Error('Spillet er ikke installert.');
-    if (!pack.simulationOnly) throw new Error('Denne utgaven kjører bare lokale prøvespill.');
+    const mode = a.mode ?? 'simulation';
+    if (!['simulation', 'field'].includes(mode)) throw new Error('Ukjent spillmodus.');
+    const enteringField = mode === 'field';
+    if (enteringField && pack.simulationOnly) throw new Error('Spillet er ikke åpnet for feltprøve.');
+    const fix = enteringField ? physicalFix : a.fix;
+    if (!fix || (enteringField && fix.accuracy > 30) || fix.source !== (enteringField ? 'gps' : 'simulation')) throw new Error('Venter på riktig posisjonskilde.');
+    const states = enteringField ? (next.fieldGames ??= {}) : next.games;
+    if (!canEnter(pack, fix, now, !!states[pack.id])) throw new Error(states[pack.id] ? 'Kom tilbake til spillområdet med fersk GPS.' : `Gå til ${pack.start.name} med brukbar GPS for å begynne.`);
     for (const item of registry.items.values()) if (!next.items[item.id]) next.items[item.id] = { ...item };
-    if (a.fix.source !== 'simulation') throw new Error('Møtestedene er foreløpig bare åpne i simulatoren.');
-    if (!canEnter(pack, a.fix, now, !!next.games[pack.id])) throw new Error(next.games[pack.id] ? 'Du må være innenfor spillområdet.' : `Gå til ${pack.start.name} for å begynne.`);
-    if (!next.games[pack.id]) next.games[pack.id] = { packVersion: pack.version, position: { latitude: a.fix.latitude, longitude: a.fix.longitude }, discovered: [], journal: [], visits: 0,
+    if (!states[pack.id]) states[pack.id] = { packVersion: pack.version, position: { latitude: fix.latitude, longitude: fix.longitude }, discovered: [], journal: [], visits: 0,
       stock: Object.fromEntries(pack.encounters.flatMap(e => (e.shop ?? []).map(s => [stockKey(e.id, s.itemId), s.quantity]))) };
-    if (next.games[pack.id].packVersion !== pack.version) throw new Error('Dette spillet trenger en oppdatering av lagringen. Fremgangen er bevart.');
-    next.games[pack.id].visits++;
+    if (states[pack.id].packVersion !== pack.version) throw new Error('Dette spillet trenger en oppdatering av lagringen. Fremgangen er bevart.');
+    states[pack.id].visits++;
+    states[pack.id].position = { latitude: fix.latitude, longitude: fix.longitude };
+    states[pack.id].revealed = revealAt(pack, states[pack.id], fix);
+    states[pack.id].lastObservedAt = fix.timestamp;
+    next.activeMode = mode;
     next.currentGame = pack.id;
     message = `Velkommen til ${pack.title}.`;
   } else {
     const pack = next.currentGame && registry.get(next.currentGame);
     if (!pack) throw new Error('Velg et spill først.');
-    const progress = next.games[pack.id];
+    const progress = progressFor(next)!;
+    const field = next.activeMode === 'field';
+    if (field) {
+      if (!freshPosition(physicalFix, now) || physicalFix.source !== 'gps' || physicalFix.accuracy > 30) throw new Error('Venter på fersk GPS med bedre enn 30 m nøyaktighet.');
+      if (metersBetween(physicalFix, pack.area.center) + physicalFix.accuracy > pack.area.radiusMeters) throw new Error('Du er utenfor spillområdet. Fremgangen er bevart.');
+      progress.position = { latitude: physicalFix.latitude, longitude: physicalFix.longitude };
+    }
     if (progress.packVersion !== pack.version) throw new Error('Spillversjonen er endret.');
-    if (a.type === 'travel') {
-      if (!pack.simulationOnly || !validPoint(a.position) || metersBetween(pack.area.center, a.position) > pack.area.radiusMeters) throw new Error('Velg et sted innenfor spillområdet.');
-      progress.position = { ...a.position }; message = 'Flyttet i simulatoren.';
+    if (a.type === 'observe') {
+      if (!field || !physicalFix) throw new Error('Observasjon krever fysisk posisjon.');
+      if (physicalFix.timestamp <= (progress.lastObservedAt ?? 0)) return { account, message: '' };
+      const old = progressFor(account)!;
+      const seconds = (physicalFix.timestamp - (old.lastObservedAt ?? physicalFix.timestamp)) / 1000;
+      if (seconds > 0 && seconds < 30 && metersBetween(old.position, physicalFix) / seconds > 8) throw new Error('GPS hoppet. Venter på en stabil posisjon.');
+      progress.revealed = revealAt(pack, progress, physicalFix);
+      progress.lastObservedAt = physicalFix.timestamp;
+    } else if (a.type === 'travel') {
+      if (field || !validPoint(a.position) || metersBetween(pack.area.center, a.position) > pack.area.radiusMeters) throw new Error('Velg et sted innenfor spillområdet.');
+      progress.position = { ...a.position }; progress.revealed = revealAt(pack, progress, a.position); message = 'Flyttet i simulatoren.';
     } else {
       const encounter = pack.encounters.find(e => e.id === a.encounterId);
-      if (!encounter || !nearby(pack, progress.position, encounter)) throw new Error('Du må være ved møtestedet.');
+      if (!encounter || !nearby(pack, progress.position, encounter) || (field && metersBetween(progress.position, encounter.position) + physicalFix!.accuracy > encounter.radiusMeters)) throw new Error('Du må være ved møtestedet.');
+      if (field && arEncounter !== encounter.id) throw new Error('Åpne dette møtet i AR før du samhandler.');
       if (a.type === 'discover') {
         if (!progress.discovered.includes(encounter.id)) {
           progress.discovered.push(encounter.id);
@@ -118,7 +152,20 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
         message = encounter.greeting;
       } else {
         if (!progress.discovered.includes(encounter.id)) throw new Error('Undersøk stedet først.');
-        if (a.type === 'recruit') {
+        if (a.type === 'interact') {
+          const interaction = encounter.interaction;
+          if (!interaction || (interaction.requires && !progress.journal.some(j => j.id === interaction.requires))) throw new Error('Du trenger et spor til før du kan gjøre dette.');
+          if (progress.journal.some(j => j.id === interaction.clue.id)) return { account, message: 'Du har allerede gjort dette.' };
+          for (const cost of interaction.costs) if ((next.character.inventory[cost.itemId] ?? 0) < cost.amount) throw new Error(`Du trenger ${cost.amount} ${next.items[cost.itemId]?.name ?? cost.itemId}.`);
+          for (const cost of interaction.costs) { next.character.inventory[cost.itemId] -= cost.amount; next.inventoryEvents.push({ commandId: command.id, gameId: pack.id, itemId: cost.itemId, delta: -cost.amount }); }
+          if (interaction.reward) {
+            const reward = interaction.reward;
+            if (inventoryWeight(next) + next.items[reward.itemId].weightGrams * reward.amount > carryCapacity(next)) throw new Error('Sekken har ikke plass til belønningen ennå.');
+            next.character.inventory[reward.itemId] = (next.character.inventory[reward.itemId] ?? 0) + reward.amount;
+            next.inventoryEvents.push({ commandId: command.id, gameId: pack.id, itemId: reward.itemId, delta: reward.amount });
+          }
+          progress.journal.push({ ...interaction.clue }); next.character.xp += interaction.xp; message = interaction.clue.text;
+        } else if (a.type === 'recruit') {
           const offer = encounter.recruit, helper = pack.helpers.find(h => h.id === offer?.helperId);
           if (!helper || !offer || (offer.requires && !progress.journal.some(j => j.id === offer.requires))) throw new Error('Hjelperen er ikke klar til å slå følge ennå.');
           if (!next.character.helpers[helper.id]) next.character.helpers[helper.id] = { ...helper };
@@ -138,17 +185,17 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
           if (a.direction === 'buy') {
             if (inventoryWeight(next) + item.weightGrams * a.quantity > carryCapacity(next)) throw new Error('Sekken blir for tung. Selg noe før du kjøper mer.');
             if (progress.stock[key] < a.quantity) throw new Error('Butikken har ikke nok på lager.');
-            if (next.character.gold < price) throw new Error('Du har ikke nok gull.');
-            progress.stock[key] -= a.quantity; next.character.gold -= price; next.character.inventory[item.id] = owned + a.quantity;
-            message = `Kjøpt ${a.quantity} ${item.name.toLocaleLowerCase('nb-NO')} for ${price} gull.`;
+            if (next.character.credits < price) throw new Error('Du har ikke nok på Herebound-saldoen.');
+            progress.stock[key] -= a.quantity; next.character.credits -= price; next.character.inventory[item.id] = owned + a.quantity;
+            message = `Kjøpt ${a.quantity} ${item.name.toLocaleLowerCase('nb-NO')} for ${price * (pack.currency?.unitsPerCredit ?? 1)} ${pack.currency?.name ?? 'mynt'}.`;
           } else {
             if (owned < a.quantity) throw new Error('Du har ikke nok av denne varen.');
             if (!offer.sell) throw new Error('Denne varen kjøpes ikke tilbake.');
-            next.character.inventory[item.id] = owned - a.quantity; next.character.gold += price; progress.stock[key] += a.quantity;
-            message = `Solgt ${a.quantity} ${item.name.toLocaleLowerCase('nb-NO')} for ${price} gull.`;
+            next.character.inventory[item.id] = owned - a.quantity; next.character.credits += price; progress.stock[key] += a.quantity;
+            message = `Solgt ${a.quantity} ${item.name.toLocaleLowerCase('nb-NO')} for ${price * (pack.currency?.unitsPerCredit ?? 1)} ${pack.currency?.name ?? 'mynt'}.`;
           }
           next.inventoryEvents.push({ commandId: command.id, gameId: pack.id, itemId: item.id, delta: a.direction === 'buy' ? a.quantity : -a.quantity });
-          if (![next.character.gold, next.character.inventory[item.id], progress.stock[key]].every(count)) throw new Error('Handelen overskrider prøveversjonens grenser.');
+          if (![next.character.credits, next.character.inventory[item.id], progress.stock[key]].every(count)) throw new Error('Handelen overskrider prøveversjonens grenser.');
         } else throw new Error('Ukjent handling.');
       }
     }
@@ -167,14 +214,22 @@ export function decodeAccount(raw: string): Account {
     if (!Object.entries(a.items).every(([key, item]) => id(key) && item && item.id === key && typeof item.name === 'string' && typeof item.description === 'string' && count(item.weightGrams) && ['ingredient', 'equipment', 'potion'].includes(item.kind))) throw 0;
     if (!Array.isArray(a.inventoryEvents) || !a.inventoryEvents.every(e => e && id(e.commandId) && id(e.gameId) && id(e.itemId) && !!a.items[e.itemId] && Number.isSafeInteger(e.delta) && e.delta !== 0 && Math.abs(e.delta) <= 99)) throw 0;
     const c = a.character;
-    if (typeof c.name !== 'string' || !c.name.trim() || c.name.length > 30 || ![c.level, c.xp, c.gold].every(count) || c.level < 1 || !record(c.attributes) || !record(c.inventory) || !record(c.helpers)) throw 0;
+    // 0.1.x called the shared balance gold. Preserve its value during migration.
+    const legacy = c as typeof c & { gold?: number };
+    if (c.credits === undefined && count(legacy.gold)) c.credits = legacy.gold;
+    delete legacy.gold;
+    if (typeof c.name !== 'string' || !c.name.trim() || c.name.length > 30 || ![c.level, c.xp, c.credits].every(count) || c.level < 1 || !record(c.attributes) || !record(c.inventory) || !record(c.helpers)) throw 0;
     if (!['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].every(k => count(c.attributes[k as keyof typeof c.attributes]))) throw 0;
     if (!Object.entries(c.helpers).every(([key, h]) => id(key) && h && h.id === key && typeof h.name === 'string' && typeof h.description === 'string' && count(h.carryGrams))) throw 0;
     if (!Object.entries(c.inventory).every(([key, n]) => id(key) && count(n) && !!a.items[key])) throw 0;
-    for (const [key, p] of Object.entries(a.games)) {
+    if (a.activeMode !== undefined && !['simulation', 'field'].includes(a.activeMode)) throw 0;
+    if (a.fieldGames !== undefined && !record(a.fieldGames)) throw 0;
+    for (const [key, p] of [...Object.entries(a.games), ...Object.entries(a.fieldGames ?? {})]) {
+      if (p.revealed && (!record(p.revealed) || !Object.entries(p.revealed).every(([cell, value]) => /^-?\d{1,4},-?\d{1,4}$/.test(cell) && value === true))) throw 0;
+      if (p.lastObservedAt !== undefined && (!Number.isFinite(p.lastObservedAt) || p.lastObservedAt < 0)) throw 0;
       if (!id(key) || !record(p) || !validPoint(p.position) || !count(p.packVersion) || !count(p.visits) || !Array.isArray(p.discovered) || !p.discovered.every(id) || !Array.isArray(p.journal) || !p.journal.every(j => j && id(j.id) && typeof j.title === 'string' && typeof j.text === 'string') || !record(p.stock) || !Object.values(p.stock).every(count)) throw 0;
     }
-    if (a.currentGame !== null && (!id(a.currentGame) || !Object.hasOwn(a.games, a.currentGame))) throw 0;
+    if (a.currentGame !== null && (!id(a.currentGame) || !Object.hasOwn(a.activeMode === 'field' ? a.fieldGames ?? {} : a.games, a.currentGame))) throw 0;
     if (!Object.entries(a.receipts).every(([key, r]) => id(key) && record(r) && typeof r.fingerprint === 'string' && typeof r.message === 'string')) throw 0;
     return a;
   } catch { throw new Error('Lagringen kan ikke åpnes av denne versjonen. Den er bevart. Eksporter den før du gjør endringer.'); }

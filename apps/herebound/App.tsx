@@ -5,11 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Session, carryCapacity, inventoryWeight, freshPosition, gamesNearby, metersBetween, nearby, stockKey } from '../../packages/herebound-sdk';
+import { Session, carryCapacity, inventoryWeight, canEnter, progressFor, isRevealed, freshPosition, gamesNearby, metersBetween, nearby, stockKey } from '../../packages/herebound-sdk';
 import type { Account, Action, Encounter, GamePack, GameRegistry, Persistence, PositionFix } from '../../packages/herebound-sdk';
 import { registry } from './registry';
 import { persistence } from './storage';
 import { PortalArt, WorldMap } from './Map';
+import { FieldScene } from './FieldScene';
+import { FieldMap } from './FieldMap';
 
 const distance = (m: number) => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`;
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Noe gikk galt. Prøv igjen.';
@@ -26,20 +28,27 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState(''), [message, setMessage] = useState(''), [name, setName] = useState('');
+  const [arEncounter, setArEncounter] = useState<string | null>(null), [arRequested, setArRequested] = useState<string | null>(null);
   const [tab, setTab] = useState<'world' | 'journal' | 'character'>('world');
   const [selected, setSelected] = useState<string | null>(null), [preview, setPreview] = useState<string | null>(null);
   const [fix, setFix] = useState<PositionFix | null>(null), [locating, setLocating] = useState(false), [locationMessage, setLocationMessage] = useState('');
+  const [watching, setWatching] = useState(false), [foreground, setForeground] = useState(AppState.currentState !== 'background');
   const [now, setNow] = useState(Date.now());
+  const arExpires = useRef(0), lastGps = useRef(0);
   const inFlight = useRef(false), commandNo = useRef(0), locationAttempt = useRef(0);
   const pack = account?.currentGame ? games.get(account.currentGame) : undefined;
-  const progress = pack && account?.games[pack.id];
+  const progress = account ? progressFor(account) : undefined;
+  const field = account?.activeMode === 'field' && !!pack;
   const encounter = pack?.encounters.find(e => e.id === selected);
   const previewPack = preview ? games.get(preview) : undefined;
   const visible = gamesNearby(games, fix, now);
-  const simulation = fix?.source === 'simulation' || !!pack;
+  const simulation = !field && (fix?.source === 'simulation' || !!pack);
+  const live = foreground && freshPosition(fix, now) && fix.source === 'gps' && fix.accuracy <= 30;
+  const present = (e: Encounter) => !!pack && !!progress && (field ? live && metersBetween(fix!, e.position) + fix!.accuracy <= e.radiusMeters : nearby(pack, progress.position, e));
+  const money = (amount: number) => `${amount * (pack?.currency?.unitsPerCredit ?? 1)} ${pack?.currency?.name ?? 'mynt'}`;
 
   useEffect(() => { let alive = true;
-    session.load().then(value => { if (alive) { setAccount(value); setLoadFailed(false); } }).catch(e => { if (alive) { setError(errorText(e)); setLoadFailed(true); } }).finally(() => { if (alive) setLoading(false); });
+    session.load().then(value => { if (alive) { setAccount(value); setWatching(value?.activeMode === 'field' && !!value.currentGame); setLoadFailed(false); } }).catch(e => { if (alive) { setError(errorText(e)); setLoadFailed(true); } }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; locationAttempt.current++; };
   }, [session]);
   useEffect(() => {
@@ -48,12 +57,37 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
     const refreshClock = () => {
       const timestamp = Date.now();
       setNow(timestamp);
+      if (arExpires.current && timestamp > arExpires.current) { setArEncounter(null); session.closeArEncounter(); arExpires.current=0; }
       setFix(current => current?.source === 'simulation' ? { ...current, timestamp } : current);
     };
     const timer = setInterval(refreshClock, 5000);
-    const sub = AppState.addEventListener('change', state => { if (state === 'active') refreshClock(); });
+    const sub = AppState.addEventListener('change', state => { setForeground(state === 'active'); if (state !== 'active') { session.setPosition(null); session.closeArEncounter(); setArEncounter(null); } if (state === 'active') refreshClock(); });
     return () => { clearInterval(timer); sub.remove(); };
   }, []);
+  function acceptGps(next: PositionFix) { if(next.timestamp < lastGps.current)return; lastGps.current=next.timestamp; session.setPosition(next); setFix(next); setNow(Date.now()); }
+  useEffect(() => {
+    if (!watching || !foreground) { session.setPosition(null); return; }
+    let cancelled = false; let subscription: Location.LocationSubscription | undefined;
+    void (async () => {
+      const permission = await Location.getForegroundPermissionsAsync();
+      if (cancelled) return;
+      if (!permission.granted) { setLocationMessage('Tillat posisjon for å spille ute.'); return; }
+      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 4 }, result => {
+        if (cancelled) return;
+        acceptGps({ latitude: result.coords.latitude, longitude: result.coords.longitude, accuracy: result.coords.accuracy ?? Infinity, timestamp: result.timestamp, source: 'gps' });
+      }, reason => { if (!cancelled) setLocationMessage(`GPS: ${reason}`); });
+      if (cancelled) sub.remove(); else subscription = sub;
+    })().catch(e => { if (!cancelled) setLocationMessage(errorText(e)); });
+    return () => { cancelled = true; subscription?.remove(); session.setPosition(null); };
+  }, [watching, foreground, session]);
+  useEffect(() => {
+    if (!field || !account || !live || !fix || fix.timestamp <= (progress?.lastObservedAt ?? 0) || inFlight.current) return;
+    inFlight.current = true;
+    void session.dispatch({ id: `observe-${Date.now()}-${++commandNo.current}`, expectedRevision: account.revision, action: { type: 'observe' } })
+      .then(result => { setAccount(result.account); setLocationMessage(''); })
+      .catch(e => setLocationMessage(errorText(e)))
+      .finally(() => { inFlight.current = false; });
+  }, [fix, account?.revision, field, live]);
   async function run(work: () => Promise<void>) {
     if (inFlight.current) return;
     inFlight.current = true; setBusy(true); setError('');
@@ -79,6 +113,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
   async function startSimulation(game: GamePack) {
     if (inFlight.current) return;
     const timestamp = Date.now();
+    setWatching(false); session.setPosition(null);
     const position = account?.games[game.id]?.position ?? game.start.position;
     const startFix: PositionFix = { ...position, timestamp, accuracy: 0, source: 'simulation' };
     // Simulator entry is independent of a pending or rejected GPS request.
@@ -100,7 +135,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       ]).finally(() => clearTimeout(timer));
       if (attempt !== locationAttempt.current) return;
       const next: PositionFix = { latitude: result.coords.latitude, longitude: result.coords.longitude, accuracy: result.coords.accuracy ?? Infinity, timestamp: result.timestamp, source: 'gps' };
-      setFix(next); setNow(Date.now());
+      acceptGps(next); setWatching(true);
       if (!freshPosition(next, Date.now())) setLocationMessage('Posisjonen er for usikker. Prøv igjen når GPS har bedre dekning.');
     } catch (e) { if (attempt === locationAttempt.current) setLocationMessage(errorText(e)); }
     finally { if (attempt === locationAttempt.current) setLocating(false); }
@@ -120,8 +155,9 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       setMessage('Lagringen er klar for eksport.');
     });
   }
-  const choose = (e: Encounter) => { setSelected(e.id); setMessage(''); };
-  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.1.1 · PRØVE</Text></View>;
+  const choose = (e: Encounter) => { session.closeArEncounter(); setArEncounter(null); setArRequested(null); setSelected(e.id); setMessage(''); };
+  const chooseAr = (e: Encounter) => { session.openArEncounter(e.id); arExpires.current=Date.now()+5*60_000; setArEncounter(e.id); setArRequested(null); setSelected(e.id); setMessage(''); };
+  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.2.0 · FELTTEST</Text></View>;
   const tabs = account && <View style={s.tabs}>{([{ id: 'world', title: pack ? 'Verden' : 'Spill' }, { id: 'journal', title: 'Journal' }, { id: 'character', title: 'Figur & sekk' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); setSelected(null); setMessage(''); }} style={[s.tab, tab === t.id && s.tabActive]}><Text style={[s.tabText, tab === t.id && s.tabTextActive]}>{t.title}</Text></Pressable>)}</View>;
 
   let body: React.ReactNode;
@@ -134,39 +170,42 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       <Text style={s.small}>Figuren lagres på denne enheten. Dette er en lokal spillprøve; ingen konto kreves.</Text></View>
   </>;
   else if (tab === 'character') body = <>
-    <View style={s.hero}><View style={s.heroWords}><Eyebrow>DIN HEREBOUND-FIGUR</Eyebrow><Text style={s.heroTitle}>{account.character.name}</Text><Text style={s.heroCopy}>Nivå {account.character.level} · {account.character.xp} erfaring · {account.character.gold} gull</Text></View></View>
+    <View style={s.hero}><View style={s.heroWords}><Eyebrow>DIN HEREBOUND-FIGUR</Eyebrow><Text style={s.heroTitle}>{account.character.name}</Text><Text style={s.heroCopy}>Nivå {account.character.level} · {account.character.xp} erfaring · {account.character.credits} Herebound-mynt</Text></View></View>
     <View style={s.card}><Text style={s.title}>Sekken din</Text><Text style={s.gold}>{(inventoryWeight(account) / 1000).toFixed(1).replace('.', ',')} / {carryCapacity(account) / 1000} kg</Text><Text style={s.body}>Følger deg mellom spill. Hvert spill bestemmer hva tingene kan brukes til.</Text>
       {Object.entries(account.character.inventory).filter(([, count]) => count > 0).length === 0 && <Text style={s.empty}>Sekken er tom. Finn en handelsmann i verdenen.</Text>}
       {Object.entries(account.character.inventory).filter(([, count]) => count > 0).map(([id, count]) => <View key={id} style={s.item}><Text style={s.itemTitle}>{account.items[id]?.name ?? id} <Text style={s.count}>× {count}</Text></Text><Text style={s.small}>{account.items[id]?.description}</Text></View>)}
     </View>
     <View style={s.card}><Text style={s.title}>Reisefølget ditt</Text>{Object.keys(account.character.helpers).length === 0 ? <Text style={s.body}>Ingen hjelpere ennå. Kanskje noen du møter vil slå følge?</Text> : Object.values(account.character.helpers).map(h => <View key={h.id} style={s.item}><Text style={s.itemTitle}>{h.name} · +{h.carryGrams / 1000} kg</Text><Text style={s.body}>{h.description}</Text><Text style={s.small}>Følger deg mellom spill og steder.</Text></View>)}</View>
-    <View style={s.card}><Eyebrow>EGENSKAPER</Eyebrow><View style={s.stats}>{Object.entries(account.character.attributes).map(([key, value], i) => <View key={key} style={s.stat}><Text style={s.statValue}>{value}</Text><Text style={s.small}>{['Styrke', 'Smidighet', 'Utholdenhet', 'Intelligens', 'Visdom', 'Karisma'][i]}</Text></View>)}</View><Text style={s.small}>Første prøve tester utforsking og handel. Nivåstigning, magi og kamp kommer i neste del.</Text></View>
+    <View style={s.card}><Eyebrow>EGENSKAPER</Eyebrow><View style={s.stats}>{Object.entries(account.character.attributes).map(([key, value], i) => <View key={key} style={s.stat}><Text style={s.statValue}>{value}</Text><Text style={s.small}>{['Styrke', 'Smidighet', 'Utholdenhet', 'Intelligens', 'Visdom', 'Karisma'][i]}</Text></View>)}</View><Text style={s.small}>Prøvefiguren følger deg mellom spill. Kamp og nivåstigning kommer senere.</Text></View>
     <Button title="Eksporter figuren" secondary disabled={busy} onPress={() => void exportSave()}/>
   </>;
   else if (tab === 'journal') body = <><Eyebrow>DINE OPPDAGELSER</Eyebrow><Text style={s.pageTitle}>Journal</Text>
-    {Object.entries(account.games).every(([, p]) => p.journal.length === 0) && <View style={s.card}><Text style={s.body}>Foreløpig blanke sider. Spør dem du møter, og undersøk det du finner.</Text></View>}
-    {Object.entries(account.games).map(([gameId, p]) => p.journal.length ? <View key={gameId}><Text style={s.sectionTitle}>{games.get(gameId)?.title ?? gameId}</Text>{p.journal.map(j => <View key={j.id} style={s.card}><Text style={s.title}>{j.title}</Text><Text style={s.body}>{j.text}</Text></View>)}</View> : null)}
+    {Object.entries(account.activeMode === 'field' ? account.fieldGames ?? {} : account.games).every(([, p]) => p.journal.length === 0) && <View style={s.card}><Text style={s.body}>Foreløpig blanke sider. Spør dem du møter, og undersøk det du finner.</Text></View>}
+    {Object.entries(account.activeMode === 'field' ? account.fieldGames ?? {} : account.games).map(([gameId, p]) => p.journal.length ? <View key={gameId}><Text style={s.sectionTitle}>{games.get(gameId)?.title ?? gameId}</Text>{p.journal.map(j => <View key={j.id} style={s.card}><Text style={s.title}>{j.title}</Text><Text style={s.body}>{j.text}</Text></View>)}</View> : null)}
   </>;
   else if (pack && progress) body = <>
-    <View style={s.row}><Pressable accessibilityRole="button" onPress={() => void act({ type: 'leave' })} disabled={busy}><Text style={s.link}>← Spilloversikt</Text></Pressable><Text style={s.small}>{account.character.gold} gull · {account.character.xp} XP</Text></View>
-    <Eyebrow>{pack.title} · SIMULATOR</Eyebrow><Text style={s.pageTitle}>{pack.subtitle}</Text>
+    <View style={s.row}><Pressable accessibilityRole="button" onPress={() => void act({ type: 'leave' })} disabled={busy}><Text style={s.link}>← Spilloversikt</Text></Pressable><Text style={s.small}>{money(account.character.credits)} · {account.character.xp} XP</Text></View>
+    <Eyebrow>{pack.title} · {field ? 'UTE' : 'SIMULATOR'}</Eyebrow><Text style={s.pageTitle}>{pack.subtitle}</Text>
+    {field && <><Text style={s.small}>{locationMessage || (live ? `GPS ±${Math.round(fix!.accuracy)} m` : 'Venter på fersk GPS. Kjente steder er bevart.')}</Text>{!live && <Button title={locating ? 'Finner GPS …' : 'Oppdater GPS'} disabled={locating} secondary onPress={() => void locate()}/>}</>}
     {!encounter ? <>
-      <WorldMap pack={pack} position={progress.position} discovered={progress.discovered} onSelect={choose}/>
-      <Text style={s.small}>Prøveplasser, ikke befarte møtesteder. Velg fritt hvor du vil gå.</Text>
-      <Text style={s.sectionTitle}>Rykter i landskapet</Text>
-      {pack.encounters.map((e, i) => <Pressable key={e.id} accessibilityRole="button" onPress={() => choose(e)} style={({ pressed }) => [s.location, pressed && s.pressed]}><View style={s.number}><Text style={s.numberText}>{progress.discovered.includes(e.id) ? i + 1 : '?'}</Text></View><View style={s.flex}><Text style={s.itemTitle}>{progress.discovered.includes(e.id) ? e.name : e.rumor}</Text><Text style={s.small}>{distance(metersBetween(progress.position, e.position))} unna · {progress.discovered.includes(e.id) ? 'Oppdaget' : 'Uutforsket'}</Text></View><Text style={s.arrow}>›</Text></Pressable>)}
+      {field ? <FieldScene pack={pack} progress={progress} fix={fix?.source === 'gps' ? fix : null} now={now} onSelect={choose} onArSelect={chooseAr} initialTarget={arRequested}/> : <WorldMap pack={pack} position={progress.position} discovered={progress.discovered} onSelect={choose}/>}
+      <Text style={s.small}>{field ? 'Gå for å avdekke verdenen. Trykk på et funn for å se mer.' : 'Simulert posisjon. Velg fritt hvor du vil gå.'}</Text>
+      <Text style={s.sectionTitle}>{field ? 'Oppdaget på kartet' : 'Rykter i landskapet'}</Text>
+      {pack.encounters.filter(e => !field || progress.discovered.includes(e.id) || isRevealed(pack, progress, e.position)).map((e, i) => <Pressable key={e.id} accessibilityRole="button" onPress={() => choose(e)} style={({ pressed }) => [s.location, pressed && s.pressed]}><View style={s.number}><Text style={s.numberText}>{progress.discovered.includes(e.id) ? i + 1 : '?'}</Text></View><View style={s.flex}><Text style={s.itemTitle}>{progress.discovered.includes(e.id) ? e.name : e.mapLabel ?? e.rumor}</Text><Text style={s.small}>{distance(metersBetween(progress.position, e.position))} unna · {e.interaction && progress.journal.some(j=>j.id===e.interaction!.clue.id) ? 'Fullført' : progress.discovered.includes(e.id) ? 'Oppdaget' : 'Nytt funn'}</Text></View><Text style={s.arrow}>›</Text></Pressable>)}
     </> : <>
       <Pressable accessibilityRole="button" onPress={() => { setSelected(null); setMessage(''); }}><Text style={s.link}>← Tilbake til verdenen</Text></Pressable>
-      <View style={s.card}><Eyebrow>{distance(metersBetween(progress.position, encounter.position))} UNNA</Eyebrow><Text style={s.pageTitle}>{progress.discovered.includes(encounter.id) ? encounter.name : encounter.rumor}</Text>
-        {!nearby(pack, progress.position, encounter) ? <><Text style={s.body}>Kom nærmere for å undersøke stedet.</Text><Button title="Gå hit i simulatoren" disabled={busy} onPress={() => void act({ type: 'travel', position: encounter.position })}/></> : !progress.discovered.includes(encounter.id) ? <><Text style={s.body}>Du er fremme. Hva skjuler seg her?</Text><Button title="Undersøk stedet" disabled={busy} onPress={() => void act({ type: 'discover', encounterId: encounter.id })}/></> : <>
+      {field && arEncounter !== encounter.id && <Button title="Finn dette i AR" disabled={!present(encounter)} onPress={()=>{setArRequested(encounter.id);setSelected(null);setMessage('');}}/>}
+      <View style={s.card}><Eyebrow>{distance(metersBetween(field && fix ? fix : progress.position, encounter.position))} UNNA</Eyebrow><Text style={s.pageTitle}>{progress.discovered.includes(encounter.id) ? encounter.name : encounter.rumor}</Text>
+        {!present(encounter) ? <><Text style={s.body}>Kom nærmere for å undersøke stedet.</Text>{!field && <Button title="Gå hit i simulatoren" disabled={busy} onPress={() => void act({ type: 'travel', position: encounter.position })}/>}{field && progress.discovered.includes(encounter.id) && <><Text style={s.body}>{encounter.description}</Text><Text style={s.small}>Du kjenner dette stedet. Kom tilbake for å samhandle.</Text></>}</> : !progress.discovered.includes(encounter.id) ? <><Text style={s.body}>Du er fremme. Hva skjuler seg her?</Text><Button title="Undersøk stedet" disabled={busy || (field && arEncounter !== encounter.id)} onPress={() => void act({ type: 'discover', encounterId: encounter.id })}/></> : <>
           <Text style={s.body}>{encounter.description}</Text><View style={s.dialogue}><Text style={s.dialogueText}>{message || encounter.greeting}</Text></View>
-          {encounter.recruit && (!encounter.recruit.requires || progress.journal.some(j => j.id === encounter.recruit!.requires)) && <Button title={account.character.helpers[encounter.recruit.helperId] ? 'Med i reisefølget ditt' : 'Spør om å slå følge'} disabled={busy || !!account.character.helpers[encounter.recruit.helperId]} onPress={() => void act({ type: 'recruit', encounterId: encounter.id })}/>}
-          {encounter.topics.filter(t => !t.requires || progress.journal.some(j => j.id === t.requires)).map(t => <Button key={t.id} title={t.label} secondary disabled={busy} onPress={() => void act({ type: 'talk', encounterId: encounter.id, topicId: t.id })}/>)}
+          {encounter.interaction && <><Button title={progress.journal.some(j=>j.id===encounter.interaction!.clue.id) ? 'Fullført ✓' : encounter.interaction.label} disabled={busy || (field && arEncounter !== encounter.id) || progress.journal.some(j=>j.id===encounter.interaction!.clue.id) || (!!encounter.interaction.requires && !progress.journal.some(j=>j.id===encounter.interaction!.requires))} onPress={()=>void act({type:'interact', encounterId:encounter.id})}/>{encounter.interaction.requires && !progress.journal.some(j=>j.id===encounter.interaction!.requires) && <Text style={s.small}>Undersøk stedet for å lære hvordan.</Text>}</>}
+          {encounter.recruit && (!encounter.recruit.requires || progress.journal.some(j => j.id === encounter.recruit!.requires)) && <Button title={account.character.helpers[encounter.recruit.helperId] ? 'Med i reisefølget ditt' : 'Spør om å slå følge'} disabled={busy || (field && arEncounter !== encounter.id) || !!account.character.helpers[encounter.recruit.helperId]} onPress={() => void act({ type: 'recruit', encounterId: encounter.id })}/>}
+          {encounter.topics.filter(t => !t.requires || progress.journal.some(j => j.id === t.requires)).map(t => <Button key={t.id} title={t.label} secondary disabled={busy || (field && arEncounter !== encounter.id)} onPress={() => void act({ type: 'talk', encounterId: encounter.id, topicId: t.id })}/>)}
         </>}
       </View>
-      {nearby(pack, progress.position, encounter) && progress.discovered.includes(encounter.id) && encounter.shop && <View style={s.card}><View style={s.row}><Text style={s.title}>Handel</Text><Text style={s.gold}>{account.character.gold} gull</Text></View>
+      {present(encounter) && (!field || arEncounter === encounter.id) && progress.discovered.includes(encounter.id) && encounter.shop && <View style={s.card}><View style={s.row}><Text style={s.title}>Handel</Text><Text style={s.gold}>{money(account.character.credits)}</Text></View>
         {encounter.shop.map(offer => { const item = account.items[offer.itemId], owned = account.character.inventory[offer.itemId] ?? 0, stock = progress.stock[stockKey(encounter.id, offer.itemId)]; return <View key={offer.itemId} style={s.item}>
-          <Text style={s.itemTitle}>{item.name}</Text><Text style={s.small}>Du har {owned} · {stock} i boden · {item.weightGrams} g/stk.</Text><View style={s.tradeRow}><View style={s.flex}><Button title={`Kjøp · ${offer.buy} gull`} disabled={busy || stock < 1 || account.character.gold < offer.buy || inventoryWeight(account) + item.weightGrams > carryCapacity(account)} onPress={() => void act({ type: 'trade', encounterId: encounter.id, itemId: item.id, direction: 'buy', quantity: 1 })}/></View><View style={s.flex}><Button title={`Selg · ${offer.sell} gull`} secondary disabled={busy || owned < 1 || offer.sell < 1} onPress={() => void act({ type: 'trade', encounterId: encounter.id, itemId: item.id, direction: 'sell', quantity: 1 })}/></View></View>
+          <Text style={s.itemTitle}>{item.name}</Text><Text style={s.small}>Du har {owned} · {stock} i boden · {item.weightGrams} g/stk.</Text><View style={s.tradeRow}><View style={s.flex}><Button title={`Kjøp · ${money(offer.buy)}`} disabled={busy || stock < 1 || account.character.credits < offer.buy || inventoryWeight(account) + item.weightGrams > carryCapacity(account)} onPress={() => void act({ type: 'trade', encounterId: encounter.id, itemId: item.id, direction: 'buy', quantity: 1 })}/></View><View style={s.flex}><Button title={`Selg · ${money(offer.sell)}`} secondary disabled={busy || owned < 1 || offer.sell < 1} onPress={() => void act({ type: 'trade', encounterId: encounter.id, itemId: item.id, direction: 'sell', quantity: 1 })}/></View></View>
         </View>; })}
       </View>}
     </>}
@@ -179,24 +218,26 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       {fix && <Text style={s.body}>{distance(metersBetween(fix, previewPack.start.position))} til start · kom innen {previewPack.start.radiusMeters} m</Text>}
       <Text style={s.small}>{previewPack.start.position.latitude.toFixed(6)}, {previewPack.start.position.longitude.toFixed(6)}</Text>
       <Button title="Vis startpunkt på kart" secondary onPress={() => void Linking.openURL(`https://www.openstreetmap.org/?mlat=${previewPack.start.position.latitude}&mlon=${previewPack.start.position.longitude}#map=17/${previewPack.start.position.latitude}/${previewPack.start.position.longitude}`).catch(e => setError(errorText(e)))}/>
-      <Text style={s.body}>Denne utgaven spilles i simulatoren. Å gå til startstedet aktiverer ikke fysisk spilling ennå.</Text>
+      <View style={{height:300,borderRadius:16,overflow:'hidden'}}><FieldMap pack={previewPack} position={fix?.source==='gps' ? fix : null} navigation/></View>
+      {!previewPack.simulationOnly && <><Text style={s.body}>{live && canEnter(previewPack,fix,now,!!account.fieldGames?.[previewPack.id]) ? 'Du er fremme. Klar til å utforske!' : `Gå til ${previewPack.start.name}. Start åpnes når GPS bekrefter at du er i nærheten.`}</Text><Button title={account.fieldGames?.[previewPack.id] ? 'Fortsett ute' : 'Start ute'} disabled={busy || !live || !canEnter(previewPack,fix,now,!!account.fieldGames?.[previewPack.id])} onPress={()=>void act({type:'enter',gameId:previewPack.id,mode:'field',fix:fix!})}/>{!live && <Button title={locating?'Finner GPS …':'Oppdater GPS'} disabled={locating} secondary onPress={()=>void locate()}/>}</>}
+      <Text style={s.small}>Du kan også prøve historien hjemme med simulerte posisjoner.</Text>
       <Button title={account.games[previewPack.id] ? 'Fortsett prøve' : 'Start prøve'} disabled={busy} onPress={() => void startSimulation(previewPack)}/>
     </View>
   </>;
   else body = <>
     <Eyebrow>SPILL DER DU ER</Eyebrow><Text style={s.pageTitle}>En annen verden.{ '\n'}Rett i nærheten.</Text>
     <Text style={s.body}>Oppdag spill innen 5 km. Hvert eventyr har sitt eget startsted.</Text>
-    {[...games.values()].filter(game => game.simulationOnly).map(game => <View key={game.id} style={s.card}>
-      <Eyebrow>PRØV UTEN GPS</Eyebrow><Text style={s.title}>{game.title}</Text>
-      <Text style={s.body}>Prøvespill ved {game.start.name}. Du flytter deg med knapper i simulatoren.</Text>
-      <Button title={account.games[game.id] ? 'Fortsett prøve' : 'Start prøve'} disabled={busy} onPress={() => void startSimulation(game)}/>
-    </View>)}
     <View style={s.locationPanel}><View style={s.row}><Text style={s.itemTitle}>{simulation ? '◈ Simulert posisjon' : '◎ Posisjonen din'}</Text>{locating && <ActivityIndicator color="#254b3c"/>}</View>
       {locationMessage ? <Text style={s.body}>{locationMessage}</Text> : fix && freshPosition(fix, now) ? <Text style={s.body}>{simulation ? 'Prøver spillområdet uten å være der fysisk.' : `GPS funnet · omtrent ${Math.round(fix.accuracy)} m nøyaktighet`}</Text> : <Text style={s.body}>{fix ? 'Oppdater posisjonen for å se spill i nærheten.' : 'Bruk posisjonen din for å finne spill.'}</Text>}
-      <Button title={locating ? 'Finner posisjon …' : 'Finn spill nær meg'} secondary disabled={locating || busy} onPress={() => void locate()}/>
+      <Button title={locating ? 'Finner posisjon …' : 'Finn spill nær meg'} disabled={locating || busy} onPress={() => void locate()}/>
     </View>
     {visible.length === 0 && fix && freshPosition(fix, now) && <View style={s.card}><Text style={s.title}>Ingen spill her ennå</Text><Text style={s.body}>Det finnes foreløpig ingen tilgjengelige spill innen 5 km fra deg.</Text></View>}
     {visible.map(game => <View key={game.id} style={s.gameCard}><View style={s.gameArt}><PortalArt/></View><View style={s.cardInterior}><Eyebrow>{game.areaName} · {distance(metersBetween(fix!, game.area.center))}</Eyebrow><Text style={s.gameTitle}>{game.title}</Text><Text style={s.title}>{game.subtitle}</Text><Text style={s.body}>{game.description}</Text><Button title="Se startsted →" disabled={busy} onPress={() => setPreview(game.id)}/></View></View>)}
+    {[...games.values()].map(game => <View key={game.id} style={s.card}>
+      <Eyebrow>HJEMMEPRØVE</Eyebrow><Text style={s.title}>{game.title}</Text>
+      <Text style={s.body}>Prøvespill ved {game.start.name}. Du flytter deg med knapper i simulatoren.</Text>
+      <Button title={account.games[game.id] ? 'Fortsett prøve' : 'Start prøve'} secondary disabled={busy} onPress={() => void startSimulation(game)}/>
+    </View>)}
     {games.size === 0 && <Text style={s.body}>Ingen spillpakker er installert. Herebound er klar når et spill legges til.</Text>}
   </>;
 

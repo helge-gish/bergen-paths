@@ -49,7 +49,7 @@ test('first journey persists trades, dialogue, discoveries and character across 
   await doAction(trade('ultima-x:garlic', 'sell'));
   const reloaded = await new Session(registry, disk).load();
   assert.deepEqual(reloaded, account);
-  assert.equal(reloaded!.character.gold, 15);
+  assert.equal(reloaded!.character.credits, 15);
   assert.equal(reloaded!.character.inventory['herebound:rowanberry'], 2);
   assert.equal(reloaded!.character.inventory['ultima-x:garlic'], 1);
   assert.equal(reloaded!.games['ultima-x'].journal[0].id, 'missing-keeper');
@@ -59,10 +59,10 @@ test('first journey persists trades, dialogue, discoveries and character across 
 
 test('free order: lantern can be first; clue unlocks new dialogue without Maren prerequisite', () => {
   let a = start();
-  a = action(a, { type: 'travel', position: ultimaX.encounters[2].position });
+  a = action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='lantern')!.position });
   a = action(a, { type: 'discover', encounterId: 'lantern' });
   a = action(a, { type: 'talk', encounterId: 'lantern', topicId: 'mark' });
-  a = action(a, { type: 'travel', position: ultimaX.encounters[0].position });
+  a = action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='maren')!.position });
   a = action(a, { type: 'discover', encounterId: 'maren' });
   a = action(a, { type: 'talk', encounterId: 'maren', topicId: 'inscription' });
   assert.deepEqual(a.games['ultima-x'].journal.map(j => j.id), ['lantern-mark', 'memory-key']);
@@ -80,18 +80,18 @@ test('trade invariants: no negative stock, gold, count, remote trades, or duplic
   assert.equal(applyCommand(once.account, registry, cmd, now).account, once.account);
   assert.throws(() => applyCommand(once.account, registry, { ...cmd, action: trade('ultima-x:ginseng', 'buy') }, now), /allerede/);
   assert.throws(() => applyCommand(once.account, registry, { ...cmd, id: 'stale' }, now), /oppdatert/);
-  const far = action(a, { type: 'travel', position: ultimaX.encounters[1].position });
+  const far = action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='rusk')!.position });
   assert.throws(() => action(far, trade('ultima-x:garlic', 'buy')), /møtestedet/);
   assert.throws(() => action(a, { type: 'travel', position: { latitude: 0, longitude: 0 } }));
   let spend = action(a, trade('ultima-x:staff', 'buy', 2));
-  assert.throws(() => action(spend, trade('ultima-x:ginseng', 'buy', 2)), /gull/);
+  assert.throws(() => action(spend, trade('ultima-x:ginseng', 'buy', 2)), /saldoen/);
 });
 
 test('shared inventory survives entering a different game and unloading its original content', () => {
-  const brazil: GamePack = { ...ultimaX, id: 'brazil-test', title: 'Brazil', helpers: [], items: [], imports: ['herebound:rowanberry'], encounters: [{ ...ultimaX.encounters[0], id: 'merchant', topics: [], shop: [{ itemId: 'herebound:rowanberry', buy: 3, sell: 2, quantity: 2 }] }] };
+  const brazil: GamePack = { ...ultimaX, id: 'brazil-test', title: 'Brazil', helpers: [], items: [], imports: ['herebound:rowanberry'], encounters: [{ ...ultimaX.encounters.find(e=>e.id==='maren')!, id: 'merchant', topics: [], shop: [{ itemId: 'herebound:rowanberry', buy: 3, sell: 2, quantity: 2 }] }] };
   const both = createRegistry([ultimaX, brazil], sharedItems);
   let a = action(shop(), trade('herebound:rowanberry', 'buy', 2));
-  a = action(a, { type: 'travel', position: ultimaX.encounters[1].position });
+  a = action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='rusk')!.position });
   a = action(a, { type: 'discover', encounterId: 'rusk' });
   a = action(a, { type: 'talk', encounterId: 'rusk', topicId: 'light' });
   a = action(a, { type: 'recruit', encounterId: 'rusk' });
@@ -102,7 +102,7 @@ test('shared inventory survives entering a different game and unloading its orig
   a = applyCommand(a, both, command(a, { type: 'discover', encounterId: 'merchant' }), now).account;
   a = applyCommand(a, both, command(a, { type: 'trade', encounterId: 'merchant', itemId: 'herebound:rowanberry', direction: 'sell', quantity: 1 }), now).account;
   assert.equal(a.character.inventory['herebound:rowanberry'], 1);
-  assert.equal(a.character.gold, 20);
+  assert.equal(a.character.credits, 20);
   assert.equal(a.character.helpers['ultima-x:rusk'].name, 'Rusk');
   assert.equal(carryCapacity(a), 25_000);
   assert.equal(JSON.stringify(a.games['ultima-x']), original);
@@ -123,7 +123,7 @@ test('strength controls global capacity; overload blocks acquisitions but not sa
   stronger.character.attributes.strength = 11;
   assert.doesNotThrow(() => action(stronger, trade('ultima-x:garlic', 'buy')));
   a.character.attributes.strength = 9;
-  assert.doesNotThrow(() => action(a, { type: 'travel', position: ultimaX.encounters[1].position }));
+  assert.doesNotThrow(() => action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='rusk')!.position }));
   a = action(a, trade('ultima-x:staff', 'sell'));
   assert.equal(inventoryWeight(a), 100);
 });
@@ -134,10 +134,10 @@ test('failed durable writes never commit a trade; rejected save remains recovera
   const cmd = command(a, trade('ultima-x:staff', 'buy'));
   disk.fail = true;
   await assert.rejects(session.dispatch(cmd), /Disk full/);
-  assert.equal(decodeAccount(disk.value!).character.gold, 20);
+  assert.equal(decodeAccount(disk.value!).character.credits, 20);
   disk.fail = false;
   const result = await session.dispatch(cmd);
-  assert.equal(result.account.character.gold, 12);
+  assert.equal(result.account.character.credits, 12);
   assert.equal(result.account.games['ultima-x'].stock[stockKey('maren', 'ultima-x:staff')], 1);
 });
 

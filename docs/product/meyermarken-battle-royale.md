@@ -41,3 +41,11 @@ Kart og AR deler verden, kister og deltakere. Geografisk GPS-nærhet er ikke pre
 3. Bruk erfaring fra begge spill til å stabilisere kapabiliteter, gjenstandseffekter, økter og pakkekontrakt. Bygg deretter ut MCP-forfatting rundt de funksjonene som faktisk kjører.
 
 Dette flytter nødvendig serverarbeid foran en faktisk battle royale-test. Simulatorens lokale testfigurer er ikke allerede verifiserte serverkonti; import/provisjonering til en privat test må gjøres eksplisitt.
+
+## Førsteperson, angrepsvarsler og avstandskamp
+
+Brukerens notat 24. oktober: battle royale må varsle med vibrasjon og stemme når spilleren angripes. AR-modus viser avatarens virtuelle hender og det aktive utstyret: våpen, gjenstand fra loot eller noe hentet fra den felles sekken. God grafikk og animasjon er en vesentlig del av opplevelsen. Skytevåpen skal tillate kamp på avstand.
+
+Dette krever en presentasjonsmodell for aktivt utstyr, førstepersonsanimasjon og hendelsesdrevet lyd/haptikk. Serverbekreftede angrep gir dedupliserte varsler også når kartet vises; retning og skade skal bare annonseres når kampdataene støtter det. Varsling når appen er i bakgrunnen/låst må planlegges og testes som en egen mobil livssyklus, ikke antas å virke via en kameravisning.
+
+Avstandskamp krever en definert, servervalidert treffmodell og håndtering av posisjons-/retningsusikkerhet og nettverksforsinkelse. Kamera/GPS alene gir ikke allerede presis FPS-sikting. Våpenets rekkevidde, skudd, ammunisjon, skade og treffrespons inngår i kampkontrakten. Virtuelle avatarhender er første mål; fysisk håndsporing er ikke besluttet som krav.

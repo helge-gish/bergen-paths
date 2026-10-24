@@ -14,6 +14,8 @@ import urllib.request
 
 repo = Path(__file__).resolve().parents[1]
 root = repo / 'apps/herebound'
+subprocess.run(['node', str(repo / 'scripts/patch-map-gestures.cjs')], check=True)
+subprocess.run(['node', str(repo / 'scripts/patch-camera-preview.cjs')], check=True)
 env = os.environ.copy()
 sdk = Path(env.get('ANDROID_HOME', '/workspace/.android-sdk'))
 jdks = sorted(Path('/workspace/.java').glob('jdk-17*'))

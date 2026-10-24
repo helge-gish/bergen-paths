@@ -1,6 +1,6 @@
 {
   "name": "herebound",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -17,7 +17,9 @@
     "react": "19.2.0",
     "react-native": "0.83.10",
     "react-native-safe-area-context": "~5.6.2",
-    "react-native-svg": "15.15.3"
+    "react-native-svg": "15.15.3",
+    "expo-camera": "~55.0.23",
+    "@maplibre/maplibre-react-native": "11.5.0"
   },
   "expo": {
     "autolinking": {
@@ -28,12 +30,15 @@
       "exclude": [
         "trakk-coach",
         "trakk-ar",
-        "expo-camera",
         "expo-dev-client",
         "expo-speech",
-        "expo-task-manager",
-        "@maplibre/maplibre-react-native"
-      ]
+        "expo-task-manager"
+      ],
+      "android": {
+        "buildFromSource": [
+          "expo-camera"
+        ]
+      }
     }
   }
 }

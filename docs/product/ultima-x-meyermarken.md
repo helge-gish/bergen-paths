@@ -2,7 +2,7 @@
 
 Siste produktpresisering 24. oktober 2026. Formålet er å finne ut hvor bra ULTIMA X kan bli før det investeres mer i Herebound. SDK-et holdes uavhengig, men utvides gjennom behovene i dette spillet. Et generelt SDK, MCP eller flere spilltyper er ikke et forkantkrav.
 
-Dette er en plan for neste leveranse, ikke innhold som allerede finnes i 0.1.1.
+Første implementasjon er 0.2.0: kartavdekking, fire AR-møter, rognebær, handel, Rusk og lyktmagi. [Teststeg og begrensninger](../release-herebound-0.2.0.md). Fysisk feltprøve gjenstår; alternativ løsning og kamp er videre arbeid.
 
 ## Mål
 

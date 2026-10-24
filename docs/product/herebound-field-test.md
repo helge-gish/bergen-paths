@@ -1,6 +1,6 @@
 # Neste leveranse: ULTIMA X ute, med kart og AR
 
-Plan 24. oktober 2026, etter simulator 0.1.1. Brukerens prioritet er ekte utendørs gameplay med AR og turkart slik som i Tråkk. Denne planen beskriver kommende arbeid; feltsystemet er ikke implementert i 0.1.1.
+Plan 24. oktober 2026, etter simulator 0.1.1. Brukerens prioritet er ekte utendørs gameplay med AR og turkart slik som i Tråkk. Implementert som første feltprøve i 0.2.0; fysisk telefonprøve gjenstår. Se [utgivelsen og teststegene](../release-herebound-0.2.0.md). Planen under dokumenterer arbeidsrekkefølgen og videre akseptanse.
 
 ## Første feltløype
 
@@ -10,7 +10,7 @@ Meyermarken er teststart. Spillområdets sentrum forblir Fløyvarden og radiusen
 2. Ankom startsonen: tydelig «Du er fremme» og startknapp. Ingen teleportering eller simuleringsposisjon i feltmodus.
 3. Velg Kart eller AR. Kartet har reelle stier, egen posisjon, startsted, oppdagelser og rykter. Fullskjerm, minimer og sentrer på meg finnes i begge relevante visninger. Spillkartet begynner mørkt og avdekkes rundt faktisk gange. Vanlig turkart kan åpnes separat når spilleren ønsker orientering; det avslører ikke spillinnhold eller gir oppdagelser.
 4. Finn ett møte i AR: på avstand gis omtrentlig retning/avstand; i møtesonen opprettes et lokalt ARCore-anker på oppdaget underlag. Første prøve kan be spilleren trykke for å plassere figuren/lykten på bakken. Dette er lokal plassering ved møtestedet, ikke et løfte om et geografisk centimeternøyaktig eller delt anker.
-5. Trykk på figuren/gjenstanden: undersøk, snakk, handle eller rekrutter gjennom eksisterende SDK-handlinger. Samme sekk, gull, journal og reisefølge som i resten av Herebound.
+5. Trykk på figuren/gjenstanden: undersøk, snakk, handle eller rekrutter gjennom eksisterende SDK-handlinger. Samme sekk, Herebound-mynt (lokalt kalt gull), journal og reisefølge som i resten av Herebound.
 6. Bytt kart/AR, legg mobilen bort, kom tilbake og fortsett. Ingen dupliserte belønninger eller tapt fremgang.
 
 Begynn med ett helt fungerende AR-møte. Når det er prøvd på Pixel 6a ute, kobles Maren, Rusk og lykten sammen i fri rekkefølge. Møteplassene i simulatoren er forslag; plasser og gangforbindelser må kontrolleres før de brukes som fysiske navigasjonsmål.
@@ -52,3 +52,9 @@ APK med ett AR-møte først, deretter tre møter. Verifiser fysisk start, normal
 Etter dette: forberedt magi, et taktisk kampmøte og alternativ løsning på lyktmysteriet, fortsatt gjennom det samme SDK-et. AR og kart blir en del av den spillbare løkken fra denne leveransen, ikke en dekorasjon som legges på etterpå.
 
 Senere presisering samme dag: Den prioriterte leveransen er [en spillbar ULTIMA X-del fra Meyermarken](ultima-x-meyermarken.md). Ett AR-møte er en intern teknisk milepæl; det endelige prøvemålet er en liten opplevelse som faktisk kan vurderes som et spill.
+
+## Implementert i 0.2.0
+
+Feltmodus, 20 m kartceller med 40 m avdekking, varig oppdagelse, vertseid GPS og tidsavgrenset AR-møte er implementert. Fire steder er koblet sammen: rognebær, Maren, Rusk og lykten. ARCore-modulen er isolert i `apps/herebound/modules/herebound-ar`. SDK-et utfører ingredienskostnad og engangsbelønning atomisk. Kjente steder kan leses fra kartet; plukking, handel, samtale og magi krever et åpnet AR-møte og fortsatt fysisk nærhet.
+
+Fysisk befaring, stabilitet på Pixel 6a, mørke og gjentatt kamerabytte er fortsatt feltkriterier. Retningshint, alternative mysterieløsninger, kamper, delte ankere og flerspiller er ikke levert i denne prøven.

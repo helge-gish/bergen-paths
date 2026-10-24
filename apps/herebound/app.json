@@ -2,12 +2,12 @@
   "expo": {
     "name": "Herebound",
     "slug": "herebound",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
       "package": "no.herebound.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
@@ -30,7 +30,15 @@
           "locationWhenInUsePermission": "Herebound bruker posisjonen din for å finne spill i nærheten."
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Herebound bruker kameraet til spillfigurer i terrenget.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "autolinkingModuleResolution": true

@@ -28,9 +28,10 @@ async function setup(permission: () => Promise<{ granted: boolean }> = async () 
     'react-native': native,
     'react-native-safe-area-context': { SafeAreaView: view, SafeAreaProvider: view },
     'expo-status-bar': { StatusBar: () => null },
-    'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: permission, getCurrentPositionAsync: async () => { gpsReads++; return { coords: { ...ultimaX.start.position, accuracy: 5 }, timestamp: Clock.now() }; } },
+    'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: permission, getForegroundPermissionsAsync: permission, watchPositionAsync: async () => ({ remove() {} }), getCurrentPositionAsync: async () => { gpsReads++; return { coords: { ...ultimaX.start.position, accuracy: 5 }, timestamp: Clock.now() }; } },
     'expo-file-system': {}, 'expo-sharing': {},
     '../../packages/herebound-sdk': sdk, './registry': { registry }, './storage': { persistence: store },
+    './FieldScene': { FieldScene: (props: any) => React.createElement('FieldScene', props) }, './FieldMap': { FieldMap: () => React.createElement('FieldMap') },
     './Map': { PortalArt: () => null, WorldMap: () => React.createElement('Map') },
   }, { Date: Clock, setInterval: (cb: () => void) => { timers.push(cb); return timers.length; }, clearInterval() {} });
   let tree!: ReactTestRenderer;
@@ -89,4 +90,26 @@ test('foreground after a long pause refreshes simulator time and keeps the open 
     await ui.click('Fortsett prøve');
     assert.equal(ui.saved().currentGame, 'ultima-x');
   } finally { await ui.close(); }
+});
+
+
+test('field UI starts from GPS catalogue and requires opening a discovered meeting through AR', async () => {
+  const ui=await setup(async()=>({granted:true}));
+  try {
+    await ui.click('Finn spill nær meg');
+    await ui.click('Se startsted →');
+    await ui.click('Start ute');
+    assert.equal(ui.saved().activeMode,'field');
+    const maren=ultimaX.encounters.find(e=>e.id==='maren')!;
+    let scene=ui.tree.root.findByType('FieldScene' as any);
+    await act(async()=>scene.props.onSelect(maren));
+    const inspect=ui.buttons().find(b=>text(b)==='Undersøk stedet');
+    assert.ok(inspect?.props.disabled,'Map selection cannot authorize a field action');
+    await ui.click('Finn dette i AR');
+    scene=ui.tree.root.findByType('FieldScene' as any);
+    assert.equal(scene.props.initialTarget,'maren');
+    await act(async()=>scene.props.onArSelect(maren));
+    await ui.click('Undersøk stedet');
+    assert.ok(ui.saved().fieldGames['ultima-x'].discovered.includes('maren'));
+  } finally {await ui.close();}
 });
