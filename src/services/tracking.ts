@@ -1,3 +1,4 @@
+import type { WorkoutKind } from '../domain/workout';
 import { AUTOMATIC_LIMIT_MS } from '../domain/automaticRecording';
 import { localDialect } from '../domain/dialect';
 import { syncTripStatus } from './tripStatus';
@@ -86,8 +87,8 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     }
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
-export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | '4x4' = 'free', requiredStart?: Coordinate, automatic = false) {
-  if (training === '4x4' && !workoutAvailable) throw new Error('4×4-betaen krever Android-appen.');
+export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | WorkoutKind = 'free', requiredStart?: Coordinate, automatic = false) {
+  if (training !== 'free' && !workoutAvailable) throw new Error('Treningsmodus krever Android-appen.');
   if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg et annet strekk eller en tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
   const foreground = await Location.requestForegroundPermissionsAsync();
@@ -121,7 +122,7 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
   store.setSetting('audioError', null);
   try {
     await Location.startLocationUpdatesAsync(LOCATION_TASK, trackingOptions);
-    if (training === '4x4') await Speech.stop();
+    if (training !== 'free') await Speech.stop();
     await syncTripStatus(store.getTrip(trip.id)).catch(() => {});
     await syncWorkoutCoach(trip).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     return trip;

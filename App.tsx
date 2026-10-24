@@ -1,3 +1,4 @@
+import { syncTripStatus } from './src/services/tripStatus';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Image, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +20,7 @@ import { TrailMap } from './src/ui/TrailMap';
 import { TrailFinder } from './src/ui/TrailFinder';
 import { ExploreSurface, type ExploreMode } from './src/ui/ExploreSurface';
 import { WorkoutCard } from './src/ui/Workout';
-import { workoutStatus } from './src/domain/workout';
+import { workoutStatus, workoutPlan, workoutPlans, type WorkoutKind } from './src/domain/workout';
 import { syncWorkoutCoach, workoutAvailable } from './src/services/workoutCoach';
 import { StretchResults } from './src/ui/StretchResults';
 import { Button, Icon, Metric } from './src/ui/components';
@@ -94,14 +95,14 @@ export function Trakk({ initial }: { initial: Data }) {
   const workout = data.active?.workout;
   const workoutState = workout ? workoutStatus(workout, now) : null;
   const training = !!workout && workout.endedAt === null && !workoutState!.complete;
-  const startTraining = () => { setTrainingOpen(false); void act(async () => {
+  const startTraining = (kind: WorkoutKind) => { setTrainingOpen(false); void act(async () => {
     // Choosing the explicitly labelled training action can resume registration;
     // merely opening the selector never overrides a deliberate GPS pause.
     if (!getStore().active()) await automaticRecorder.enable();
     const current = getStore().active();
     if (!current) throw new Error('Registreringen kunne ikke starte.');
-    const updated = getStore().startWorkout(current.id);
-    await syncWorkoutCoach(updated);
+    const updated = getStore().startWorkout(current.id, kind);
+    await Promise.all([syncWorkoutCoach(updated), syncTripStatus(updated)]);
   }); };
   const earned = new Set(timing.results.filter(r => r.source === 'nature').map(r => r.itemId)).size;
   return <SafeAreaView style={s.screen}><StatusBar style="dark" />
@@ -110,7 +111,7 @@ export function Trakk({ initial }: { initial: Data }) {
       {data.preference === 'unconfigured' && <View style={s.card}><Text style={s.heading}>Åpne Tråkk. Gå ut.</Text><Text style={s.body}>Tråkk registrerer når du åpner appen, også med låst skjerm. Stitider og egne strekk måles automatisk. Du kan alltid pause. GPS bruker batteri. Pause stopper registreringen helt.</Text><Button title="Tillat automatisk registrering" disabled={busy} onPress={() => void act(() => automaticRecorder.enable())} /><Text style={s.small}>Sporene blir på mobilen. Dette oppsettet gjøres én gang.</Text></View>}
       {(error || data.error) && <View style={s.notice}><Text style={s.body}>{error ?? data.error}</Text><Button secondary title="Prøv registrering igjen" disabled={busy} onPress={() => void act(() => automaticRecorder.ensure())} /><Button secondary title="Åpne tillatelser" onPress={() => void Linking.openSettings()} /></View>}
       {data.preference !== 'unconfigured' && <View style={[s.between, { flexWrap: 'wrap' }]}><View style={{ flex: 1 }}><Text style={s.subheading}>{busy ? 'Finner GPS …' : data.active ? '● Registrering på' : data.preference === 'paused' ? 'Registrering pauset' : data.limited ? '8 timer lagret · klar for mer' : 'Registrering venter'}</Text>{data.active && <Text style={s.small}>{stale ? 'Venter på fersk GPS' : 'Stitider måles automatisk'}</Text>}</View>{(data.preference === 'paused' || (!data.active && !busy)) ? <Button secondary title="Fortsett" disabled={busy} onPress={() => void act(() => automaticRecorder.enable())} /> : <Button secondary title="Pause" onPress={pause} />}</View>}
-      {workoutAvailable && <Button secondary title={training ? `4×4 · ${workoutState!.paused ? 'pauset' : workoutState!.current?.label}` : 'Treningsmodus · fritt tempo'} onPress={() => setTrainingOpen(true)} />}
+      {workoutAvailable && <Button secondary title={training ? `${workoutPlan(workout!.kind).name} · ${workoutState!.paused ? 'pauset' : workoutState!.current?.label}` : 'Treningsmodus · fritt tempo'} onPress={() => setTrainingOpen(true)} />}
       {tab === 'map' && <>
         <RadiusPicker radius={nearby.radius} onRadius={nearby.setRadius} />
         <ExploreSurface mode={mode} onMode={setMode} enabled={!detail && !trainingOpen} map={<TrailMap onLocate={locate} locating={nearby.pending || busy} position={position} positionStale={stale} focus={position} recenter={recenter} discoveries={items} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} selectedDiscovery={selected} height={350} />} camera={<TrailFinder embedded items={items} trails={data.trails} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} busy={loadingMap} onRefresh={() => setMapRetry(n => n + 1)} onMap={target => { setSelected(target.item); setMode('map'); }} />} />
@@ -138,10 +139,10 @@ export function Trakk({ initial }: { initial: Data }) {
     <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: colors.line }}>{([{ id: 'map', title: 'Utforsk', icon: 'map' }, { id: 'log', title: 'Målinger', icon: 'book' }, { id: 'you', title: 'Deg', icon: 'user' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); if (t.id !== 'map') setMode('map'); }} style={{ flex: 1, alignItems: 'center', gap: 5, paddingVertical: 14, backgroundColor: tab === t.id ? colors.pale : colors.paper }}><Icon name={t.icon} /><Text style={s.chipText}>{t.title}</Text></Pressable>)}</View>
     {trainingOpen && <Modal onRequestClose={() => setTrainingOpen(false)}><SafeAreaView style={s.screen}><Button secondary title="← Tilbake" onPress={() => setTrainingOpen(false)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>Treningsmodus</Text>
       {data.active?.workout && <WorkoutCard trip={data.active} now={now} onChange={refresh} />}
-      {!training && <><Text style={s.body}>4×4 leder deg gjennom rask og rolig gange med tale og vibrasjon. Etter 35 minutter fortsetter du i fritt tempo.</Text><Button title={data.active ? '4×4 · skru på' : '4×4 · fortsett registrering'} disabled={busy} onPress={startTraining} /></>}
+      {!training && <><Text style={s.small}>Tale og vibrasjon følger tempoendringene. Registreringen fortsetter i fritt tempo når økten er ferdig.</Text>{workoutPlans.map(plan => <View key={plan.kind} style={s.card}><Text style={s.subheading}>{plan.name}</Text><Text style={s.body}>{plan.description}</Text><Button title={`${plan.name} · ${data.active ? 'skru på' : 'fortsett registrering'}`} disabled={busy} onPress={() => startTraining(plan.kind)} /></View>)}</>}
       {!!data.active?.workoutHistory?.length && <Text style={s.small}>{data.active.workoutHistory.length} tidligere treningsøkter er lagret i denne registreringen.</Text>}
     </ScrollView></SafeAreaView></Modal>}
-    {detail && <Modal onRequestClose={() => setDetail(null)}><SafeAreaView style={s.screen}><Button secondary title="← Målinger" onPress={() => setDetail(null)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>{detail.name}</Text><TrailMap current={detail.points} fitRoute height={330} /><Text style={s.body}>{kmLabel(tripMetrics(detail).meters)} km · {durationLabel(movementTime(detail))} i bevegelse</Text>{[...(detail.workoutHistory ?? []), ...(detail.workout ? [detail.workout] : [])].map((w, i) => <Text key={w.id ?? i} style={s.body}>4×4 · {durationLabel(workoutStatus(w, detail.endedAt ?? now).elapsed)} · {workoutStatus(w, detail.endedAt ?? now).rounds} av 4 drag</Text>)}<Button secondary title="Slett registreringen" onPress={() => Alert.alert('Slette registreringen?', 'Strekk laget fra denne registreringen slettes også.', [{ text: 'Behold', style: 'cancel' }, { text: 'Slett', style: 'destructive', onPress: () => { getStore().deleteTrip(detail.id); setDetail(null); refresh(); } }])} /></ScrollView></SafeAreaView></Modal>}
+    {detail && <Modal onRequestClose={() => setDetail(null)}><SafeAreaView style={s.screen}><Button secondary title="← Målinger" onPress={() => setDetail(null)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>{detail.name}</Text><TrailMap current={detail.points} fitRoute height={330} /><Text style={s.body}>{kmLabel(tripMetrics(detail).meters)} km · {durationLabel(movementTime(detail))} i bevegelse</Text>{[...(detail.workoutHistory ?? []), ...(detail.workout ? [detail.workout] : [])].map((w, i) => <Text key={w.id ?? i} style={s.body}>{workoutPlan(w.kind).name} · {durationLabel(workoutStatus(w, detail.endedAt ?? now).elapsed)} · {workoutStatus(w, detail.endedAt ?? now).rounds} av {workoutPlan(w.kind).rounds} drag</Text>)}<Button secondary title="Slett registreringen" onPress={() => Alert.alert('Slette registreringen?', 'Strekk laget fra denne registreringen slettes også.', [{ text: 'Behold', style: 'cancel' }, { text: 'Slett', style: 'destructive', onPress: () => { getStore().deleteTrip(detail.id); setDetail(null); refresh(); } }])} /></ScrollView></SafeAreaView></Modal>}
   </SafeAreaView>;
 }
 class Boundary extends React.Component<{ children: React.ReactNode }, { error: boolean }> {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changeWorkout, createWorkout, WORKOUT_MS, workoutCues, workoutElapsed, workoutPhases, workoutStatus } from '../src/domain/workout';
+import { changeWorkout, createWorkout, WORKOUT_MS, workoutCues, workoutElapsed, workoutPhases, workoutStatus, workoutPlan } from '../src/domain/workout';
 test('35 minute trainer has four complete brisk efforts, three recoveries and no extra recovery before cooldown', () => {
   const w = createWorkout(1000, true);
   assert.equal(workoutStatus(w, 1000).current?.kind, 'warmup');
@@ -46,4 +46,40 @@ test('native final-APK fixture uses the production coaching plan without acceler
   const { readFileSync } = await import('node:fs');
   const plan = JSON.parse(readFileSync(new URL('../scripts/android-coach-test/plan.json', import.meta.url), 'utf8'));
   assert.deepEqual(plan, { cues: workoutCues, phases: workoutPhases, totalMs: WORKOUT_MS });
+});
+
+for (const [kind, minutes, rounds] of [['interval-walk', 30, 5], ['walk-jog', 25, 6]] as const) {
+  test(`${kind}: exact phase boundaries, completion, pause/restart and native transition cues`, () => {
+    const plan = workoutPlan(kind), w = createWorkout(1000, false, kind);
+    assert.equal(plan.totalMs, minutes * 60000);
+    assert.equal(plan.rounds, rounds);
+    for (let i = 0; i < plan.phases.length; i++) {
+      const p = plan.phases[i];
+      assert.equal(workoutStatus(w, 1000 + p.start * 1000).current, p);
+      assert.equal(workoutStatus(w, 1000 + (p.start + p.seconds) * 1000 - 1).remaining, 1);
+      assert.equal(workoutStatus(w, 1000 + (p.start + p.seconds) * 1000).current, plan.phases[i + 1] ?? null);
+      assert.ok(plan.cues.some(c => c.at === p.start * 1000 && c.transition));
+    }
+    const paused = changeWorkout(w, 'pause', 100000), resumed = changeWorkout(paused, 'resume', 999000);
+    assert.equal(workoutElapsed(paused, 999000), 99000);
+    assert.equal(workoutElapsed(resumed, 1000000), 100000);
+    const done = workoutStatus(w, 1000 + plan.totalMs);
+    assert.equal(done.complete, true); assert.equal(done.rounds, rounds); assert.equal(done.next, null);
+    assert.equal(workoutElapsed(w, 1e10), plan.totalMs);
+    assert.equal(changeWorkout(w, 'resume', 1e10).runningSince, null);
+    assert.equal(workoutElapsed(changeWorkout(resumed, 'stop', 1000000), 1e10), 100000);
+    assert.equal(new Set(plan.cues.map(c => c.at)).size, plan.cues.length);
+    assert.deepEqual(plan.cues.map(c => c.at), plan.cues.map(c => c.at).sort((a, b) => a - b));
+    assert.equal(plan.cues.at(-1)?.at, plan.totalMs); assert.equal(plan.cues.at(-1)?.transition, true);
+    assert.ok(plan.cues.every(c => !/fire ganger fire|4×4/.test(c.text)));
+  });
+}
+test('Japanese walking is five slow/fast 3-minute pairs; walk/jog includes six short jogs with recovery', () => {
+  const walk = workoutPlan('interval-walk').phases;
+  assert.equal(walk.length, 10); assert.ok(walk.every(p => p.seconds === 180));
+  assert.deepEqual(walk.map(p => p.kind), Array.from({ length: 5 }, () => ['easy', 'fast']).flat());
+  const jog = workoutPlan('walk-jog').phases;
+  assert.equal(jog[0].kind, 'warmup'); assert.equal(jog.at(-1)?.kind, 'cooldown');
+  assert.equal(jog.filter(p => p.kind === 'fast' && p.seconds === 60).length, 6);
+  assert.equal(jog.filter(p => p.kind === 'easy' && p.seconds === 120).length, 6);
 });

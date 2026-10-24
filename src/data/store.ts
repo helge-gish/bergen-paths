@@ -1,4 +1,4 @@
-import { createWorkout, changeWorkout, workoutStatus, WORKOUT_MS, type Workout } from '../domain/workout';
+import { createWorkout, changeWorkout, workoutStatus, workoutPlan, workoutPlans, type WorkoutKind, type Workout } from '../domain/workout';
 import { defaultTripName } from '../domain/tripNames';
 import { fallbackStretchName, stretchName } from '../domain/stretchNames';
 import type { Discovery } from '../domain/discoveries';
@@ -70,13 +70,13 @@ export function createStore(db: Database) {
       if (key !== completedKey) { completedTrips = rows.map(hydrate); completedKey = key; }
       return completedTrips;
     },
-    begin(ghostId: string | null, audioEnabled: boolean, now = Date.now(), name?: string, training: 'free' | '4x4' = 'free') {
+    begin(ghostId: string | null, audioEnabled: boolean, now = Date.now(), name?: string, training: 'free' | WorkoutKind = 'free') {
       const tripId = id();
       db.withTransactionSync(() => {
         db.runSync('INSERT INTO trips VALUES (?, ?, ?, NULL, ?, ?, ?)', tripId, name?.trim().slice(0, 80) || defaultTripName(now), now, ghostId, audioEnabled ? 1 : 0, now);
         store.setSetting(`mode:${tripId}`, ghostId ? 'ghost' : 'normal');
         store.setSetting(`automaticName:${tripId}`, !name?.trim());
-        if (training === '4x4') store.setSetting(`workout:${tripId}`, createWorkout(now, audioEnabled));
+        if (training !== 'free') store.setSetting(`workout:${tripId}`, createWorkout(now, audioEnabled, training));
       });
       return store.getTrip(tripId)!;
     },
@@ -88,19 +88,19 @@ export function createStore(db: Database) {
       });
     },
     finish(tripId: string, now = Date.now()) { db.withTransactionSync(() => { store.updateWorkout(tripId, 'stop', now); db.runSync('UPDATE trips SET endedAt = MAX(startedAt, ?) WHERE id = ? AND endedAt IS NULL', now, tripId); }); },
-    startWorkout(tripId: string, kind: '4x4' = '4x4', now = Date.now(), audioEnabled = true) {
-      if (kind !== '4x4') throw new Error('Treningsformen er ikke tilgjengelig ennå.');
+    startWorkout(tripId: string, kind: WorkoutKind = '4x4', now = Date.now(), audioEnabled = true) {
+      if (!workoutPlans.some(p => p.kind === kind)) throw new Error('Treningsformen er ikke tilgjengelig ennå.');
       db.withTransactionSync(() => {
         const trip = store.getTrip(tripId);
         if (!trip || trip.endedAt !== null || !Number.isFinite(now) || now < trip.startedAt) throw new Error('Registrering må være på for å bruke treningsmodus.');
         const previous = trip.workout;
         if (previous && previous.endedAt === null && !workoutStatus(previous, now).complete) throw new Error('En treningsøkt pågår allerede. Fortsett den eller velg fritt tempo først.');
         if (previous) {
-          const end = previous.endedAt ?? (previous.runningSince === null ? now : Math.min(now, previous.runningSince + Math.max(0, WORKOUT_MS - previous.elapsedMs)));
+          const end = previous.endedAt ?? (previous.runningSince === null ? now : Math.min(now, previous.runningSince + Math.max(0, workoutPlan(previous.kind).totalMs - previous.elapsedMs)));
           const archived = { ...changeWorkout(previous, 'stop', end), startedAt: previous.startedAt ?? trip.startedAt };
           store.setSetting(`workoutHistory:${tripId}`, [...(trip.workoutHistory ?? []), archived]);
         }
-        store.setSetting(`workout:${tripId}`, { ...createWorkout(now, audioEnabled), id: id(), startedAt: now });
+        store.setSetting(`workout:${tripId}`, { ...createWorkout(now, audioEnabled, kind), id: id(), startedAt: now });
       });
       return store.getTrip(tripId)!;
     },

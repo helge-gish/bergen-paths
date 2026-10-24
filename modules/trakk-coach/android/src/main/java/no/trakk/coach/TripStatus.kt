@@ -49,16 +49,18 @@ internal object TripStatus {
     if (workout != null) {
       val elapsed = workout.optLong("elapsedMs") + if (workout.isNull("runningSince")) 0 else (now - workout.optLong("runningSince")).coerceAtLeast(0)
       val phases = d.optJSONArray("phases")
-      if (workout.isNull("endedAt") && elapsed < 2100000 && phases != null) {
+      val workoutName = d.optString("workoutName", "4×4")
+      val totalMs = d.optLong("workoutTotalMs", 2100000)
+      if (workout.isNull("endedAt") && elapsed < totalMs && phases != null) {
         for (i in 0 until phases.length()) {
           val p = phases.getJSONObject(i); val end = (p.getLong("start") + p.getLong("seconds")) * 1000
           if (elapsed < end) {
             val seconds = ((end - elapsed + 999) / 1000).coerceAtLeast(0)
-            phase = (if (workout.isNull("runningSince")) "4×4 pause · " else "4×4 · ") + p.getString("label") + String.format(Locale.ROOT, " · %d:%02d igjen", seconds / 60, seconds % 60)
+            phase = (if (workout.isNull("runningSince")) "$workoutName pause · " else "$workoutName · ") + p.getString("label") + String.format(Locale.ROOT, " · %d:%02d igjen", seconds / 60, seconds % 60)
             break
           }
         }
-      } else phase = "4×4 avsluttet · turen fortsetter"
+      } else phase = "$workoutName avsluttet · turen fortsetter"
     }
     val text = if (phase.isEmpty()) gps else phase
     val elapsed = (now - d.getLong("startedAt")).coerceAtLeast(1)

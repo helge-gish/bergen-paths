@@ -372,3 +372,24 @@ test('starting another 4x4 after natural completion archives the exact program e
   assert.equal(again.workoutHistory?.[0].endedAt, 2110000);
   assert.equal(again.endedAt, null); assert.equal(again.workout?.elapsedMs, 0); raw.close();
 });
+
+test('different training programs survive reopening and archive their own completion time without stopping GPS', () => {
+  const { store, db, raw } = database();
+  const trip = store.begin(null, false, 1000);
+  store.startWorkout(trip.id, 'interval-walk', 10000, false);
+  assert.equal(createStore(db).active()?.workout?.kind, 'interval-walk');
+  assert.throws(() => store.startWorkout(trip.id, 'walk-jog', 20000), /pågår/);
+  const next = store.startWorkout(trip.id, 'walk-jog', 2000000);
+  assert.equal(next.workoutHistory?.[0].endedAt, 1810000);
+  assert.equal(next.workoutHistory?.[0].elapsedMs, 1800000);
+  assert.equal(next.workoutHistory?.[0].audioEnabled, false);
+  store.updateWorkout(trip.id, 'pause', 2060000);
+  assert.equal(createStore(db).active()?.workout?.elapsedMs, 60000);
+  store.updateWorkout(trip.id, 'resume', 2100000);
+  const third = store.startWorkout(trip.id, '4x4', 4000000);
+  assert.equal(third.workoutHistory?.[1].endedAt, 3540000);
+  assert.equal(third.workoutHistory?.[1].elapsedMs, 1500000);
+  assert.equal(third.startedAt, 1000); assert.equal(third.endedAt, null);
+  assert.equal(createStore(db).active()?.workoutHistory?.length, 2);
+  raw.close();
+});
