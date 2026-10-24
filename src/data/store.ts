@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 PRAGMA user_version = 1;
 `;
 const id = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-export type SegmentWindow = { from: number; count: number; lastTrailId: string | null };
+export type SegmentWindow = { from: number; count: number; lastTrailId: string | null; draft?: boolean };
 export type SegmentUndo = { before: SegmentWindow; after: SegmentWindow; trailId: string | null; expiresAt: number };
 type Row = Omit<Trip, 'points' | 'audioEnabled'> & { audioEnabled: number };
 export function createStore(db: Database) {
@@ -87,7 +87,17 @@ export function createStore(db: Database) {
         for (const p of points) if (Number.isFinite(p.timestamp) && p.timestamp >= active.startedAt) db.runSync('INSERT OR IGNORE INTO points VALUES (?, ?, ?)', tripId, p.timestamp, JSON.stringify(p));
       });
     },
-    finish(tripId: string, now = Date.now()) { db.withTransactionSync(() => { store.updateWorkout(tripId, 'stop', now); db.runSync('UPDATE trips SET endedAt = MAX(startedAt, ?) WHERE id = ? AND endedAt IS NULL', now, tripId); }); },
+    finish(tripId: string, now = Date.now()) {
+      db.withTransactionSync(() => {
+        store.updateWorkout(tripId, 'stop', now);
+        db.runSync('UPDATE trips SET endedAt = MAX(startedAt, ?) WHERE id = ? AND endedAt IS NULL', now, tripId);
+        const segment = store.setting<SegmentWindow | null>(`segments:${tripId}`, null);
+        if (segment?.draft) {
+          store.setSetting(`segments:${tripId}`, { ...segment, draft: false });
+          store.setSetting(`segmentUndo:${tripId}`, null);
+        }
+      });
+    },
     startWorkout(tripId: string, kind: WorkoutKind = '4x4', now = Date.now(), audioEnabled = true) {
       if (!workoutPlans.some(p => p.kind === kind)) throw new Error('Treningsformen er ikke tilgjengelig ennå.');
       db.withTransactionSync(() => {
@@ -172,9 +182,17 @@ export function createStore(db: Database) {
       const last = cleanPoints(trip.points.filter(p => p.timestamp <= now)).at(-1);
       if (!last || now - last.timestamp > 20000) throw new Error('Vent på et ferskt GPS-punkt før du setter startpunkt.');
       db.withTransactionSync(() => {
-        const before = store.segmentWindow(tripId), after = { ...before, from: last.timestamp };
+        const before = store.segmentWindow(tripId), after = { ...before, from: last.timestamp, draft: true };
         store.setSetting(`segments:${tripId}`, after);
         store.setSetting(`segmentUndo:${tripId}`, { before, after, trailId: null, expiresAt: now + 60000 });
+      });
+    },
+    cancelSegmentDraft(tripId: string) {
+      db.withTransactionSync(() => {
+        const trip = store.getTrip(tripId);
+        if (!trip || trip.endedAt !== null) throw new Error('Ingen aktiv registrering.');
+        store.setSetting(`segments:${tripId}`, { ...store.segmentWindow(tripId), draft: false });
+        store.setSetting(`segmentUndo:${tripId}`, null);
       });
     },
     clipSegment(tripId: string, now = Date.now()): Trail {
@@ -191,7 +209,7 @@ export function createStore(db: Database) {
         const name = stretchName(points, store.setting<Discovery[]>('osmDiscoveries', [])) ?? `Strekk ${window.count + 1} · ${new Date(now).toLocaleDateString('nb-NO')}`;
         saved = { id: id(), tripId, name, createdAt: now, points };
         db.runSync('INSERT INTO trails VALUES (?, ?, ?, ?, ?)', saved.id, tripId, saved.name, now, JSON.stringify(points));
-        const after = { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id };
+        const after = { from: last.timestamp, count: window.count + 1, lastTrailId: saved.id, ...(window.draft !== undefined ? { draft: false } : {}) };
         store.setSetting(`segments:${tripId}`, after);
         store.setSetting(`segmentUndo:${tripId}`, { before: window, after, trailId: saved.id, expiresAt: now + 60000 });
       });

@@ -54,7 +54,7 @@ test('Finn sti renders saved and growing live tracks without fresh GPS, across f
   await act(() => tree.update(React.createElement(TrailFinder, { ...props, current, segmentStart: current[0] })));
   assert.match(JSON.stringify(tree.toJSON()), /Ditt spor/);
   assert.equal(source('live').features[0].geometry.coordinates.length, 2);
-  assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Aktivt startmerke' }).length, 1);
+  assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Start på strekket du lager' }).length, 1);
   const layers = tree.root.findAllByType('GeoJSONSource' as any).map(node => node.props.id);
   assert.ok(layers.indexOf('walked') > layers.indexOf('discoveries'));
   assert.ok(layers.indexOf('live') > layers.indexOf('walked'));

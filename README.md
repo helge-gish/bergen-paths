@@ -2,6 +2,10 @@
 
 En Android-først tur-app for registrering, utforsking og samling, bygget med Expo, React Native og TypeScript. Turene er ikke begrenset til et bestemt sted.
 
+## Nytt i 0.4.3
+
+Velg **Start strekk** for å sette startpunkt. Først da vises strekkstart i kartet og **Stopp og lagre strekk / Avbryt**. Lagring eller avbrudd fjerner merket og lar GPS-registreringen fortsette. Et påbegynt strekk beholdes ved appbytte og gjenåpning av samme aktive registrering. Se [0.4.3](docs/release-0.4.3.md).
+
 ## Tråkk 0.4.2 — Utforsk og Logg
 
 - Når registrering er av, vises bare Start-skjermen. Første Start forklarer registreringen og ber om nødvendige tillatelser. Pause lagrer og stopper registreringen, og varer til neste Start.

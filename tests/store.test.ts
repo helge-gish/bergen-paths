@@ -393,3 +393,35 @@ test('different training programs survive reopening and archive their own comple
   assert.equal(createStore(db).active()?.workoutHistory?.length, 2);
   raw.close();
 });
+
+test('explicit segment drafts survive reopening, cancel without changing the track, and end after save or recording stop', () => {
+  const { store, db, raw } = database();
+  const trip = store.begin(null, false, 1000);
+  const points = Array.from({ length: 8 }, (_, i) => ({ ...point, timestamp: 1000 + i * 10000, latitude: point.latitude + i * .0001 }));
+  store.append(trip.id, points.slice(0, 2));
+  assert.equal(!!store.segmentWindow(trip.id).draft, false);
+  store.setSegmentStart(trip.id, 11000);
+  const reopened = createStore(db);
+  assert.equal(reopened.segmentWindow(trip.id).draft, true);
+  assert.equal(reopened.segmentWindow(trip.id).from, 11000);
+  assert.throws(() => reopened.clipSegment(trip.id, 11000), /lenger/);
+  assert.equal(reopened.segmentWindow(trip.id).draft, true);
+  reopened.cancelSegmentDraft(trip.id);
+  assert.equal(reopened.segmentWindow(trip.id).draft, false);
+  assert.equal(reopened.trails().length, 0); assert.equal(reopened.active()?.points.length, 2);
+  reopened.append(trip.id, points.slice(2, 4));
+  reopened.setSegmentStart(trip.id, 31000);
+  reopened.append(trip.id, points.slice(4, 6));
+  const trail = reopened.clipSegment(trip.id, 51000);
+  assert.equal(trail.points[0].timestamp, 31000); assert.equal(trail.points.at(-1)?.timestamp, 51000);
+  assert.equal(reopened.segmentWindow(trip.id).draft, false);
+  assert.equal(reopened.active()?.points.length, 6); assert.equal(reopened.active()?.endedAt, null);
+  reopened.setSegmentStart(trip.id, 51000);
+  reopened.cancelSegmentDraft(trip.id);
+  assert.equal(reopened.trails().length, 1); // Cancel never removes a saved stretch.
+  reopened.append(trip.id, points.slice(6));
+  reopened.setSegmentStart(trip.id, 71000);
+  reopened.finish(trip.id, 72000);
+  assert.equal(reopened.segmentWindow(trip.id).draft, false);
+  assert.equal(reopened.trails().length, 1); raw.close();
+});
