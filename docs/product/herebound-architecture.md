@@ -86,3 +86,7 @@ Etter den første ULTIMA X-feltprøven kommer en liten serverstyrt flerspillerpr
 Vertens `FieldMap`, `FieldScene` og `FieldCamera` bruker generiske spillpakker. Isolert native-modul ligger i `apps/herebound/modules/herebound-ar`; kun registry importerer ULTIMA X. SDK-et eier feltvalidering, avdekking, handlinger og atomiske kostnader/belønninger. Vertens sesjon leverer fersk fysisk GPS og et kortvarig AR-møte; de gjenopprettes aldri som tillitsbevis fra lagring.
 
 `Character.credits` er felles myntbalanse; eldre `gold` migreres. `GamePack.currency` gir lokalt navn og fast heltallskurs, mens priser og transaksjoner lagres i felles enhet. Spill lager ikke parallelle pengebøker. `fieldGames` skiller fysisk utforsking fra simulatorjournalen; inventar og figur er bevisst felles lokal testdata. Serverautoritet er et senere trinn.
+
+## Nye produktspor etter feltleveransen
+
+[Avatar og publikumsarrangementer](herebound-avatar-and-live-events.md) beskriver ønsket om en gjennomarbeidet avatarbygger, mulig formendring ved inaktivitet og Herebound som vert for pauseunderholdning på Brann Stadion. Dette er planlagte bruksområder som kan prøve felles identitet, arrangement, lag og serverautoritet. De endrer ikke prioriteten på den pågående ULTIMA X-feltprøven.
