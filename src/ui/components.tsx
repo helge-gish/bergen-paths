@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { colors, styles as s } from './theme';
-export type IconName = 'mountain' | 'map' | 'compass' | 'book' | 'user' | 'arrow' | 'sound' | 'close' | 'check' | 'ghost' | 'location' | 'clock';
+export type IconName = 'mountain' | 'map' | 'compass' | 'book' | 'user' | 'arrow' | 'sound' | 'close' | 'check' | 'ghost' | 'location' | 'clock' | 'settings';
 export function Icon({ name, size = 24, color = colors.ink }: { name: IconName; size?: number; color?: string }) {
   const paths: Record<IconName, string> = {
     mountain: 'M2 20 9 6l4 7 3-5 6 12H2Z M6.5 11l2.5 2 2.5-2',
@@ -16,6 +16,7 @@ export function Icon({ name, size = 24, color = colors.ink }: { name: IconName; 
     check: 'M5 12l4 4L19 6',
     ghost: 'M5 21V10a7 7 0 0 1 14 0v11l-4-3-3 3-3-3-4 3Z M9 10v2 M15 10v2',
     location: 'M12 22S4 14 4 9a8 8 0 0 1 16 0c0 5-8 13-8 13Z M12 6a3 3 0 1 0 0 6 3 3 0 1 0 0-6',
+    settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M10 2h4l1 3 3 1 3-1 2 4-2 2v3l2 2-2 4-3-1-3 1-1 3h-4l-1-3-3-1-3 1-2-4 2-2v-3L1 9l2-4 3 1 3-1 1-3Z',
     clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20 M12 6v6l4 2',
   };
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d={paths[name]} stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" /></Svg>;

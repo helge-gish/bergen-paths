@@ -22,7 +22,16 @@ export function createAutomaticRecorder(deps: RecorderDependencies) {
   });
   return {
     ensure,
-    enable: () => { deps.setPreference('enabled'); return ensure(); },
+    enable: () => {
+      const before = deps.preference();
+      deps.setPreference('enabled');
+      return ensure().catch(error => {
+        // Permission denial is not consent. A later launch must not retry it
+        // automatically, and a concurrent explicit pause must still win.
+        if (deps.preference() === 'enabled' && !deps.active()) deps.setPreference(before);
+        throw error;
+      });
+    },
     pause: () => { deps.setPreference('paused'); return enqueue(async () => { await deps.finish(); }); },
   };
 }

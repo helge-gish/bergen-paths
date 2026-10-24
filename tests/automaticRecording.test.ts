@@ -33,3 +33,12 @@ test('a denied startup does not poison later explicit retry or pause', async () 
   assert.equal(h.state().active, false);
   await h.recorder.enable(); assert.equal(h.state().active, true);
 });
+
+test('declining first-start permissions restores the consent gate and never retries on foreground', async () => {
+  const h = harness('unconfigured'); h.block(Promise.reject(new Error('Permission denied')));
+  await assert.rejects(h.recorder.enable(), /Permission denied/);
+  assert.equal(h.state().preference, 'unconfigured');
+  const starts = h.state().starts;
+  await h.recorder.ensure(); assert.equal(h.state().starts, starts);
+  h.block(Promise.resolve()); await h.recorder.enable(); assert.equal(h.state().active, true);
+});

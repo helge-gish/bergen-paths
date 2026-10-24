@@ -1,3 +1,7 @@
+import { idleEvidence, shouldPauseIdle, type IdleEvidence } from '../domain/idleRecording';
+import { workoutStatus } from '../domain/workout';
+import { currentAreaPosition, stageAreaConsent } from './areaConsent';
+import { natureArea } from '../domain/natureArea';
 import type { WorkoutKind } from '../domain/workout';
 import { AUTOMATIC_LIMIT_MS } from '../domain/automaticRecording';
 import { localDialect } from '../domain/dialect';
@@ -26,7 +30,7 @@ const trackingOptions: Location.LocationTaskOptions = {
   pausesUpdatesAutomatically: false,
   activityType: Location.ActivityType.Fitness,
   showsBackgroundLocationIndicator: true,
-  foregroundService: { notificationTitle: 'Tråkk · registrering på', notificationBody: 'Målinger og GPS-spor lagres. Åpne Tråkk for å sette på pause.', notificationColor: '#183E32', killServiceOnDestroy: false },
+  foregroundService: { notificationTitle: 'Tråkk · registrering på', notificationBody: 'Målinger og GPS-spor lagres. Åpne Tråkk og trykk Pause for å stoppe.', notificationColor: '#183E32', killServiceOnDestroy: false },
 };
 export function toFix(location: Location.LocationObject): Fix {
   return { timestamp: location.timestamp, latitude: location.coords.latitude, longitude: location.coords.longitude, accuracy: location.coords.accuracy ?? 999, altitude: location.coords.altitude, altitudeAccuracy: location.coords.altitudeAccuracy, speed: location.coords.speed };
@@ -38,6 +42,8 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
   try {
     const active = store.active();
     if (!active) return;
+    const latest = data.locations.map(toFix).sort((a, b) => b.timestamp - a.timestamp).find(f => f.accuracy <= 100 && Date.now() - f.timestamp <= 30000);
+    if (active.automatic && latest && stageAreaConsent(latest)) { await finishTracking(); return; }
     if (active.automatic && Date.now() - active.startedAt >= AUTOMATIC_LIMIT_MS) {
       store.setSetting('automaticLimitReached', true);
       await finishTracking();
@@ -46,6 +52,20 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     void syncWorkoutCoach(active).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     const fixes = data.locations.map(toFix);
     store.append(active.id, fixes);
+    if (active.automatic) {
+      const saved = store.setting<{ tripId: string; evidence: IdleEvidence | null } | null>('idleRecording', null);
+      let evidence = saved?.tripId === active.id ? saved.evidence : null;
+      const training = active.workout && active.workout.runningSince !== null && active.workout.endedAt === null && !workoutStatus(active.workout, Date.now()).complete;
+      if (training) evidence = null;
+      else for (const fix of [...fixes].sort((a, b) => a.timestamp - b.timestamp)) evidence = idleEvidence(evidence, fix, Date.now());
+      store.setSetting('idleRecording', { tripId: active.id, evidence });
+      if (shouldPauseIdle(evidence)) {
+        store.setSetting('automaticPauseReason', 'idle');
+        store.setSetting('automaticRecording', 'paused');
+        await finishTracking();
+        return;
+      }
+    }
     const last = fixes.filter(validFix).at(-1);
     if (last && Date.now() - last.timestamp <= 30000) store.setSetting('localDialect', localDialect(last));
     store.setSetting('trackingError', null);
@@ -104,6 +124,13 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
   }
   const store = getStore();
   let initial: Fix | null = null;
+  if (automatic) {
+    const position = await currentAreaPosition();
+    if (stageAreaConsent(position)) throw new Error('Du er i et nytt område. Velg Utforsk her for å fortsette.');
+    if (!store.setting('activeNatureArea', null)) store.setSetting('activeNatureArea', natureArea(null, position));
+    store.setSetting('lastMapPosition', position);
+    initial = { ...position, altitude: null, altitudeAccuracy: null, speed: null };
+  }
   if (ghostId || requiredStart) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -115,7 +142,7 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
     if (!gate.ready) throw new Error(gate.message);
   }
   const trip = store.begin(ghostId, audioEnabled, Date.now(), name, training);
-  if (automatic) { store.setSetting(`automatic:${trip.id}`, true); store.setSetting('automaticLimitReached', false); }
+  if (automatic) { store.setSetting(`automatic:${trip.id}`, true); store.setSetting('automaticLimitReached', false); store.setSetting('idleRecording', null); store.setSetting('automaticPauseReason', null); }
   if (initial) store.append(trip.id, [{ ...initial, timestamp: trip.startedAt }]);
   if (suggestion) store.suggestName(trip.id, suggestion);
   store.setSetting('trackingError', null);
@@ -135,15 +162,17 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
 }
 export async function finishTracking() {
   const store = getStore(), trip = store.active();
-  if (!trip) return null;
   // Persist the end timestamp first, so late deliveries never extend the recorded trip.
-  store.finish(trip.id);
+  if (trip) store.finish(trip.id);
+  store.setSetting('idleRecording', null);
   await syncTripStatus(null).catch(() => {});
   await syncWorkoutCoach(null).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke stoppes. Lukk appen for å stoppe lyden.'));
+  let stopFailed = false;
   try { if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) await Location.stopLocationUpdatesAsync(LOCATION_TASK); }
-  catch { store.setSetting('trackingError', 'Turen er lagret, men GPS-tjenesten kunne ikke stoppes. Lukk appen for å stoppe tjenesten.'); }
+  catch { stopFailed = true; store.setSetting('trackingError', 'Målingene er lagret, men GPS kunne ikke stoppes. Stopp Tråkk i Androids appinnstillinger.'); }
   await Speech.stop();
-  return trip.id;
+  if (stopFailed) throw new Error('Målingene er lagret, men GPS kunne ikke stoppes. Stopp Tråkk i Androids appinnstillinger.');
+  return trip?.id ?? null;
 }
 export async function trackingRunning() { return Location.hasStartedLocationUpdatesAsync(LOCATION_TASK); }
 export async function resumeTracking() {

@@ -8,7 +8,7 @@ test('recording rechecks the selected start after permission prompts and cannot 
   const trip = { id: 'new', startedAt: Date.now(), points: [] };
   const store = { active: () => null, begin: () => { begins++; return trip; }, append: (_: string, fixes: any[]) => { samples = fixes; }, setSetting() {}, getTrip: () => trip };
   const { startTracking } = component('src/services/tracking.ts', {
-    '../domain/automaticRecording': { AUTOMATIC_LIMIT_MS: 28800000 }, '../domain/dialect': {}, './tripStatus': { syncTripStatus: async () => {} }, '../domain/metrics': {}, '../domain/commentary': {},
+    '../domain/idleRecording': {}, '../domain/workout': {}, './areaConsent': { stageAreaConsent: () => false }, '../domain/natureArea': {}, '../domain/automaticRecording': { AUTOMATIC_LIMIT_MS: 28800000 }, '../domain/dialect': {}, './tripStatus': { syncTripStatus: async () => {} }, '../domain/metrics': {}, '../domain/commentary': {},
     './workoutCoach': { workoutAvailable: true, syncWorkoutCoach: async () => {} },
     'expo-task-manager': { defineTask() {} }, 'expo-speech': {}, './voice': {},
     'react-native': { Platform: { OS: 'android', Version: 32 }, PermissionsAndroid: {} },

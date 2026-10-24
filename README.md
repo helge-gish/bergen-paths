@@ -2,15 +2,16 @@
 
 En Android-først tur-app for registrering, utforsking og samling, bygget med Expo, React Native og TypeScript. Turene er ikke begrenset til et bestemt sted.
 
-## Tråkk 0.4 — naturstier og enkel trening
+## Tråkk 0.4.2 — Utforsk og Logg
 
-- Engangsoppsett av automatisk registrering. Deretter åpner du appen og går; bakgrunns-GPS fortsetter med låst skjerm. Pause vedvarer til du velger Fortsett.
-- Naturstier i nærområdet, kart/fullskjerm, stiinfo, avstand og Min posisjon. Kamera/AR er beholdt.
-- Registrert distanse, fart, høydemeter og bevegelsestid. Egne strekk kan klippes med et synlig startmerke. Treningsmodus kan slås på når som helst; 4×4, japansk intervallgange og gå/jogg guider tempoet med tale og vibrasjon. Se [0.4.1](docs/release-0.4.1.md).
-- Automatiske GPS-tider for kartlagte stideler og egne strekk, separat per retning. Personlige milepæler beregnes fra egne spor.
-- Tidligere turer, strekk og eksport beholdes. Ingen gamle spor lastes opp til de nye spillproduktene.
+- Når registrering er av, vises bare Start-skjermen. Første Start forklarer registreringen og ber om nødvendige tillatelser. Pause lagrer og stopper registreringen, og varer til neste Start.
+- Utforsk: turkart og Kamera/AR for naturstier, en diskret treningsknapp og egne strekk. Tre programmer: 4×4, japansk intervallgange og gå/jogg.
+- Logg: «X av Y stier gått» i det festede 5 km-området, Innom/Gått-historikk, stitider og tidligere registreringer.
+- Tannhjul: fest området på kartet, valgfrie profilfelt for vekt/kjønn/alder og eksport. Ingen radiusvelger.
+- På reise over 25 km fra området stopper registreringen ved en fersk, brukbar GPS-posisjon. «Utforsk her» krever godkjenning før nytt område og ny registrering.
+- Automatisk batteripause etter ti minutter med god, stillestående GPS, unntatt under pågående trening. Dårlig/manglende GPS alene er ikke bevis på stillstand. Deretter kreves Start.
 
-0.4 er en **alfa med ny arbeidsflyt**. Naturstiklassifisering er konservativ og kartdata kan mangle. Automatisk registrering, batteri og timing må feltprøves på telefon. Se [regler, begrensninger og kontroll](docs/release-0.4.0.md).
+0.4 er fortsatt en alfa med ny arbeidsflyt. Kartgrunnlaget kan være ufullstendig. Feltprøving av batteri, GPS, AR og låseskjerm gjenstår. Se [0.4.2-regler og kontroll](docs/release-0.4.2.md).
 
 ## Tre separate produkter
 

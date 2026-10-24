@@ -28,7 +28,7 @@ export type Trail = {
   createdAt: number;
   points: Fix[];
 };
-export type Profile = { weightKg: number | null };
+export type Profile = { weightKg: number | null; age?: number | null; gender?: 'woman' | 'man' | 'other' | null };
 export type Peak = Coordinate & { id: string; name: string; elevation: number; description: string };
 
 export function isGhostTrip(trip: Trip): boolean { return trip.mode ? trip.mode === 'ghost' : trip.ghostId !== null; }

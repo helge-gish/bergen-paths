@@ -1,3 +1,4 @@
+import { NATURE_RADIUS } from '../domain/natureArea';
 import { localDialect } from '../domain/dialect';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -8,10 +9,7 @@ import { getStore } from '../data/native';
 
 export const nearbyRadii = [1000, 3000, 5000];
 export function useNearbyArea() {
-  const [radius, setRadiusState] = useState(() => {
-    const store = getStore(), saved = store.setting('nearbyRadius', store.setting<HomeArea | null>('homeArea', null)?.radius ?? 3000);
-    return nearbyRadii.includes(saved) ? saved : 3000;
-  });
+  const radius = NATURE_RADIUS;
   const [fix, setFix] = useState<MapPosition | null>(() => getStore().lastPosition());
   const [live, setLive] = useState(false);
   const [status, setStatus] = useState('Finner GPS-posisjonen din …');
@@ -61,10 +59,6 @@ export function useNearbyArea() {
     });
     return () => { stop(); sub.remove(); };
   }, [start, stop]);
-  const setRadius = useCallback((value: number) => {
-    if (!nearbyRadii.includes(value)) return;
-    getStore().setSetting('nearbyRadius', value); setRadiusState(value);
-  }, []);
   const locate = useCallback(async (): Promise<HomeArea> => {
     setPending(true); setStatus('Finner GPS-posisjonen din …');
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -86,5 +80,5 @@ export function useNearbyArea() {
     finally { clearTimeout(timer); setPending(false); }
   }, [radius, accept, start]);
   const area = useMemo<HomeArea | null>(() => fix ? { latitude: fix.latitude, longitude: fix.longitude, name: live ? 'der du er nå' : 'sist kjente posisjon', radius } : null, [fix, radius, live]);
-  return { needsSettings, area, radius, setRadius, pending, status, locate, live, lastSeen: fix?.timestamp ?? null };
+  return { needsSettings, area, radius, pending, status, locate, live, lastSeen: fix?.timestamp ?? null };
 }
