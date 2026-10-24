@@ -8,6 +8,7 @@ export type Fix = Coordinate & {
   speed: number | null;
 };
 export type Trip = {
+  automatic?: boolean;
   mode?: 'normal' | 'ghost';
   workout?: Workout | null;
   id: string;

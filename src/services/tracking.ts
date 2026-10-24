@@ -1,3 +1,4 @@
+import { AUTOMATIC_LIMIT_MS } from '../domain/automaticRecording';
 import { localDialect } from '../domain/dialect';
 import { syncTripStatus } from './tripStatus';
 import { tripMetrics } from '../domain/metrics';
@@ -24,7 +25,7 @@ const trackingOptions: Location.LocationTaskOptions = {
   pausesUpdatesAutomatically: false,
   activityType: Location.ActivityType.Fitness,
   showsBackgroundLocationIndicator: true,
-  foregroundService: { notificationTitle: 'Tråkk · turen registreres', notificationBody: 'Tid, pauser og GPS-spor lagres. Åpne Tråkk for å avslutte.', notificationColor: '#183E32', killServiceOnDestroy: false },
+  foregroundService: { notificationTitle: 'Tråkk · registrering på', notificationBody: 'Målinger og GPS-spor lagres. Åpne Tråkk for å sette på pause.', notificationColor: '#183E32', killServiceOnDestroy: false },
 };
 export function toFix(location: Location.LocationObject): Fix {
   return { timestamp: location.timestamp, latitude: location.coords.latitude, longitude: location.coords.longitude, accuracy: location.coords.accuracy ?? 999, altitude: location.coords.altitude, altitudeAccuracy: location.coords.altitudeAccuracy, speed: location.coords.speed };
@@ -36,6 +37,11 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
   try {
     const active = store.active();
     if (!active) return;
+    if (active.automatic && Date.now() - active.startedAt >= AUTOMATIC_LIMIT_MS) {
+      store.setSetting('automaticLimitReached', true);
+      await finishTracking();
+      return;
+    }
     void syncWorkoutCoach(active).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     const fixes = data.locations.map(toFix);
     store.append(active.id, fixes);
@@ -80,7 +86,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     }
   } catch (e) { store.setSetting('trackingError', e instanceof Error ? e.message : 'Kunne ikke lagre GPS-posisjonen.'); }
 });
-export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | '4x4' = 'free', requiredStart?: Coordinate) {
+export async function startTracking(ghostId: string | null, audioEnabled: boolean, name?: string, suggestion?: string, training: 'free' | '4x4' = 'free', requiredStart?: Coordinate, automatic = false) {
   if (training === '4x4' && !workoutAvailable) throw new Error('4×4-betaen krever Android-appen.');
   if (ghostId && !getStore().getReference(ghostId)) throw new Error('Den valgte skyggen finnes ikke lenger. Velg et annet strekk eller en tur.');
   if (getStore().active()) throw new Error('Du har allerede en tur som pågår.');
@@ -108,6 +114,7 @@ export async function startTracking(ghostId: string | null, audioEnabled: boolea
     if (!gate.ready) throw new Error(gate.message);
   }
   const trip = store.begin(ghostId, audioEnabled, Date.now(), name, training);
+  if (automatic) { store.setSetting(`automatic:${trip.id}`, true); store.setSetting('automaticLimitReached', false); }
   if (initial) store.append(trip.id, [{ ...initial, timestamp: trip.startedAt }]);
   if (suggestion) store.suggestName(trip.id, suggestion);
   store.setSetting('trackingError', null);

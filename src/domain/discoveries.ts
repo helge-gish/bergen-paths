@@ -13,6 +13,9 @@ export type Discovery = Coordinate & {
   fetchedAt: number;
   osmHighway?: string;
   sacScale?: string;
+  surface?: string;
+  footway?: string;
+  natureContext?: boolean;
   unnamed?: boolean;
   localName?: string;
   osmName?: string;
@@ -167,7 +170,7 @@ export function parseOsm(data: unknown, fetchedAt: number): Discovery[] {
     if (latitude === undefined || longitude === undefined || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
     const fallback: Record<DiscoveryKind, string> = { street: 'Gate uten navn', trail: 'Sti uten navn', steps: 'Trapp', peak: 'Topp uten navn', viewpoint: 'Utsiktspunkt', hut: 'Hytte eller ly', landmark: 'Landemerke', water: 'Kilde / vann', picnic: 'Rasteplass' };
     const mappedName = t['name:nb']?.trim() || t.name?.trim();
-    items.push({ id: `${e.type}/${e.id}`, name: (mappedName || fallback[kind]).slice(0, 100), unnamed: !mappedName, kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway, sacScale: t.sac_scale, ...(kind === 'steps' ? { streetPaths: [geometry], streetEnds: [geometry[0], geometry.at(-1)!] } : {}) });
+    items.push({ id: `${e.type}/${e.id}`, name: (mappedName || fallback[kind]).slice(0, 100), unnamed: !mappedName, kind, latitude, longitude, geometry, sourceUrl: `https://www.openstreetmap.org/${e.type}/${e.id}`, fetchedAt, osmHighway: t.highway, sacScale: t.sac_scale, surface: t.surface, footway: t.footway, ...(kind === 'steps' ? { streetPaths: [geometry], streetEnds: [geometry[0], geometry.at(-1)!] } : {}) });
   }
   return items;
 }

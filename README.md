@@ -2,24 +2,22 @@
 
 En Android-først tur-app for registrering, utforsking og samling, bygget med Expo, React Native og TypeScript. Turene er ikke begrenset til et bestemt sted.
 
-## Første versjon
+## Tråkk 0.4 — naturstier og enkel trening
 
-- Registrerer GPS-spor, distanse, fart, høydeprofil og filtrerte høydemeter opp/ned.
-- Måler hele tiden fra start til slutt. Pauser trekkes aldri fra. Starttid og GPS-punkter lagres fortløpende i SQLite.
-- Har «Lagre sti hit» under vanlig tur, med automatisk start ved forrige klipp og valgfritt navn. Skyggeturer har ingen klippeverktøy. Se [turmodusene](docs/trip-modes.md).
-- Åpner lagrede stier fra Utforsk og kompasset, med direkte oppstart av stien som skygge.
-- Tilpasser kartet til hele den lagrede turen og lar deg slette turen med bekreftelse.
-- Lar deg navngi hele eller deler av et lagret turspor. Egne stier vises på kartet og i et kompass med luftlinjeavstand.
-- Viser en skygge av en tidligere tur, med den opprinnelige tidslinjen og pausene. Valgfrie norske stemmemeldinger gir tidsavvik omtrent hvert minutt når sammenligningen er pålitelig.
-- Oppdager vedvarende ruteavvik og gjeninntreden på referanseruten. Avstikkere og GPS-hull gjør hele turens tidsresultat usammenlignbart; det gis ingen snarvei-rekord.
-- Samler navngitte gater i kartlagte lokale områder ved minst 95 % lengdedekning og alle ender i én sammenhengende, lagret gåtur. Hele gaten med forgreninger vises på kartet. Se [reglene for gatesamling](docs/street-collection.md).
-- Har et turpass for OSM-stier, topper, utsiktspunkter, hytter/ly, landemerker, kilder og rasteplasser. Stidekning kan samles over flere turer. Oppnådde stempler lagres lokalt; gatestempler vurderes på nytt ved kartoppdatering.
-- Henter kartobjekter automatisk langs lagrede turer mens appen er åpen, med mellomlagring og nye forsøk ved nettfeil. Alle kategorier teller på både vanlige turer og skyggeturer.
-- Følger posisjonen din automatisk med valgt radius, og har målforslag fra OSM og aktiverbare personlige mål med fast innhold.
-- Har en Tråkkvenn med mann/dame, animasjon og synlig opptjent utstyr fra distanse-, stignings- og samlingsmilepæler. Se [mål og sosial pilot](docs/goals-and-social.md).
-- Lagrer turlogg og valgfri vekt lokalt, og eksporterer turer og samling som en JSON-fil uten vekten.
+- Engangsoppsett av automatisk registrering. Deretter åpner du appen og går; bakgrunns-GPS fortsetter med låst skjerm. Pause vedvarer til du velger Fortsett.
+- Naturstier i nærområdet, kart/fullskjerm, stiinfo, avstand og Min posisjon. Kamera/AR er beholdt.
+- Registrert distanse, fart, høydemeter og bevegelsestid. Egne strekk kan klippes med et synlig startmerke. 4×4-treneren ligger under Deg.
+- Automatiske GPS-tider for kartlagte stideler og egne strekk, separat per retning. Personlige milepæler beregnes fra egne spor.
+- Tidligere turer, strekk og eksport beholdes. Ingen gamle spor lastes opp til de nye spillproduktene.
 
-Dette er en første implementasjon. GPS med låst skjerm, tale i bakgrunnen, faktisk batteriforbruk, kartvisning og sensorpresisjon må kontrolleres på en fysisk Android-telefon før appen kan regnes som pålitelig på tur. Retningsbasert kamera-AR finnes i Android-testutgaven; den krever feltprøving. Ingen konto, skysynk, sosial deling eller planteidentifikasjon er implementert.
+0.4 er en **alfa med ny arbeidsflyt**. Naturstiklassifisering er konservativ og kartdata kan mangle. Automatisk registrering, batteri og timing må feltprøves på telefon. Se [regler, begrensninger og kontroll](docs/release-0.4.0.md).
+
+## Tre separate produkter
+
+[Arbeidsplan og beslutninger](docs/product/roadmap.md). Tråkk rendyrkes; spillmenyer og avatar er tatt ut av hovedflyten.
+
+- [Gatekampen](apps/gatekampen/README.md): bare gater, private vennegrupper og sesonger. Regelmodell og databaseskisse finnes; nettapp/backend er ikke publisert.
+- [Rollespillplattformen](apps/eventyr/README.md): en Ultima-inspirert spillmotor for ekte landområder. Første eventyr er [Lyktene under Fløyen](docs/product/floeyen-story.md). Én figur beholder alle krefter og alt utstyr på tvers av eventyrene. Historie og testede domenemodeller finnes; spillbar mobil løkke og live-server gjenstår.
 
 ## Utvikling
 
@@ -53,7 +51,7 @@ python3 scripts/build-android.py
 
 Resultatet er `android/app/build/outputs/apk/release/app-release.apk`. Skriptet bruker testnøkkelen fra det genererte prosjektet; dette er ikke en produksjonssignert butikkutgivelse. Pakken trenger ikke Metro for å starte. Native bygging og fysisk felttest er separate kontroller.
 
-**Android-testversjon:** [Tråkk 0.3.28](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.3.28). AR-infopanelet får husket lesestørrelse med A−/A+ og to fingre. Valgt element viser luftlinjeavstand direkte på kartet, og «Min posisjon» er tydelig også i fullskjerm. Installer som oppdatering for å beholde turene. Se [endringer og kontroll](docs/release-0.3.28.md).
+**Android-testversjon:** [Tråkk 0.4.0 alfa](https://github.com/helge-gish/bergen-paths/releases/tag/trakk-0.4.0). Automatisk registrering, naturstier og personlige tider. Installer som oppdatering for å beholde turene. Se [bruk og kontroll](docs/release-0.4.0.md).
 
 Versjon 0.1.0 manglet `RECEIVE_BOOT_COMPLETED`, som Android krever når `expo-task-manager` oppretter vedvarende GPS-jobber. Det ga et native krasj ved første posisjonsoppdatering og kunne gjenta seg ved gjenåpning. Tillatelsen er nå eksplisitt deklarert i `app.json`, og byggeskriptet kontrollerer den ferdige APK-en for å hindre samme feil igjen.
 

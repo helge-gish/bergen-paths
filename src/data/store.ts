@@ -38,7 +38,8 @@ export function createStore(db: Database) {
   const hydrate = (row: Row): Trip => {
     const workout = store.setting<Workout | null>(`workout:${row.id}`, null);
     const mode = store.setting<'normal' | 'ghost'>(`mode:${row.id}`, row.ghostId ? 'ghost' : 'normal');
-    const metadata = JSON.stringify([row, workout, mode]);
+    const automatic = store.setting(`automatic:${row.id}`, false);
+    const metadata = JSON.stringify([row, workout, mode, automatic]);
     const revision = db.getFirstSync<{ count: number; latest: number | null }>('SELECT COUNT(*) AS count, MAX(timestamp) AS latest FROM points WHERE tripId = ?', row.id)!;
     const old = hydrated.get(row.id);
     // append() only inserts immutable points. Polling during a GPS outage must
@@ -46,7 +47,7 @@ export function createStore(db: Database) {
     const samePoints = old?.count === revision.count && old.latest === revision.latest;
     if (samePoints && old.metadata === metadata) return old.trip;
     const points = samePoints ? old.trip.points : db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix);
-    const trip = { ...row, workout, mode, audioEnabled: !!row.audioEnabled, points };
+    const trip = { ...row, workout, mode, ...(automatic ? { automatic: true } : {}), audioEnabled: !!row.audioEnabled, points };
     hydrated.set(row.id, { ...revision, metadata, trip });
     return trip;
   };
@@ -204,7 +205,7 @@ export function createStore(db: Database) {
     setting<T>(key: string, fallback: T): T {
       const r = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key);
       if (!r) return fallback;
-      if (!['osmDiscoveries', 'goals', 'goalCatalog'].includes(key)) return JSON.parse(r.value) as T;
+      if (!['osmDiscoveries', 'natureDiscoveries', 'goals', 'goalCatalog'].includes(key)) return JSON.parse(r.value) as T;
       const previous = immutableSettings.get(key);
       if (previous?.raw === r.value) return previous.value as T;
       const value = JSON.parse(r.value) as T;
