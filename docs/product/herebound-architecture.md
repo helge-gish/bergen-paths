@@ -74,3 +74,9 @@ Utseendet eies av Herebound og holdes adskilt fra styrke/ferdigheter. Før AR-fi
 ## Beslutning for neste arbeid
 
 Neste kodeleveranse prioriterer en liten, sammenhengende og morsom ULTIMA X-del fra Meyermarken: mørklagt kart, faktisk gange som avdekker verdenen, stedlige AR-møter og et lite løsbart mysterium. Trinnene over er avhengigheter som bygges for denne delen, ikke et separat plattformprosjekt som må ferdigstilles først. SDK-et utvides når spillet trenger det. Se [Meyermarken-prøven](ultima-x-meyermarken.md) for det konkrete leveransemålet. Deretter vurderer brukeren om gameplayet er godt nok til videre satsing. MCP, bredt rammeverk og andre spilltyper venter.
+
+## Andre SDK-kunde: battle royale med samme figur
+
+Brukerens senere avklaring 24. oktober: [Meyermarken battle royale](meyermarken-battle-royale.md) blir spill nummer to som skal utfordre SDK-et. Eksisterende Herebound-figur, egenskaper, hjelpere og relevant eid utstyr skal brukes i spillet. Ingen automatisk nullstilling til identiske startfigurer.
+
+Etter den første ULTIMA X-feltprøven kommer en liten serverstyrt flerspillerprøve før vi stabiliserer det brede MCP-/forfatterlaget. Dette endrer den tidligere rekkefølgen mellom trinn 6 og 7: battle royale trenger autoritative økter, kister, forbruk, kampstatus og resultat før den kan testes som et faktisk flerspillerspill. Den nye spillpakken skal ikke innføre en separat figur eller inventarmodell.
