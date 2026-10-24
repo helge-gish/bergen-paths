@@ -73,3 +73,7 @@ Koordinatkilde for teststart: [Meyermarken / OpenStreetMap way 27461162](https:/
 «Start prøve» åpner spillet direkte ved spillpakkens startpunkt, uten GPS og uten de tidligere mellomstegene. «Fortsett prøve» bruker lagret prøveposisjon. Fysisk start i en kommende feltutgave skal fortsatt kontrolleres mot spillets startkoordinat.
 
 Simulatorens tidsstempel og kontrollklokke oppdateres fra samme klokkeavlesning. I 0.1.0 kunne en senere avlesning i en kølagt state-oppdatering bli tolket som en fremtidig posisjon og skjule katalogen/startknappen. En ventende GPS-forespørsel kan nå avbrytes ved prøvestart og får ikke endre modus etterpå. Startdetaljer er en egen skjerm og forsvinner ikke mens GPS-tilstanden endrer seg.
+
+Neste prioriterte leveranse er [felttest med ekte kart og AR](herebound-field-test.md), før utvidelse til andre spilltyper eller større plattformfunksjoner.
+
+Gjeldende avhengighetsgrenser og byggerekkefølge: [Herebound-arkitekturen](herebound-architecture.md).
