@@ -3,3 +3,4 @@ export * from './engine';
 export * from './session';
 export * from './presence';
 export * from './exploration';
+export * from './character';

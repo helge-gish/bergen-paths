@@ -5,11 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Session, carryCapacity, inventoryWeight, canEnter, progressFor, isRevealed, freshPosition, gamesNearby, metersBetween, nearby, stockKey } from '../../packages/herebound-sdk';
+import { Session, entryStatus, canMeet, carryCapacity, inventoryWeight, canEnter, progressFor, isRevealed, freshPosition, gamesNearby, metersBetween, nearby, stockKey } from '../../packages/herebound-sdk';
 import type { Account, Action, Encounter, GamePack, GameRegistry, Persistence, PositionFix } from '../../packages/herebound-sdk';
 import { registry } from './registry';
 import { persistence } from './storage';
 import { PortalArt, WorldMap } from './Map';
+import { GamePortal } from './GamePortal';
+import { FieldCamera } from './FieldCamera';
+import { CharacterScreen } from './CharacterScreen';
 import { FieldScene } from './FieldScene';
 import { FieldMap } from './FieldMap';
 
@@ -30,6 +33,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
   const [error, setError] = useState(''), [message, setMessage] = useState(''), [name, setName] = useState('');
   const [arEncounter, setArEncounter] = useState<string | null>(null), [arRequested, setArRequested] = useState<string | null>(null);
   const [tab, setTab] = useState<'world' | 'journal' | 'character'>('world');
+  const [previewCamera, setPreviewCamera] = useState(false);
   const [selected, setSelected] = useState<string | null>(null), [preview, setPreview] = useState<string | null>(null);
   const [fix, setFix] = useState<PositionFix | null>(null), [locating, setLocating] = useState(false), [locationMessage, setLocationMessage] = useState('');
   const [watching, setWatching] = useState(false), [foreground, setForeground] = useState(AppState.currentState !== 'background');
@@ -44,7 +48,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
   const visible = gamesNearby(games, fix, now);
   const simulation = !field && (fix?.source === 'simulation' || !!pack);
   const live = foreground && freshPosition(fix, now) && fix.source === 'gps' && fix.accuracy <= 30;
-  const present = (e: Encounter) => !!pack && !!progress && (field ? live && metersBetween(fix!, e.position) + fix!.accuracy <= e.radiusMeters : nearby(pack, progress.position, e));
+  const present = (e: Encounter) => !!pack && !!progress && (field ? foreground && canMeet(e,fix,now) : nearby(pack, progress.position, e));
   const money = (amount: number) => `${amount * (pack?.currency?.unitsPerCredit ?? 1)} ${pack?.currency?.name ?? 'mynt'}`;
 
   useEffect(() => { let alive = true;
@@ -72,7 +76,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       const permission = await Location.getForegroundPermissionsAsync();
       if (cancelled) return;
       if (!permission.granted) { setLocationMessage('Tillat posisjon for å spille ute.'); return; }
-      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 4 }, result => {
+      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 0 }, result => {
         if (cancelled) return;
         acceptGps({ latitude: result.coords.latitude, longitude: result.coords.longitude, accuracy: result.coords.accuracy ?? Infinity, timestamp: result.timestamp, source: 'gps' });
       }, reason => { if (!cancelled) setLocationMessage(`GPS: ${reason}`); });
@@ -123,7 +127,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
   }
   async function locate() {
     const attempt = ++locationAttempt.current;
-    setLocating(true); setLocationMessage(''); setFix(null); setPreview(null);
+    setLocating(true); setLocationMessage('');
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (attempt !== locationAttempt.current) return;
@@ -137,8 +141,18 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       const next: PositionFix = { latitude: result.coords.latitude, longitude: result.coords.longitude, accuracy: result.coords.accuracy ?? Infinity, timestamp: result.timestamp, source: 'gps' };
       acceptGps(next); setWatching(true);
       if (!freshPosition(next, Date.now())) setLocationMessage('Posisjonen er for usikker. Prøv igjen når GPS har bedre dekning.');
+      return next;
     } catch (e) { if (attempt === locationAttempt.current) setLocationMessage(errorText(e)); }
     finally { if (attempt === locationAttempt.current) setLocating(false); }
+  }
+  async function enterField(game: GamePack) {
+    if (locating || inFlight.current) return;
+    let position = fix;
+    if (!position || position.source !== 'gps' || !freshPosition(position, Date.now()) || !canEnter(game,position,Date.now(),!!account?.fieldGames?.[game.id])) position = await locate() ?? null;
+    const status = entryStatus(game, position, Date.now(), !!account?.fieldGames?.[game.id]);
+    if (!status.ready || !position) { setLocationMessage(status.text); return; }
+    session.setPosition(position);
+    await act({type:'enter',gameId:game.id,mode:'field',fix:position});
   }
   async function exportSave() {
     await run(async () => {
@@ -155,9 +169,21 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       setMessage('Lagringen er klar for eksport.');
     });
   }
-  const choose = (e: Encounter) => { session.closeArEncounter(); setArEncounter(null); setArRequested(null); setSelected(e.id); setMessage(''); };
+  const choose = (e: Encounter) => {
+    session.closeArEncounter(); setArEncounter(null); setArRequested(null); setMessage('');
+    if (field || !account || !pack) { setSelected(e.id); return; }
+    // One tap opens a simulator meeting. No intermediate move/inspect screen that
+    // can disappear under the next tap when its content changes height.
+    void run(async()=>{
+      let current = account;
+      for (const action of [{type:'travel',position:e.position},{type:'discover',encounterId:e.id}] as Action[]) {
+        const result=await session.dispatch({id:`cmd-${Date.now()}-${++commandNo.current}`,expectedRevision:current.revision,action}); current=result.account;
+      }
+      setAccount(current);setSelected(e.id);
+    });
+  };
   const chooseAr = (e: Encounter) => { session.openArEncounter(e.id); arExpires.current=Date.now()+5*60_000; setArEncounter(e.id); setArRequested(null); setSelected(e.id); setMessage(''); };
-  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.2.0 · FELTTEST</Text></View>;
+  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.3.0 · TEST</Text></View>;
   const tabs = account && <View style={s.tabs}>{([{ id: 'world', title: pack ? 'Verden' : 'Spill' }, { id: 'journal', title: 'Journal' }, { id: 'character', title: 'Figur & sekk' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); setSelected(null); setMessage(''); }} style={[s.tab, tab === t.id && s.tabActive]}><Text style={[s.tabText, tab === t.id && s.tabTextActive]}>{t.title}</Text></Pressable>)}</View>;
 
   let body: React.ReactNode;
@@ -169,16 +195,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       <Button title="Opprett prøvefigur →" disabled={busy || !name.trim()} onPress={() => void run(async () => { setAccount(await session.create(name)); })}/>
       <Text style={s.small}>Figuren lagres på denne enheten. Dette er en lokal spillprøve; ingen konto kreves.</Text></View>
   </>;
-  else if (tab === 'character') body = <>
-    <View style={s.hero}><View style={s.heroWords}><Eyebrow>DIN HEREBOUND-FIGUR</Eyebrow><Text style={s.heroTitle}>{account.character.name}</Text><Text style={s.heroCopy}>Nivå {account.character.level} · {account.character.xp} erfaring · {account.character.credits} Herebound-mynt</Text></View></View>
-    <View style={s.card}><Text style={s.title}>Sekken din</Text><Text style={s.gold}>{(inventoryWeight(account) / 1000).toFixed(1).replace('.', ',')} / {carryCapacity(account) / 1000} kg</Text><Text style={s.body}>Følger deg mellom spill. Hvert spill bestemmer hva tingene kan brukes til.</Text>
-      {Object.entries(account.character.inventory).filter(([, count]) => count > 0).length === 0 && <Text style={s.empty}>Sekken er tom. Finn en handelsmann i verdenen.</Text>}
-      {Object.entries(account.character.inventory).filter(([, count]) => count > 0).map(([id, count]) => <View key={id} style={s.item}><Text style={s.itemTitle}>{account.items[id]?.name ?? id} <Text style={s.count}>× {count}</Text></Text><Text style={s.small}>{account.items[id]?.description}</Text></View>)}
-    </View>
-    <View style={s.card}><Text style={s.title}>Reisefølget ditt</Text>{Object.keys(account.character.helpers).length === 0 ? <Text style={s.body}>Ingen hjelpere ennå. Kanskje noen du møter vil slå følge?</Text> : Object.values(account.character.helpers).map(h => <View key={h.id} style={s.item}><Text style={s.itemTitle}>{h.name} · +{h.carryGrams / 1000} kg</Text><Text style={s.body}>{h.description}</Text><Text style={s.small}>Følger deg mellom spill og steder.</Text></View>)}</View>
-    <View style={s.card}><Eyebrow>EGENSKAPER</Eyebrow><View style={s.stats}>{Object.entries(account.character.attributes).map(([key, value], i) => <View key={key} style={s.stat}><Text style={s.statValue}>{value}</Text><Text style={s.small}>{['Styrke', 'Smidighet', 'Utholdenhet', 'Intelligens', 'Visdom', 'Karisma'][i]}</Text></View>)}</View><Text style={s.small}>Prøvefiguren følger deg mellom spill. Kamp og nivåstigning kommer senere.</Text></View>
-    <Button title="Eksporter figuren" secondary disabled={busy} onPress={() => void exportSave()}/>
-  </>;
+  else if (tab === 'character') body = <CharacterScreen account={account} registry={games} onAction={act} busy={busy} error={error} onExport={()=>void exportSave()}/>;
   else if (tab === 'journal') body = <><Eyebrow>DINE OPPDAGELSER</Eyebrow><Text style={s.pageTitle}>Journal</Text>
     {Object.entries(account.activeMode === 'field' ? account.fieldGames ?? {} : account.games).every(([, p]) => p.journal.length === 0) && <View style={s.card}><Text style={s.body}>Foreløpig blanke sider. Spør dem du møter, og undersøk det du finner.</Text></View>}
     {Object.entries(account.activeMode === 'field' ? account.fieldGames ?? {} : account.games).map(([gameId, p]) => p.journal.length ? <View key={gameId}><Text style={s.sectionTitle}>{games.get(gameId)?.title ?? gameId}</Text>{p.journal.map(j => <View key={j.id} style={s.card}><Text style={s.title}>{j.title}</Text><Text style={s.body}>{j.text}</Text></View>)}</View> : null)}
@@ -197,7 +214,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       {field && arEncounter !== encounter.id && <Button title="Finn dette i AR" disabled={!present(encounter)} onPress={()=>{setArRequested(encounter.id);setSelected(null);setMessage('');}}/>}
       <View style={s.card}><Eyebrow>{distance(metersBetween(field && fix ? fix : progress.position, encounter.position))} UNNA</Eyebrow><Text style={s.pageTitle}>{progress.discovered.includes(encounter.id) ? encounter.name : encounter.rumor}</Text>
         {!present(encounter) ? <><Text style={s.body}>Kom nærmere for å undersøke stedet.</Text>{!field && <Button title="Gå hit i simulatoren" disabled={busy} onPress={() => void act({ type: 'travel', position: encounter.position })}/>}{field && progress.discovered.includes(encounter.id) && <><Text style={s.body}>{encounter.description}</Text><Text style={s.small}>Du kjenner dette stedet. Kom tilbake for å samhandle.</Text></>}</> : !progress.discovered.includes(encounter.id) ? <><Text style={s.body}>Du er fremme. Hva skjuler seg her?</Text><Button title="Undersøk stedet" disabled={busy || (field && arEncounter !== encounter.id)} onPress={() => void act({ type: 'discover', encounterId: encounter.id })}/></> : <>
-          <Text style={s.body}>{encounter.description}</Text><View style={s.dialogue}><Text style={s.dialogueText}>{message || encounter.greeting}</Text></View>
+          <Text style={s.body}>{encounter.description}</Text><View style={s.dialogue}><Text style={s.dialogueText}>{message || (encounter.interaction && progress.journal.some(j=>j.id===encounter.interaction!.clue.id) ? encounter.interaction.clue.text : encounter.greeting)}</Text></View>
           {encounter.interaction && <><Button title={progress.journal.some(j=>j.id===encounter.interaction!.clue.id) ? 'Fullført ✓' : encounter.interaction.label} disabled={busy || (field && arEncounter !== encounter.id) || progress.journal.some(j=>j.id===encounter.interaction!.clue.id) || (!!encounter.interaction.requires && !progress.journal.some(j=>j.id===encounter.interaction!.requires))} onPress={()=>void act({type:'interact', encounterId:encounter.id})}/>{encounter.interaction.requires && !progress.journal.some(j=>j.id===encounter.interaction!.requires) && <Text style={s.small}>Undersøk stedet for å lære hvordan.</Text>}</>}
           {encounter.recruit && (!encounter.recruit.requires || progress.journal.some(j => j.id === encounter.recruit!.requires)) && <Button title={account.character.helpers[encounter.recruit.helperId] ? 'Med i reisefølget ditt' : 'Spør om å slå følge'} disabled={busy || (field && arEncounter !== encounter.id) || !!account.character.helpers[encounter.recruit.helperId]} onPress={() => void act({ type: 'recruit', encounterId: encounter.id })}/>}
           {encounter.topics.filter(t => !t.requires || progress.journal.some(j => j.id === t.requires)).map(t => <Button key={t.id} title={t.label} secondary disabled={busy || (field && arEncounter !== encounter.id)} onPress={() => void act({ type: 'talk', encounterId: encounter.id, topicId: t.id })}/>)}
@@ -213,13 +230,17 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
   else if (previewPack) body = <>
     <Pressable accessibilityRole="button" onPress={() => setPreview(null)}><Text style={s.link}>← Spilloversikt</Text></Pressable>
     <Eyebrow>{previewPack.areaName}</Eyebrow><Text style={s.pageTitle}>{previewPack.title}</Text>
-    <Text style={s.body}>{previewPack.description}</Text>
-    <View style={s.card}><Eyebrow>HER BEGYNNER EVENTYRET</Eyebrow><Text style={s.title}>{previewPack.start.name}</Text>
-      {fix && <Text style={s.body}>{distance(metersBetween(fix, previewPack.start.position))} til start · kom innen {previewPack.start.radiusMeters} m</Text>}
-      <Text style={s.small}>{previewPack.start.position.latitude.toFixed(6)}, {previewPack.start.position.longitude.toFixed(6)}</Text>
+    <View style={s.card}><View style={s.row}><View style={s.flex}><Eyebrow>STARTSONE</Eyebrow><Text style={s.title}>{previewPack.start.name}</Text><Text style={s.small}>{previewPack.start.radiusMeters} meter rundt portalen</Text></View><GamePortal start={previewPack.start}/></View>
+      {!previewPack.simulationOnly && <>
+        <Text accessibilityLiveRegion="polite" style={s.body}>{entryStatus(previewPack,fix,now,!!account.fieldGames?.[previewPack.id]).text}</Text>
+        {fix?.source==='gps'&&<Text style={s.small}>GPS ±{Math.round(fix.accuracy)} m · oppdatert for {Math.max(0,Math.round((now-fix.timestamp)/1000))} s siden</Text>}
+        {!!locationMessage&&<Text style={s.small}>{locationMessage}</Text>}
+        <Button title={locating?'Sjekker GPS …':account.fieldGames?.[previewPack.id]?'Fortsett ute':'Start ute'} disabled={busy||locating} onPress={()=>void enterField(previewPack)}/>
+        <Button title="Oppdater GPS" disabled={locating||busy} secondary onPress={()=>void locate()}/>
+      </>}
+      <View style={s.row}><Button title="Startkart" secondary={previewCamera} onPress={()=>setPreviewCamera(false)}/><Button title="Test kamera · AR" secondary={!previewCamera} onPress={()=>setPreviewCamera(true)}/></View>
+      <View style={{height:360,borderRadius:16,overflow:'hidden'}}>{previewCamera?<FieldCamera demo encounter={previewPack.encounters[0]} lit={false} onSelect={()=>{}} emptyMessage="Her kan du teste AR-kameraet. Spillfigurer åpnes etter at du har startet i spillområdet."/>:<FieldMap pack={previewPack} position={fix?.source==='gps' ? fix : null} navigation/>}</View>
       <Button title="Vis startpunkt på kart" secondary onPress={() => void Linking.openURL(`https://www.openstreetmap.org/?mlat=${previewPack.start.position.latitude}&mlon=${previewPack.start.position.longitude}#map=17/${previewPack.start.position.latitude}/${previewPack.start.position.longitude}`).catch(e => setError(errorText(e)))}/>
-      <View style={{height:300,borderRadius:16,overflow:'hidden'}}><FieldMap pack={previewPack} position={fix?.source==='gps' ? fix : null} navigation/></View>
-      {!previewPack.simulationOnly && <><Text style={s.body}>{live && canEnter(previewPack,fix,now,!!account.fieldGames?.[previewPack.id]) ? 'Du er fremme. Klar til å utforske!' : `Gå til ${previewPack.start.name}. Start åpnes når GPS bekrefter at du er i nærheten.`}</Text><Button title={account.fieldGames?.[previewPack.id] ? 'Fortsett ute' : 'Start ute'} disabled={busy || !live || !canEnter(previewPack,fix,now,!!account.fieldGames?.[previewPack.id])} onPress={()=>void act({type:'enter',gameId:previewPack.id,mode:'field',fix:fix!})}/>{!live && <Button title={locating?'Finner GPS …':'Oppdater GPS'} disabled={locating} secondary onPress={()=>void locate()}/>}</>}
       <Text style={s.small}>Du kan også prøve historien hjemme med simulerte posisjoner.</Text>
       <Button title={account.games[previewPack.id] ? 'Fortsett prøve' : 'Start prøve'} disabled={busy} onPress={() => void startSimulation(previewPack)}/>
     </View>
@@ -236,13 +257,12 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
     {[...games.values()].map(game => <View key={game.id} style={s.card}>
       <Eyebrow>HJEMMEPRØVE</Eyebrow><Text style={s.title}>{game.title}</Text>
       <Text style={s.body}>Prøvespill ved {game.start.name}. Du flytter deg med knapper i simulatoren.</Text>
-      <Button title={account.games[game.id] ? 'Fortsett prøve' : 'Start prøve'} secondary disabled={busy} onPress={() => void startSimulation(game)}/>
+      <Button title={account.games[game.id] ? 'Fortsett prøve' : 'Start prøve'} secondary disabled={busy} onPress={() => void startSimulation(game)}/><Button title="Startsted og AR-kamera" secondary onPress={()=>{setPreviewCamera(false);setPreview(game.id);}}/>
     </View>)}
     {games.size === 0 && <Text style={s.body}>Ingen spillpakker er installert. Herebound er klar når et spill legges til.</Text>}
   </>;
 
   return <SafeAreaView style={s.screen} edges={['top', 'bottom']}><StatusBar style="dark"/>{header}
-    {busy && <View style={s.saving}><ActivityIndicator size="small" color="#254b3c"/><Text style={s.small}>Lagrer …</Text></View>}
     {!!error && <View accessibilityRole="alert" style={s.error}><Text style={s.errorText}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setError('')}><Text style={s.link}>Lukk</Text></Pressable></View>}
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" key={`${tab}-${pack?.id ?? 'catalogue'}-${selected ?? ''}-${preview ?? ''}`}>
       {body}

@@ -47,3 +47,9 @@ Navnet skal passe arenaen og ulike spilltyper. Kandidater til videre undersøkel
 ## Implementert nå
 
 Manifest-/områdevalidering og domenemodeller ligger i `apps/arena`. Regel- og innholdsmodeller er testbare uten GPS. Ingen generell spillcontainer, creator portal, offentlig SDK eller live-server er ferdigstilt ennå.
+
+## Slagordkandidater, 24. oktober 2026
+
+Brukerens notat: «Games out there» og «Games out here» er mulige slagord for Herebound. Ingen variant er valgt. «Out here» peker mot spill der du selv står; «out there» mot en verden med spill å oppdage. Vurder senere om uttrykket også dekker arrangementer, tribunespill og andre stedbundne spill som ikke nødvendigvis er ute i naturen.
+
+Oppfølgingsnotat: **GOH — Games Out Here** er også kandidat til selve container-/plattformnavnet, som alternativ til Herebound. Ikke en beslutning om navnebytte. Kort navn med mulig uttale som «go», men uttale, søkbarhet, domener og varemerketilgjengelighet må undersøkes før valg. App-ID og produktnavn beholdes foreløpig.

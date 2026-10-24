@@ -7,7 +7,7 @@ type State = { state: string; reason: string; targetId?: string };
 const native = requireOptionalNativeModule<{ availability(): Promise<string>; install(): Promise<boolean> }>('HereboundAr');
 const Native = native ? requireNativeView<any>('HereboundAr') : null;
 const style = { padding: 14, backgroundColor: '#f6e8b7', borderRadius: 12 } as const;
-export function FieldCamera({ encounter, lit, onSelect }: { encounter?: Encounter; lit: boolean; onSelect(e: Encounter): void }) {
+export function FieldCamera({ encounter, lit, onSelect, demo = false, emptyMessage = 'Gå nærmere et funn på kartet for å møte det i AR.' }: { encounter?: Encounter; lit: boolean; onSelect(e: Encounter): void; emptyMessage?: string; demo?: boolean }) {
   const [permission, request] = useCameraPermissions();
   const [support, setSupport] = useState('checking'), [attempt, setAttempt] = useState(0), [placement, setPlacement] = useState(0);
   const [active, setActive] = useState(AppState.currentState === 'active');
@@ -29,12 +29,12 @@ export function FieldCamera({ encounter, lit, onSelect }: { encounter?: Encounte
   if(support!=='ready' || !Native)return <View style={{padding:24,gap:16}}><Text style={{color:'#fff'}}>{support==='install'?'AR trenger Google Play-tjenester for AR.':support==='checking'?'Kontrollerer AR …':'AR er ikke tilgjengelig akkurat nå. Du kan fortsatt bruke kartet. Stedlige handlinger krever AR.'}</Text><Pressable style={style} onPress={()=>void (async()=>{if(support==='install')await native?.install();setAttempt(a=>a+1);})()}><Text>{support==='install'?'Installer / oppdater AR':'Prøv AR igjen'}</Text></Pressable></View>;
   return <View style={{flex:1}}>
     {active && <Native key={`${encounter?.id ?? 'scan'}-${attempt}`} style={{flex:1}} active={active} placement={placement} scene={encounter ? {id:encounter.id,kind:encounter.visual ?? 'lantern',lit} : null}
-      onState={({nativeEvent}: {nativeEvent:State})=>setState(nativeEvent)} onInteract={({nativeEvent}: {nativeEvent:{id:string}})=>{if(encounter?.id===nativeEvent.id)onSelect(encounter);}}/>}
+      onState={({nativeEvent}: {nativeEvent:State})=>setState(nativeEvent)} onInteract={({nativeEvent}: {nativeEvent:{id:string}})=>{if(!demo && encounter?.id===nativeEvent.id)onSelect(encounter);}}/>}
     <View pointerEvents="box-none" style={{position:'absolute',left:16,right:16,bottom:20,gap:10}}>
-      <Text style={{color:'#fff7dc',fontSize:15,backgroundColor:'#10271ee8',padding:12,borderRadius:12}}>{!encounter?'Gå nærmere et funn på kartet for å møte det i AR.':state.reason}</Text>
+      <Text style={{color:'#fff7dc',fontSize:15,backgroundColor:'#10271ee8',padding:12,borderRadius:12}}>{state.state==='unavailable'?state.reason:demo&&state.state==='anchored'?'Prøvegjenstanden er festet. Kameraet fungerer. Dette gir ingen spillbelønning.':!encounter?emptyMessage:state.reason}</Text>
       {encounter && state.state!=='unavailable' && <Pressable style={style} onPress={()=>setPlacement(p=>p+1)}><Text style={{fontWeight:'700',textAlign:'center'}}>{state.state==='anchored'?'Plasser på nytt':'Plasser foran meg'}</Text></Pressable>}
       {state.state==='unavailable' && <Pressable style={style} onPress={()=>setAttempt(a=>a+1)}><Text>Åpne kamera igjen</Text></Pressable>}
-      {encounter && state.state==='anchored' && <Pressable style={style} onPress={()=>onSelect(encounter)}><Text style={{fontWeight:'700',textAlign:'center'}}>Undersøk funnet</Text></Pressable>}
+      {!demo && encounter && state.state==='anchored' && <Pressable style={style} onPress={()=>onSelect(encounter)}><Text style={{fontWeight:'700',textAlign:'center'}}>Undersøk funnet</Text></Pressable>}
     </View>
   </View>;
 }

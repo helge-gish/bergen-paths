@@ -90,3 +90,9 @@ Vertens `FieldMap`, `FieldScene` og `FieldCamera` bruker generiske spillpakker. 
 ## Nye produktspor etter feltleveransen
 
 [Avatar og publikumsarrangementer](herebound-avatar-and-live-events.md) beskriver ønsket om en gjennomarbeidet avatarbygger, mulig formendring ved inaktivitet og Herebound som vert for pauseunderholdning på Brann Stadion. Dette er planlagte bruksområder som kan prøve felles identitet, arrangement, lag og serverautoritet. De endrer ikke prioriteten på den pågående ULTIMA X-feltprøven.
+
+## 0.3.0: figur og deklarativ portal
+
+[Figurkontrakten](herebound-character-v1.md) føyer til utseende, utstyrsplasser, skins, global XP og nivå. `Avatar`/`CharacterScreen` er vertens presentasjon; `character.ts` i SDK-et eier progresjon og migrasjon. ULTIMA X definerer funn og eventyrskins. Ingen konkret spillimport utenfor registry.
+
+`GamePack.start.presentation` beskriver portalens motiv, farge og etikett. `GamePortal` er en spillnøytral renderer med runeportal, leir og signalstein, og animasjon som respekterer redusert bevegelse. Kontrakten kan senere utvides med validerte grafikkpakker uten at spillet får kjøre vilkårlig renderingskode i verten.

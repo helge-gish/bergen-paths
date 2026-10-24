@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyCommand, createRegistry, newAccount, decodeAccount, progressFor, isRevealed, fogFeature, metersBetween, Session } from '../packages/herebound-sdk';
+import { applyCommand, createRegistry, newAccount, decodeAccount, progressFor, isRevealed, fogFeature, metersBetween, Session, canEnter, canMeet, entryStatus } from '../packages/herebound-sdk';
 import type { Account, Action, GamePack, PositionFix } from '../packages/herebound-sdk';
 import { ultimaX } from '../games/ultima-x';
 import { sharedItems } from '../content/shared-items';
@@ -109,4 +109,19 @@ test('fog geometry has valid closed disjoint revealed-cell holes',()=>{
   const a=enter(),rings=fogFeature(ultimaX,progressFor(a)!.revealed).geometry.coordinates;
   assert.ok(rings.length>1);
   for(const ring of rings){assert.equal(ring.length,5);assert.deepEqual(ring[0],ring[4]);assert.ok(ring.flat().every(Number.isFinite));}
+});
+
+
+test('field start and meeting zones remain usable with ordinary GPS error; stale and distant fixes fail',()=>{
+ const near=gps({...ultimaX.start.position,latitude:ultimaX.start.position.latitude+.0006},25);
+ assert.ok(canEnter(ultimaX,near,clock,false));
+ assert.equal(entryStatus(ultimaX,near,clock,false).ready,true);
+ assert.ok(enter(newAccount('Zone')));
+ assert.doesNotThrow(()=>perform(newAccount('Zone'),{type:'enter',gameId:ultimaX.id,mode:'field',fix:near},near));
+ const far=gps({...ultimaX.start.position,latitude:ultimaX.start.position.latitude+.0012},5);
+ assert.equal(canEnter(ultimaX,far,clock,false),false);assert.match(entryStatus(ultimaX,far,clock,false).text,/igjen til sonen/);
+ assert.equal(entryStatus(ultimaX,{...near,accuracy:100},clock,false).ready,false);
+ assert.equal(entryStatus(ultimaX,{...near,timestamp:clock-31_000},clock,false).ready,false);
+ const e=at('rowan'),atBerry=gps({...e.position,latitude:e.position.latitude+.0001},20);
+ assert.ok(canMeet(e,atBerry,clock));assert.equal(canMeet(e,{...atBerry,accuracy:50},clock),false);
 });

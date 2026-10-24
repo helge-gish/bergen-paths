@@ -221,7 +221,13 @@ internal class HereboundArRenderer {
       GLES20.glUniform4f(color,r,g,b,1f); attribute(actorProgram,"a",cube,3); GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,36)
     }
     val glow = (.85 + .15 * sin(elapsed / 500.0)).toFloat()
-    if (kind == "berries") {
+    if (kind == "satchel") {
+      block(0f,.3f,0f,.48f,.55f,.25f,.49f,.31f,.17f)
+      block(0f,.58f,0f,.58f,.17f,.28f,.62f,.65f,.44f)
+      block(-.16f,.35f,.14f,.05f,.4f,.03f,.8f,.65f,.4f)
+      block(.16f,.35f,.14f,.05f,.4f,.03f,.8f,.65f,.4f)
+      block(0f,.25f,.17f,.3f,.2f,.09f,.65f,.43f,.24f)
+    } else if (kind == "berries") {
       block(0f,.34f,0f,.05f,.65f,.05f,.34f,.42f,.19f)
       for(i in 0..5) { val angle=i*Math.PI/3; block((cos(angle)*.18).toFloat(),.62f+(i%2)*.08f,(sin(angle)*.18).toFloat(),.14f,.14f,.14f,.85f,.17f,.09f) }
       block(.22f,.4f,0f,.4f,.05f,.2f,.35f,.53f,.18f)

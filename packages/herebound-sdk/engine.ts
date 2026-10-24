@@ -1,27 +1,32 @@
-import type { Account, Action, Command, Encounter, GamePack, GameRegistry, Item, Point, PositionFix, Snapshot } from './types';
-import { canEnter, freshPosition } from './presence';
+import { awardXp, DEFAULT_APPEARANCE, EQUIP_SLOTS, migrateCharacter, prepareCharacter, validAppearance, validSkin } from './character';
+import type { Account, Action, Command, Encounter, GamePack, GameRegistry, Item, Point, PositionFix, Skin, Snapshot } from './types';
+import { canEnter, canMeet, freshPosition } from './presence';
 import { progressFor, revealAt } from './exploration';
 import { validPoint, metersBetween } from './geo';
 export { validPoint, metersBetween } from './geo';
 
 const id = (s: unknown): s is string => typeof s === 'string' && /^[a-z][a-z0-9:-]{0,79}$/.test(s) && !['constructor', 'prototype'].includes(s);
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= 1_000_000;
-export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item> = new Map(pack.items.map(i => [i.id, i]))) {
+export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item> = new Map(pack.items.map(i => [i.id, i])), skins: ReadonlyMap<string, Skin> = new Map((pack.skins ?? []).map(s => [s.id, s]))) {
   if (pack.sdkVersion !== 1 || !id(pack.id) || !count(pack.version) || pack.version < 1 || !pack.title?.trim() ||
       !validPoint(pack.area?.center) || !(pack.area.radiusMeters > 0 && pack.area.radiusMeters <= 5000) ||
       !validPoint(pack.spawn) || metersBetween(pack.spawn, pack.area.center) > pack.area.radiusMeters ||
       !validPoint(pack.start?.position) || !pack.start.name?.trim() || !(pack.start.radiusMeters > 0 && pack.start.radiusMeters <= 200) ||
       metersBetween(pack.start.position, pack.area.center) + pack.start.radiusMeters > pack.area.radiusMeters ||
       typeof pack.simulationOnly !== 'boolean' || !Array.isArray(pack.items) || !Array.isArray(pack.encounters)) throw new Error('Spillpakken støtter ikke denne Herebound-versjonen.');
+  const portal = pack.start.presentation;
+  if (portal && (!['rune-gate','beacon','camp'].includes(portal.motif) || !/^#[0-9a-fA-F]{6}$/.test(portal.accent) || !portal.label?.trim() || portal.label.length > 30)) throw new Error('Ugyldig startportal.');
   if (pack.currency && (!pack.currency.name?.trim() || !Number.isSafeInteger(pack.currency.unitsPerCredit) || pack.currency.unitsPerCredit < 1 || pack.currency.unitsPerCredit > 1000)) throw new Error('Ugyldig valutaomregning.');
   const helperIds = new Set<string>();
   for (const helper of pack.helpers) {
     if (!id(helper.id) || !helper.id.startsWith(pack.id + ':') || helperIds.has(helper.id) || !helper.name?.trim() || !count(helper.carryGrams)) throw new Error('Ugyldig hjelper.');
     helperIds.add(helper.id);
   }
+  for (const skin of pack.skins ?? []) if (!validSkin(skin) || !skin.id.startsWith(pack.id + ':')) throw new Error('Ugyldig skin.');
   const itemIds = new Set<string>(), encounterIds = new Set<string>();
   for (const item of pack.items) {
     if (!id(item.id) || !item.id.startsWith(pack.id + ':') || itemIds.has(item.id) || !item.name.trim() || !count(item.weightGrams)) throw new Error('Ugyldig gjenstand i spillpakken.');
+    if (item.wearable && (item.kind !== 'equipment' || !EQUIP_SLOTS.includes(item.wearable.slot) || !['staff','satchel','lantern'].includes(item.wearable.visual) || (item.wearable.minLevel !== undefined && (!count(item.wearable.minLevel) || item.wearable.minLevel < 1 || item.wearable.minLevel > 50)))) throw new Error('Ugyldig utstyr.');
     itemIds.add(item.id);
   }
   for (const imported of pack.imports) {
@@ -36,6 +41,7 @@ export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item
     if (e.interaction) {
       const r = e.interaction;
       if (!id(r.id) || !r.label?.trim() || !id(r.clue?.id) || !r.clue.title?.trim() || !r.clue.text?.trim() || !count(r.xp) || r.xp > 100 || (r.requires && !clueIds.has(r.requires))) throw new Error('Ugyldig møtehandling.');
+      if (r.skinReward && (!skins.has(r.skinReward) || skins.get(r.skinReward)!.source !== 'adventure')) throw new Error('Ukjent skinbelønning.');
       const costs = new Set<string>();
       for (const c of r.costs) { if (!itemIds.has(c.itemId) || costs.has(c.itemId) || !Number.isInteger(c.amount) || c.amount < 1 || c.amount > 99) throw new Error('Ugyldig kostnad.'); costs.add(c.itemId); }
       if (r.reward && (!itemIds.has(r.reward.itemId) || !Number.isInteger(r.reward.amount) || r.reward.amount < 1 || r.reward.amount > 99)) throw new Error('Ugyldig belønning.');
@@ -52,9 +58,15 @@ export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item
     }
   }
 }
-export function createRegistry(packs: GamePack[], sharedItems: Item[] = []): GameRegistry {
+export function createRegistry(packs: GamePack[], sharedItems: Item[] = [], sharedSkins: Skin[] = []): GameRegistry {
   const registry = new Map<string, GamePack>();
   const catalogue = new Map<string, Item>();
+  const skins = new Map<string, Skin>();
+  if (sharedSkins.some(s => !s.id.startsWith('herebound:'))) throw new Error('Ugyldig felles skin.');
+  for (const skin of [...sharedSkins, ...packs.flatMap(p => p.skins ?? [])]) {
+    if (!validSkin(skin) || skins.has(skin.id)) throw new Error('Ugyldig eller duplisert skin.');
+    skins.set(skin.id, { ...skin });
+  }
   for (const item of sharedItems) {
     if (!id(item.id) || !item.id.startsWith('herebound:') || !item.name?.trim() || !count(item.weightGrams) || catalogue.has(item.id)) throw new Error('Ugyldig felles gjenstand.');
     catalogue.set(item.id, JSON.parse(JSON.stringify(item)));
@@ -64,17 +76,17 @@ export function createRegistry(packs: GamePack[], sharedItems: Item[] = []): Gam
     catalogue.set(item.id, item);
   }
   for (const pack of packs) {
-    validatePack(pack, catalogue);
+    validatePack(pack, catalogue, skins);
     if (registry.has(pack.id)) throw new Error('Spillet er allerede registrert.');
     registry.set(pack.id, JSON.parse(JSON.stringify(pack)));
   }
-  return Object.assign(registry, { items: catalogue });
+  return Object.assign(registry, { items: catalogue, skins });
 }
 export function newAccount(name: string): Account {
   const clean = name.trim();
   if (!clean || clean.length > 30) throw new Error('Bruk et navn på 1–30 tegn.');
   return { schemaVersion: 1, namespace: 'local-test', revision: 0, currentGame: null,
-    character: { name: clean, level: 1, xp: 0, credits: 20, attributes: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }, inventory: {}, helpers: {} },
+    character: { appearance: { ...DEFAULT_APPEARANCE }, equipment: {}, ownedSkins: {}, skin: null, xpClaims: {}, name: clean, level: 1, xp: 0, credits: 20, attributes: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }, inventory: {}, helpers: {} },
     items: {}, inventoryEvents: [], games: {}, receipts: {} };
 }
 export const stockKey = (encounterId: string, itemId: string) => `${encounterId}/${itemId}`;
@@ -93,9 +105,36 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
   // assumed to exist in the phone runtime.
   const next: Account = JSON.parse(JSON.stringify(account));
   for (const item of registry.items.values()) if (!next.items[item.id]) next.items[item.id] = { ...item };
+  prepareCharacter(next, registry);
+  const previousLevel = next.character.level;
   const a: Action = command.action;
   let message = '';
-  if (a.type === 'leave') { next.currentGame = null; message = 'Fremgangen er bevart.'; }
+  if (a.type === 'appearance') {
+    if (!validAppearance(a.appearance)) throw new Error('Ugyldig utseende.');
+    next.character.appearance = { ...a.appearance }; message = 'Utseendet er lagret.';
+  } else if (a.type === 'equip') {
+    if (!EQUIP_SLOTS.includes(a.slot)) throw new Error('Ukjent utstyrsplass.');
+    if (a.itemId === null) delete next.character.equipment[a.slot];
+    else {
+      const item = next.items[a.itemId];
+      if (!item?.wearable || item.wearable.slot !== a.slot || !(next.character.inventory[item.id] > 0)) throw new Error('Du må eie utstyret for å ta det på.');
+      if (next.character.level < (item.wearable.minLevel ?? 1)) throw new Error('Utstyret krever høyere nivå.');
+      next.character.equipment[a.slot] = item.id;
+    }
+    message = a.itemId ? `${next.items[a.itemId].name} er tatt på.` : 'Utstyret er lagt i sekken.';
+  } else if (a.type === 'wear-skin') {
+    const skin = a.skinId && next.skins?.[a.skinId];
+    if (a.skinId !== null && (!skin || !next.character.ownedSkins[a.skinId] || next.character.level < skin.minLevel)) throw new Error('Dette antrekket er ikke låst opp ennå.');
+    next.character.skin = a.skinId; message = 'Antrekket er tatt på.';
+  } else if (a.type === 'buy-skin') {
+    const skin = registry.skins.get(a.skinId);
+    if (!skin || skin.source !== 'shop' || !skin.price) throw new Error('Dette antrekket er ikke til salgs.');
+    if (next.character.ownedSkins[skin.id]) throw new Error('Du eier allerede dette antrekket.');
+    if (next.character.level < skin.minLevel) throw new Error('Antrekket krever høyere nivå.');
+    if (next.character.credits < skin.price) throw new Error('Du har ikke nok Herebound-mynt.');
+    next.character.credits -= skin.price; next.character.ownedSkins[skin.id] = true;
+    message = `${skin.name} er lagt i garderoben.`;
+  } else if (a.type === 'leave') { next.currentGame = null; message = 'Fremgangen er bevart.'; }
   else if (a.type === 'enter') {
     const pack = registry.get(a.gameId);
     if (!pack) throw new Error('Spillet er ikke installert.');
@@ -104,7 +143,7 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
     const enteringField = mode === 'field';
     if (enteringField && pack.simulationOnly) throw new Error('Spillet er ikke åpnet for feltprøve.');
     const fix = enteringField ? physicalFix : a.fix;
-    if (!fix || (enteringField && fix.accuracy > 30) || fix.source !== (enteringField ? 'gps' : 'simulation')) throw new Error('Venter på riktig posisjonskilde.');
+    if (!fix || (enteringField && fix.accuracy > 50) || fix.source !== (enteringField ? 'gps' : 'simulation')) throw new Error('Venter på riktig posisjonskilde.');
     const states = enteringField ? (next.fieldGames ??= {}) : next.games;
     if (!canEnter(pack, fix, now, !!states[pack.id])) throw new Error(states[pack.id] ? 'Kom tilbake til spillområdet med fersk GPS.' : `Gå til ${pack.start.name} med brukbar GPS for å begynne.`);
     for (const item of registry.items.values()) if (!next.items[item.id]) next.items[item.id] = { ...item };
@@ -142,12 +181,12 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
       progress.position = { ...a.position }; progress.revealed = revealAt(pack, progress, a.position); message = 'Flyttet i simulatoren.';
     } else {
       const encounter = pack.encounters.find(e => e.id === a.encounterId);
-      if (!encounter || !nearby(pack, progress.position, encounter) || (field && metersBetween(progress.position, encounter.position) + physicalFix!.accuracy > encounter.radiusMeters)) throw new Error('Du må være ved møtestedet.');
+      if (!encounter || !nearby(pack, progress.position, encounter) || (field && !canMeet(encounter,physicalFix,now))) throw new Error('Du må være ved møtestedet.');
       if (field && arEncounter !== encounter.id) throw new Error('Åpne dette møtet i AR før du samhandler.');
       if (a.type === 'discover') {
         if (!progress.discovered.includes(encounter.id)) {
           progress.discovered.push(encounter.id);
-          next.character.xp += 10;
+          awardXp(next, `${pack.id}/discover/${encounter.id}`, 10);
         }
         message = encounter.greeting;
       } else {
@@ -164,7 +203,9 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
             next.character.inventory[reward.itemId] = (next.character.inventory[reward.itemId] ?? 0) + reward.amount;
             next.inventoryEvents.push({ commandId: command.id, gameId: pack.id, itemId: reward.itemId, delta: reward.amount });
           }
-          progress.journal.push({ ...interaction.clue }); next.character.xp += interaction.xp; message = interaction.clue.text;
+          progress.journal.push({ ...interaction.clue }); awardXp(next, `${pack.id}/interact/${encounter.id}`, interaction.xp);
+          if (interaction.skinReward) next.character.ownedSkins[interaction.skinReward] = true;
+          message = interaction.clue.text;
         } else if (a.type === 'recruit') {
           const offer = encounter.recruit, helper = pack.helpers.find(h => h.id === offer?.helperId);
           if (!helper || !offer || (offer.requires && !progress.journal.some(j => j.id === offer.requires))) throw new Error('Hjelperen er ikke klar til å slå følge ennå.');
@@ -200,6 +241,8 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
       }
     }
   }
+  prepareCharacter(next, registry);
+  if (next.character.level > previousLevel) message += ` Nivå ${next.character.level}! Se belønningene i garderoben.`;
   next.revision++;
   next.receipts[command.id] = { fingerprint, message };
   return { account: next, message };
@@ -231,6 +274,13 @@ export function decodeAccount(raw: string): Account {
     }
     if (a.currentGame !== null && (!id(a.currentGame) || !Object.hasOwn(a.activeMode === 'field' ? a.fieldGames ?? {} : a.games, a.currentGame))) throw 0;
     if (!Object.entries(a.receipts).every(([key, r]) => id(key) && record(r) && typeof r.fingerprint === 'string' && typeof r.message === 'string')) throw 0;
+    if (c.appearance !== undefined && !validAppearance(c.appearance)) throw 0;
+    if (c.equipment !== undefined && (!record(c.equipment) || !Object.entries(c.equipment).every(([slot, itemId]) => EQUIP_SLOTS.includes(slot as any) && typeof itemId === 'string' && c.inventory[itemId] > 0 && a.items[itemId]?.wearable?.slot === slot))) throw 0;
+    if (a.skins !== undefined && (!record(a.skins) || !Object.entries(a.skins).every(([key, s]) => s.id === key && validSkin(s)))) throw 0;
+    if (c.ownedSkins !== undefined && (!record(c.ownedSkins) || !Object.entries(c.ownedSkins).every(([key,v]) => id(key) && v === true && !!a.skins?.[key]))) throw 0;
+    if (c.skin !== undefined && c.skin !== null && (!id(c.skin) || !c.ownedSkins?.[c.skin])) throw 0;
+    if (c.xpClaims !== undefined && (!record(c.xpClaims) || !Object.entries(c.xpClaims).every(([key,v]) => /^[a-z0-9:-]+\/(discover|interact)\/[a-z0-9:-]+$/.test(key) && v === true))) throw 0;
+    migrateCharacter(a);
     return a;
   } catch { throw new Error('Lagringen kan ikke åpnes av denne versjonen. Den er bevart. Eksporter den før du gjør endringer.'); }
 }

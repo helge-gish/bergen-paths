@@ -33,7 +33,7 @@ test('discovery and first entry are separate: gate enforces pack start coordinat
   assert.equal(canEnter(ultimaX, city, now, false), false);
   assert.throws(() => action(newAccount('A'), { type: 'enter', gameId: ultimaX.id, fix: city }), /Meyermarken/);
   assert.equal(canEnter(ultimaX, city, now, true), true);
-  assert.equal(canEnter(ultimaX, { ...fix(), accuracy: 45 }, now, false), false);
+  assert.equal(canEnter(ultimaX, { ...fix(), accuracy: 60 }, now, false), false);
   assert.equal(canEnter(ultimaX, { ...fix(), timestamp: now - 31_000 }, now, false), false);
 });
 
@@ -88,7 +88,7 @@ test('trade invariants: no negative stock, gold, count, remote trades, or duplic
 });
 
 test('shared inventory survives entering a different game and unloading its original content', () => {
-  const brazil: GamePack = { ...ultimaX, id: 'brazil-test', title: 'Brazil', helpers: [], items: [], imports: ['herebound:rowanberry'], encounters: [{ ...ultimaX.encounters.find(e=>e.id==='maren')!, id: 'merchant', topics: [], shop: [{ itemId: 'herebound:rowanberry', buy: 3, sell: 2, quantity: 2 }] }] };
+  const brazil: GamePack = { ...ultimaX, id: 'brazil-test', title: 'Brazil', skins: [], helpers: [], items: [], imports: ['herebound:rowanberry'], encounters: [{ ...ultimaX.encounters.find(e=>e.id==='maren')!, id: 'merchant', topics: [], shop: [{ itemId: 'herebound:rowanberry', buy: 3, sell: 2, quantity: 2 }] }] };
   const both = createRegistry([ultimaX, brazil], sharedItems);
   let a = action(shop(), trade('herebound:rowanberry', 'buy', 2));
   a = action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='rusk')!.position });

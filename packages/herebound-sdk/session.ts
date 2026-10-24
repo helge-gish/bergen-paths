@@ -1,3 +1,4 @@
+import { prepareCharacter } from './character';
 import { applyCommand, decodeAccount, newAccount } from './engine';
 import type { Account, Command, GameRegistry, Persistence, PositionFix, Snapshot } from './types';
 
@@ -19,11 +20,12 @@ export class Session {
   load() { return this.queue(async () => {
     const raw = await this.persistence.read();
     this.account = raw === null ? null : decodeAccount(raw);
+    if (this.account) prepareCharacter(this.account, this.registry);
     return this.account;
   }); }
   create(name: string) { return this.queue(async () => {
     if (await this.persistence.read() !== null) throw new Error('Det finnes allerede en figur på denne enheten.');
-    const account = newAccount(name);
+    const account = newAccount(name); prepareCharacter(account, this.registry);
     await this.persistence.write(JSON.stringify(account)); this.account = account; return account;
   }); }
   dispatch(command: Command): Promise<Snapshot> { return this.queue(async () => {

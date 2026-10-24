@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { freshPosition, isRevealed, metersBetween } from '../../packages/herebound-sdk';
+import { canMeet, freshPosition, isRevealed, metersBetween } from '../../packages/herebound-sdk';
 import type { Encounter, GamePack, GameProgress, PositionFix } from '../../packages/herebound-sdk';
 import { FieldMap } from './FieldMap';
 import { FieldCamera } from './FieldCamera';
 export function FieldScene({pack,progress,fix,now,onSelect,onArSelect,initialTarget}:{pack:GamePack;progress:GameProgress;fix:PositionFix|null;now:number;onSelect(e:Encounter):void;onArSelect(e:Encounter):void;initialTarget?:string|null}) {
   const [mode,setMode]=useState<'map'|'ar'>(initialTarget ? 'ar' : 'map'),[full,setFull]=useState(false),[target,setTarget]=useState<string|null>(initialTarget ?? null);
   const live=freshPosition(fix,now)&&fix.source==='gps'&&fix.accuracy<=30;
-  const nearby=live?pack.encounters.filter(e=>(progress.discovered.includes(e.id)||isRevealed(pack,progress,e.position))&&metersBetween(fix,e.position)+fix.accuracy<=e.radiusMeters).sort((a,b)=>metersBetween(fix,a.position)-metersBetween(fix,b.position)):[];
+  const nearby=live?pack.encounters.filter(e=>(progress.discovered.includes(e.id)||isRevealed(pack,progress,e.position))&&canMeet(e,fix,now)).sort((a,b)=>metersBetween(fix,a.position)-metersBetween(fix,b.position)):[];
   const encounter=nearby.find(e=>e.id===target)??nearby[0];
   useEffect(()=>{if(mode==='ar' && !target && encounter)setTarget(encounter.id);},[mode,encounter?.id,target]);
   const select=(e:Encounter)=>{setFull(false);onSelect(e);};
@@ -18,6 +18,6 @@ export function FieldScene({pack,progress,fix,now,onSelect,onArSelect,initialTar
   return <>
     {full?<View style={{height:430}}/>:<View style={{height:490,borderRadius:18,overflow:'hidden'}}>{controls}{surface}{targets}</View>}
     {full&&<Modal visible hardwareAccelerated onRequestClose={()=>setFull(false)}><SafeAreaView style={{flex:1,backgroundColor:'#f6f3e9'}}>{controls}{surface}{targets}</SafeAreaView></Modal>}
-    <Text style={{fontSize:13,color:'#666f62'}}>{live?`GPS ±${Math.round(fix.accuracy)} m · gå for å avdekke kartet`:'Venter på fersk GPS · kjente steder er bevart'}</Text>
+    <Text style={{fontSize:13,color:'#666f62'}}>{live?`GPS ±${Math.round(fix.accuracy)} m · gå for å avdekke kartet`:fix && fix.accuracy>30 ? `GPS ±${Math.round(fix.accuracy)} m · trenger 30 m eller bedre for møter` : 'Venter på fersk GPS · kjente steder er bevart'}</Text>
   </>;
 }
