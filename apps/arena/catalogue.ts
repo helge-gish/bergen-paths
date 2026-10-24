@@ -1,14 +1,17 @@
 import type { Coordinate } from '../../src/domain/types';
 import { distance } from '../../src/domain/geo';
+import { FLOEYVARDEN_AREA } from './region';
 export type LocalGame = {
   id: string; scenarioId: string; title: string; areaName: string;
   center: Coordinate; discoveryRadius: number; status: 'prototype' | 'published';
   cooperative: boolean;
 };
 export const firstGame: LocalGame = {
-  id: 'floeyen-01', scenarioId: 'bergen-floeyen-lanterns', title: 'Lyktene under Fløyen', areaName: 'Fløyen',
-  // Approximate discovery centre only. Quest checkpoints need field validation.
-  center: { latitude: 60.3943, longitude: 5.3433 }, discoveryRadius: 3000, status: 'prototype', cooperative: true,
+  id: 'floeyen-01', scenarioId: 'bergen-floeyen-lanterns', title: 'ULTIMA X', areaName: 'Fløyvarden',
+  // The player selects a game in the platform catalogue. Presence inside this
+  // area enables that selected world; individual discoveries remain separate.
+  // Still a prototype, with encounter locations awaiting validation.
+  center: FLOEYVARDEN_AREA.center, discoveryRadius: FLOEYVARDEN_AREA.radiusMeters, status: 'prototype', cooperative: true,
 };
 export function gamesNear(games: LocalGame[], position: Coordinate | null, includePrototypes = false) {
   if (!position || !Number.isFinite(position.latitude) || Math.abs(position.latitude) > 90 || !Number.isFinite(position.longitude) || Math.abs(position.longitude) > 180) return [];

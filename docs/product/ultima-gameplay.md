@@ -1,5 +1,7 @@
 # Gameplaygrunnlag: klassisk rollespill i virkelige landskap
 
+**Senere presisering:** [Gjeldende ULTIMA X-plan](ultima-v-world.md) låser Ultima V som referanse, fri rekkefølge, klassisk ingredienssystem, plattformvalg og 5 km radius rundt Fløyvarden. Den gamle lineære prøvebeskrivelsen under er historisk og skal ikke bli obligatorisk spillflyt.
+
 Brukerens presisering 24. oktober 2026: rollespillappen er en «Ultima game machine» for ekte landområder. Fløyen er spill nummer én i serien med arbeidstittel **ULTIMA XXVII**. Endelig navn er åpent; Varde / Varde I: Lyktene under Fløyen er bare et forslag.
 
 ## Fast kjerne

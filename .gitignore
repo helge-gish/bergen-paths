@@ -46,3 +46,7 @@ __pycache__/
 
 # Local Expo module build output
 /modules/*/android/build/
+
+# Standalone Herebound native build output
+/apps/herebound/android/
+/apps/herebound/ios/

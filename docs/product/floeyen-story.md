@@ -1,5 +1,7 @@
 # Lyktene under Fløyen
 
+**Gjeldende ramme:** Historien inngår i [ULTIMA X ved Fløyvarden](ultima-v-world.md). Møtene under er fortellingsmateriale, ikke obligatorisk rekkefølge. Den nye planen presiserer plattformvalg, åpen verden, 5 km-radius og Ultima V-nært ingredienssystem.
+
 Arbeidstittel for første eventyr i Bergen Ultima XXVII. Originalt univers med inspirasjon fra klassiske rollespills utforsking, samtaler, handel og ingrediensmagi. Første fortelling kan spilles alene; modell og oppdrag skal også støtte levende flerspiller på Fløyen.
 
 ## Premiss

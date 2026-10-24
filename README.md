@@ -22,7 +22,7 @@ Velg **Start strekk** for å sette startpunkt. Først da vises strekkstart i kar
 [Arbeidsplan og beslutninger](docs/product/roadmap.md). Tråkk rendyrkes; spillmenyer og avatar er tatt ut av hovedflyten.
 
 - [Gatekampen](apps/gatekampen/README.md): bare gater, private vennegrupper og sesonger. Regelmodell og databaseskisse finnes; nettapp/backend er ikke publisert.
-- [Spillarenaen](apps/arena/README.md): en container for utendørs spill innen maksimalt 5 km radius, på sikt også fra andre utviklere. Første spill bruker Ultima-inspirert gameplay. Første eventyr er [Lyktene under Fløyen](docs/product/floeyen-story.md). Én figur beholder alle krefter og alt utstyr på tvers av eventyrene. Historie og testede domenemodeller finnes; spillbar mobil løkke og live-server gjenstår.
+- [Herebound](apps/herebound/README.md): selvstendig spillplattform med eget SDK, figur, sekk og hjelpere. ULTIMA X er første spillpakke. 0.1.0 har en spillbar simulator med samtaler, handel og lagring; AR, kamp og live-server gjenstår. Se [arkitektur og plan](docs/product/herebound-sdk.md).
 
 ## Utvikling
 
