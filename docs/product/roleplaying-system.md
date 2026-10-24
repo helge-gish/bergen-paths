@@ -36,7 +36,7 @@ En første ren kampmodell er implementert og testet: et lite rutenett, turrekkef
 
 ## Appen finner lokale spill
 
-Appen er en rollespillplattform, ikke en egen Fløyen-app. Med posisjonstilgang viser den tilgjengelige spill i nærheten. Spilleren velger et spill og går inn med sin varige figur og hele inventaret. Fløyen tilbyr første eventyr. Et katalogtreff sier at et spill finnes i området; det er ikke bevis for at spilleren har kommet frem til et konkret oppdragspunkt. Spill utenfor området kan forhåndsvises, men fysisk ankomst bekreftes separat.
+Appen er en utendørs spillarena; rollespill er første spilltype, og Fløyen er første spillpakke. Se outdoor-arena.md for siste avklaring. Med posisjonstilgang viser den tilgjengelige spill i nærheten. Spilleren velger et spill og går inn med sin varige figur og hele inventaret. Fløyen tilbyr første eventyr. Et katalogtreff sier at et spill finnes i området; det er ikke bevis for at spilleren har kommet frem til et konkret oppdragspunkt. Spill utenfor området kan forhåndsvises, men fysisk ankomst bekreftes separat.
 
 ## En felles motor, ulike eventyrpakker
 

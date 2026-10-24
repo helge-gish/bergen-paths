@@ -6,7 +6,7 @@ Tråkk er naturstier i nærområdet og enkel trening. Appåpning aktiverer regis
 
 Gatekampen er et eget produkt for gater, aldri trapper. Først private vennegrupper med invitasjon; åpne konkurranser senere. Kontoer og varige, serverkontrollerte konkurranser må være med fra første spillbare nettutgave.
 
-Den tredje appen er en stedbasert rollespillplattform som viser spill i nærheten. Bergen Ultima XXVII er arbeidstittel for det første lokale fjelleventyret inspirert av klassiske rollespill. Første område er Sandviksfjellet/Fløyen. Samarbeid, handel og felles hendelser er valgt retning. Én figur beholder alle krefter og alt utstyr på tvers av rollespillets eventyrpakker. Stedlige møter og AR skal støtte historien.
+Den tredje appen er en utendørs spillarena som viser spill i nærheten, med maksimalt 5 km radius per spill. Den skal på sikt åpnes for andre utviklere. Første spilltype er rollespill med Ultima-gameplay. Bergen Ultima XXVII er arbeidstittel for det første lokale fjelleventyret inspirert av klassiske rollespill. Første område er Sandviksfjellet/Fløyen. Samarbeid, handel og felles hendelser er valgt retning. Én figur beholder alle krefter og alt utstyr på tvers av rollespillets eventyrpakker. Stedlige møter og AR skal støtte historien.
 
 ## Rekkefølge og leveranser
 

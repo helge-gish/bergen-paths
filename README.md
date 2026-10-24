@@ -17,7 +17,7 @@ En Android-først tur-app for registrering, utforsking og samling, bygget med Ex
 [Arbeidsplan og beslutninger](docs/product/roadmap.md). Tråkk rendyrkes; spillmenyer og avatar er tatt ut av hovedflyten.
 
 - [Gatekampen](apps/gatekampen/README.md): bare gater, private vennegrupper og sesonger. Regelmodell og databaseskisse finnes; nettapp/backend er ikke publisert.
-- [Rollespillplattformen](apps/eventyr/README.md): en Ultima-inspirert spillmotor for ekte landområder. Første eventyr er [Lyktene under Fløyen](docs/product/floeyen-story.md). Én figur beholder alle krefter og alt utstyr på tvers av eventyrene. Historie og testede domenemodeller finnes; spillbar mobil løkke og live-server gjenstår.
+- [Spillarenaen](apps/arena/README.md): en container for utendørs spill innen maksimalt 5 km radius, på sikt også fra andre utviklere. Første spill bruker Ultima-inspirert gameplay. Første eventyr er [Lyktene under Fløyen](docs/product/floeyen-story.md). Én figur beholder alle krefter og alt utstyr på tvers av eventyrene. Historie og testede domenemodeller finnes; spillbar mobil løkke og live-server gjenstår.
 
 ## Utvikling
 

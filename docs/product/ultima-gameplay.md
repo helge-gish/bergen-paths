@@ -30,4 +30,4 @@ Testen må inneholde inventar, ekte ressurskostnader, magi og en taktisk beslutn
 
 ## Avgrensning av dagens implementasjon
 
-`apps/eventyr` inneholder innhold, katalog og rene testmodeller for figur, handel, progresjon og kamp. De er ikke en ferdig mobil spillapp, en live-server eller en feltgodkjent AR-opplevelse. Oppdrag, kamp og kontosystem må integreres i én spillbar løkke før brukertest på Fløyen.
+`apps/arena` inneholder innhold, katalog og rene testmodeller for figur, handel, progresjon og kamp. De er ikke en ferdig mobil spillapp, en live-server eller en feltgodkjent AR-opplevelse. Oppdrag, kamp og kontosystem må integreres i én spillbar løkke før brukertest på Fløyen.

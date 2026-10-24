@@ -28,10 +28,10 @@ GPS-/bakgrunnsfeil vises med gjenoppretting. Gamle manuelle turer vises som tidl
 ## De andre produktene
 
 - Gatekampen: eget filter for bare gater, poengregler og Supabase-databaseskisse for kontoer, vennegrupper og sesonger. Nettinnlogging, API-er og publisert spillapp gjenstår. SQL-skjemaet er ikke integrasjonstestet mot en kjørende database.
-- Rollespillplattform: [Lyktene under Fløyen](product/floeyen-story.md), [systemplan](product/roleplaying-system.md), separate innholdspakker, lokal spillkatalog og testmodeller for atomisk handel, erfaring, delt/personlig progresjon og full figurportabilitet. Ingen live-server, faktisk kampmotor eller feltgodkjente oppdragspunkter er publisert.
+- Utendørs spillarena: [Lyktene under Fløyen](product/floeyen-story.md), [systemplan](product/roleplaying-system.md), separate innholdspakker, maks 5 km spillradius med manifestvalidering, lokal spillkatalog og testmodeller for atomisk handel, erfaring, delt/personlig progresjon og full figurportabilitet. Ingen live-server, faktisk kampmotor eller feltgodkjente oppdragspunkter er publisert.
 
 ## Kontroll
 
-240 tester for app, komponenter og spillmodeller, TypeScript-kontroll, Android-bygg og 14 native enhetstester består. Nye tester dekker oppstart/pause-race, vedvarende pause, naturstifilter, begge måleretninger, GPS-/fartshull, gateregler, handelsatomisitet, turbasert kamp, figurportabilitet og områdeoppdagelse. APK-ens versjon, signatur, logo, innebygde JS og native AR-moduler er kontrollert. Ingen fysisk Pixel 6a eller Android-emulator er tilkoblet.
+241 tester for app, komponenter og spillmodeller, TypeScript-kontroll, Android-bygg og 14 native enhetstester består. Nye tester dekker oppstart/pause-race, vedvarende pause, naturstifilter, begge måleretninger, GPS-/fartshull, gateregler, handelsatomisitet, turbasert kamp, figurportabilitet og områdeoppdagelse. APK-ens versjon, signatur, logo, innebygde JS og native AR-moduler er kontrollert. Ingen fysisk Pixel 6a eller Android-emulator er tilkoblet.
 
 APK: 43536394 byte. SHA-256: `21aa5ef473e51ffb30567a967076f47891d5113a5528d379c5d73c7a452b735a`.

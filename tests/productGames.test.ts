@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gatekampenCatalogue, seasonScores } from '../apps/gatekampen/rules';
-import { command, newWorld } from '../apps/eventyr/world';
+import { command, newWorld } from '../apps/arena/world';
 test('Gatekampen removes same-name stair fragments before grouping and counts only season members once per street', () => {
   const way = (id: number, highway: string) => ({ type: 'way', id, tags: { highway, name: 'Gaten' }, geometry: [{ lat: 60, lon: 5 + id * .001 }, { lat: 60.001, lon: 5 + id * .001 }] });
   const streets = gatekampenCatalogue({ elements: [way(1, 'residential'), way(2, 'steps'), way(3, 'footway')] }, 100, 'test');
@@ -38,7 +38,7 @@ test('solo and shared lanterns advance each personal story without consuming som
   assert.throws(() => command(w, 'a', 'again', w.version, { type: 'light-lantern' }));
 });
 
-import { progressCharacter, characterPower, floeyen } from '../apps/eventyr/scenario';
+import { progressCharacter, characterPower, floeyen } from '../apps/arena/scenario';
 test('persistent character growth deduplicates server events, bounds daily walking XP, and unlocks local spells', () => {
   let p = { xp: 0, eventIds: [] as string[], walkingMinutesByDay: {} as Record<string, number> };
   const event = { id: 'proof-1', day: '2026-10-24', kind: 'walking' as const, minutes: 60 };
@@ -52,7 +52,7 @@ test('persistent character growth deduplicates server events, bounds daily walki
   assert.throws(() => progressCharacter(p, { ...event, id: 'bad', minutes: NaN }));
 });
 
-import { gamesNear, firstGame } from '../apps/eventyr/catalogue';
+import { gamesNear, firstGame } from '../apps/arena/catalogue';
 test('platform discovers nearby published adventures without treating a regional hit as an arrival or publishing the prototype', () => {
   assert.equal(gamesNear([firstGame], firstGame.center).length, 0);
   assert.equal(gamesNear([firstGame], firstGame.center, true).length, 1);
@@ -62,7 +62,7 @@ test('platform discovers nearby published adventures without treating a regional
   assert.equal(gamesNear([published], null).length, 0);
 });
 
-import { enterAdventure, type AdventureAccount } from '../apps/eventyr/character';
+import { enterAdventure, type AdventureAccount } from '../apps/arena/character';
 test('entering a different region/theme preserves every spell, recipe, item and experience point', () => {
   const account: AdventureAccount = { character: { id: 'hero', name: 'Helge', xp: 12000, spells: ['floeyen:west-wind', 'coast:tide'], recipes: ['rain-brew'], inventory: { staff: 1, gold: 500, blueberry: 20 }, equipment: ['staff'] }, currentGame: 'floeyen-01', journals: { 'floeyen-01': { chapter: 2, clues: ['iver'], choices: { lantern: 'remember' } } } };
   const coast = enterAdventure(account, 'coast-01');
@@ -74,7 +74,7 @@ test('entering a different region/theme preserves every spell, recipe, item and 
   assert.deepEqual(returned.character, account.character);
 });
 
-import { startBattle, battleAction, type Fighter } from '../apps/eventyr/battle';
+import { startBattle, battleAction, type Fighter } from '../apps/arena/battle';
 test('tactical PvE respects turns, range, shared protection, mana/potions, and exactly-once actions', () => {
   const fighter = (id: string, side: Fighter['side'], x: number, y: number): Fighter => ({ id, side, x, y, hp: 10, attack: 4, mana: 3, maxMana: 9, guard: false, potions: 1, spells: ['rowan-ward', 'west-wind'] });
   let b = startBattle([fighter('a', 'party', 0, 0), fighter('b', 'party', 0, 1)], [fighter('fog', 'foe', 0, 2)]);
@@ -90,4 +90,15 @@ test('tactical PvE respects turns, range, shared protection, mana/potions, and e
   assert.equal(b.outcome, 'won');
   assert.equal(battleAction(b, 'b', 'wind', 0, { type: 'cast', spell: 'west-wind', target: 'fog' }), b);
   assert.throws(() => battleAction(b, 'a', 'extra', b.version, { type: 'guard' }));
+});
+
+import { validateGameManifest } from '../apps/arena/manifest';
+test('creator game packages have a hard 5 km radius and cannot place encounter zones beyond the boundary', () => {
+  const game = { id: 'floeyen', creatorId: 'studio', formatVersion: 1, kind: 'roleplaying', area: { center: { latitude: 60.3943, longitude: 5.3433 }, radiusMeters: 5000 }, encounters: [{ id: 'lantern', area: { center: { latitude: 60.3943, longitude: 5.3433 }, radiusMeters: 50 } }] };
+  assert.equal(validateGameManifest(game), true);
+  assert.equal(validateGameManifest({ ...game, area: { ...game.area, radiusMeters: 5001 } }), false);
+  assert.equal(validateGameManifest({ ...game, area: { ...game.area, radiusMeters: 0 } }), false);
+  assert.equal(validateGameManifest({ ...game, encounters: [{ id: 'outside', area: { center: { latitude: 60.4343, longitude: 5.3433 }, radiusMeters: 1000 } }] }), false);
+  assert.equal(validateGameManifest({ ...game, encounters: [...game.encounters, ...game.encounters] }), false);
+  assert.equal(validateGameManifest({ ...game, area: { center: { latitude: NaN, longitude: 5 }, radiusMeters: 1000 } }), false);
 });
