@@ -67,3 +67,9 @@ Hold plattformens konto/figur/sekk/hjelpere/posisjon/lag adskilt fra det enkelte
 **Avatar:** Herebound eier figurens utseende og tilpasninger. Form, ansikt, hår, klær og visning av faktisk utstyr følger med mellom spill. Utseende holdes adskilt fra egenskaper og kampbalanse. Spill kan tilby egne tematiske uttrykk, forkledninger og animasjoner gjennom en felles modell. Avatarbyggeren er planlagt, ikke implementert i 0.1.0; denne utgaven viser navn, egenskaper, sekk og reisefølge.
 
 Koordinatkilde for teststart: [Meyermarken / OpenStreetMap way 27461162](https://mapcarta.com/W27461162). Møteplassene rundt starten er simulatoreksempler, ikke befarte navigasjonsmål.
+
+## Rettelse 0.1.1 — direkte prøvestart
+
+«Start prøve» åpner spillet direkte ved spillpakkens startpunkt, uten GPS og uten de tidligere mellomstegene. «Fortsett prøve» bruker lagret prøveposisjon. Fysisk start i en kommende feltutgave skal fortsatt kontrolleres mot spillets startkoordinat.
+
+Simulatorens tidsstempel og kontrollklokke oppdateres fra samme klokkeavlesning. I 0.1.0 kunne en senere avlesning i en kølagt state-oppdatering bli tolket som en fremtidig posisjon og skjule katalogen/startknappen. En ventende GPS-forespørsel kan nå avbrytes ved prøvestart og får ikke endre modus etterpå. Startdetaljer er en egen skjerm og forsvinner ikke mens GPS-tilstanden endrer seg.

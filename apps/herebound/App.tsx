@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Session, carryCapacity, inventoryWeight, canEnter, freshPosition, gamesNearby, metersBetween, nearby, stockKey } from '../../packages/herebound-sdk';
+import { Session, carryCapacity, inventoryWeight, freshPosition, gamesNearby, metersBetween, nearby, stockKey } from '../../packages/herebound-sdk';
 import type { Account, Action, Encounter, GamePack, GameRegistry, Persistence, PositionFix } from '../../packages/herebound-sdk';
 import { registry } from './registry';
 import { persistence } from './storage';
@@ -43,8 +43,15 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
     return () => { alive = false; locationAttempt.current++; };
   }, [session]);
   useEffect(() => {
-    const timer = setInterval(() => { setNow(Date.now()); setFix(current => current?.source === 'simulation' ? { ...current, timestamp: Date.now() } : current); }, 5000);
-    const sub = AppState.addEventListener('change', state => { if (state === 'active') setNow(Date.now()); });
+    // Capture once: a later timestamp in the queued updater looks like a
+    // future GPS fix and used to hide the catalogue / disable entry.
+    const refreshClock = () => {
+      const timestamp = Date.now();
+      setNow(timestamp);
+      setFix(current => current?.source === 'simulation' ? { ...current, timestamp } : current);
+    };
+    const timer = setInterval(refreshClock, 5000);
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') refreshClock(); });
     return () => { clearInterval(timer); sub.remove(); };
   }, []);
   async function run(work: () => Promise<void>) {
@@ -69,15 +76,22 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
     if (pack) { void act({ type: 'leave' }); return true; }
     return false;
   }); return () => sub.remove(); }, [selected, preview, tab, pack, busy, account]);
-  function simulatedPosition(position: { latitude: number; longitude: number }) {
+  async function startSimulation(game: GamePack) {
+    if (inFlight.current) return;
+    const timestamp = Date.now();
+    const position = account?.games[game.id]?.position ?? game.start.position;
+    const startFix: PositionFix = { ...position, timestamp, accuracy: 0, source: 'simulation' };
+    // Simulator entry is independent of a pending or rejected GPS request.
     locationAttempt.current++;
-    setFix({ ...position, timestamp: Date.now(), accuracy: 0, source: 'simulation' }); setNow(Date.now()); setLocating(false); setLocationMessage(''); setPreview(null);
+    setFix(startFix); setNow(timestamp); setLocating(false); setLocationMessage('');
+    await act({ type: 'enter', gameId: game.id, fix: startFix });
   }
   async function locate() {
     const attempt = ++locationAttempt.current;
     setLocating(true); setLocationMessage(''); setFix(null); setPreview(null);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
+      if (attempt !== locationAttempt.current) return;
       if (!permission.granted) throw new Error('Tillat posisjon for å finne spill nær deg. Du kan også prøve simulatoren.');
       let timer: ReturnType<typeof setTimeout> | undefined;
       const result = await Promise.race([
@@ -107,7 +121,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
     });
   }
   const choose = (e: Encounter) => { setSelected(e.id); setMessage(''); };
-  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>PRØVE 01</Text></View>;
+  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.1.1 · PRØVE</Text></View>;
   const tabs = account && <View style={s.tabs}>{([{ id: 'world', title: pack ? 'Verden' : 'Spill' }, { id: 'journal', title: 'Journal' }, { id: 'character', title: 'Figur & sekk' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); setSelected(null); setMessage(''); }} style={[s.tab, tab === t.id && s.tabActive]}><Text style={[s.tabText, tab === t.id && s.tabTextActive]}>{t.title}</Text></Pressable>)}</View>;
 
   let body: React.ReactNode;
@@ -157,30 +171,39 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
       </View>}
     </>}
   </>;
+  else if (previewPack) body = <>
+    <Pressable accessibilityRole="button" onPress={() => setPreview(null)}><Text style={s.link}>← Spilloversikt</Text></Pressable>
+    <Eyebrow>{previewPack.areaName}</Eyebrow><Text style={s.pageTitle}>{previewPack.title}</Text>
+    <Text style={s.body}>{previewPack.description}</Text>
+    <View style={s.card}><Eyebrow>HER BEGYNNER EVENTYRET</Eyebrow><Text style={s.title}>{previewPack.start.name}</Text>
+      {fix && <Text style={s.body}>{distance(metersBetween(fix, previewPack.start.position))} til start · kom innen {previewPack.start.radiusMeters} m</Text>}
+      <Text style={s.small}>{previewPack.start.position.latitude.toFixed(6)}, {previewPack.start.position.longitude.toFixed(6)}</Text>
+      <Button title="Vis startpunkt på kart" secondary onPress={() => void Linking.openURL(`https://www.openstreetmap.org/?mlat=${previewPack.start.position.latitude}&mlon=${previewPack.start.position.longitude}#map=17/${previewPack.start.position.latitude}/${previewPack.start.position.longitude}`).catch(e => setError(errorText(e)))}/>
+      <Text style={s.body}>Denne utgaven spilles i simulatoren. Å gå til startstedet aktiverer ikke fysisk spilling ennå.</Text>
+      <Button title={account.games[previewPack.id] ? 'Fortsett prøve' : 'Start prøve'} disabled={busy} onPress={() => void startSimulation(previewPack)}/>
+    </View>
+  </>;
   else body = <>
     <Eyebrow>SPILL DER DU ER</Eyebrow><Text style={s.pageTitle}>En annen verden.{ '\n'}Rett i nærheten.</Text>
     <Text style={s.body}>Oppdag spill innen 5 km. Hvert eventyr har sitt eget startsted.</Text>
+    {[...games.values()].filter(game => game.simulationOnly).map(game => <View key={game.id} style={s.card}>
+      <Eyebrow>PRØV UTEN GPS</Eyebrow><Text style={s.title}>{game.title}</Text>
+      <Text style={s.body}>Prøvespill ved {game.start.name}. Du flytter deg med knapper i simulatoren.</Text>
+      <Button title={account.games[game.id] ? 'Fortsett prøve' : 'Start prøve'} disabled={busy} onPress={() => void startSimulation(game)}/>
+    </View>)}
     <View style={s.locationPanel}><View style={s.row}><Text style={s.itemTitle}>{simulation ? '◈ Simulert posisjon' : '◎ Posisjonen din'}</Text>{locating && <ActivityIndicator color="#254b3c"/>}</View>
       {locationMessage ? <Text style={s.body}>{locationMessage}</Text> : fix && freshPosition(fix, now) ? <Text style={s.body}>{simulation ? 'Prøver spillområdet uten å være der fysisk.' : `GPS funnet · omtrent ${Math.round(fix.accuracy)} m nøyaktighet`}</Text> : <Text style={s.body}>{fix ? 'Oppdater posisjonen for å se spill i nærheten.' : 'Bruk posisjonen din for å finne spill.'}</Text>}
       <Button title={locating ? 'Finner posisjon …' : 'Finn spill nær meg'} secondary disabled={locating || busy} onPress={() => void locate()}/>
-      {simulation && fix && <Button title="Oppdater simulert posisjon" secondary disabled={busy} onPress={() => simulatedPosition(fix)}/>}
     </View>
     {visible.length === 0 && fix && freshPosition(fix, now) && <View style={s.card}><Text style={s.title}>Ingen spill her ennå</Text><Text style={s.body}>Det finnes foreløpig ingen tilgjengelige spill innen 5 km fra deg.</Text></View>}
     {visible.map(game => <View key={game.id} style={s.gameCard}><View style={s.gameArt}><PortalArt/></View><View style={s.cardInterior}><Eyebrow>{game.areaName} · {distance(metersBetween(fix!, game.area.center))}</Eyebrow><Text style={s.gameTitle}>{game.title}</Text><Text style={s.title}>{game.subtitle}</Text><Text style={s.body}>{game.description}</Text><Button title="Se startsted →" disabled={busy} onPress={() => setPreview(game.id)}/></View></View>)}
-    {previewPack && visible.some(g => g.id === previewPack.id) && <View style={s.card}><Eyebrow>HER BEGYNNER EVENTYRET</Eyebrow><Text style={s.title}>{previewPack.start.name}</Text><Text style={s.body}>{distance(metersBetween(fix!, previewPack.start.position))} til start · kom innen {previewPack.start.radiusMeters} m</Text>
-      <Text style={s.small}>{previewPack.start.position.latitude.toFixed(6)}, {previewPack.start.position.longitude.toFixed(6)}</Text>
-      <Button title="Vis startpunkt på kart" secondary onPress={() => void Linking.openURL(`https://www.openstreetmap.org/?mlat=${previewPack.start.position.latitude}&mlon=${previewPack.start.position.longitude}#map=17/${previewPack.start.position.latitude}/${previewPack.start.position.longitude}`).catch(e => setError(errorText(e)))}/>
-      {simulation ? <>{!canEnter(previewPack, fix, now, !!account.games[previewPack.id]) && <Button title="Gå til start i simulatoren" secondary onPress={() => { simulatedPosition(previewPack.start.position); setPreview(previewPack.id); }}/>}<Button title={account.games[previewPack.id] ? 'Fortsett eventyret' : 'Begynn eventyret'} disabled={busy || !canEnter(previewPack, fix, now, !!account.games[previewPack.id])} onPress={() => void act({ type: 'enter', gameId: previewPack.id, fix: fix! })}/></> : <Text style={s.body}>Denne første spillprøven åpnes i simulatoren. Møteplassene må prøves ute før felttesten.</Text>}
-    </View>}
-    <View style={s.separator}/><Text style={s.small}>PRØV UTEN Å REISE</Text>
-    {[...games.values()].slice(0, 1).map(game => <Button key={game.id} title="Åpne prøvemodus" secondary disabled={busy || locating} onPress={() => simulatedPosition({ latitude: game.area.center.latitude, longitude: game.area.center.longitude - .02 })}/>)}
     {games.size === 0 && <Text style={s.body}>Ingen spillpakker er installert. Herebound er klar når et spill legges til.</Text>}
   </>;
 
   return <SafeAreaView style={s.screen} edges={['top', 'bottom']}><StatusBar style="dark"/>{header}
     {busy && <View style={s.saving}><ActivityIndicator size="small" color="#254b3c"/><Text style={s.small}>Lagrer …</Text></View>}
     {!!error && <View accessibilityRole="alert" style={s.error}><Text style={s.errorText}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setError('')}><Text style={s.link}>Lukk</Text></Pressable></View>}
-    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" key={`${tab}-${pack?.id ?? 'catalogue'}-${selected ?? ''}`}>
+    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" key={`${tab}-${pack?.id ?? 'catalogue'}-${selected ?? ''}-${preview ?? ''}`}>
       {body}
       {!!message && !encounter && <Text accessibilityLiveRegion="polite" style={s.notice}>{message}</Text>}
     </ScrollView>{tabs}
