@@ -34,7 +34,7 @@ export function WorkoutCard({ trip, now, onChange }: { trip: Trip; now: number; 
       <View style={s.between}><Text style={[s.body, { flex: 1 }]}>Taletrener og påminnelser</Text><Switch accessibilityLabel="Lyd fra 4×4-treneren" value={w.audioEnabled} onValueChange={value => void change(value ? 'unmute' : 'mute')} /></View>
       {error && <Text style={s.small}>{error}</Text>}
       <Button secondary title={status.paused ? 'Fortsett 4×4' : 'Pause 4×4'} onPress={() => void change(status.paused ? 'resume' : 'pause')} />
-      <Button secondary title="Avslutt 4×4 · gå videre fritt" onPress={() => Alert.alert('Avslutte 4×4-treningen?', 'Turen, skyggen og GPS-registreringen fortsetter. Du styrer tempoet selv.', [{ text: 'Behold treningen', style: 'cancel' }, { text: 'Avslutt 4×4', onPress: () => void change('stop') }])} />
+      <Button secondary title="Fritt tempo · avslutt 4×4" onPress={() => void change('stop')} />
     </>}
   </View>;
 }

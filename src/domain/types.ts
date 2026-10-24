@@ -11,6 +11,7 @@ export type Trip = {
   automatic?: boolean;
   mode?: 'normal' | 'ghost';
   workout?: Workout | null;
+  workoutHistory?: Workout[];
   id: string;
   name: string;
   startedAt: number;

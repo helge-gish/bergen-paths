@@ -6,7 +6,7 @@ En Android-først tur-app for registrering, utforsking og samling, bygget med Ex
 
 - Engangsoppsett av automatisk registrering. Deretter åpner du appen og går; bakgrunns-GPS fortsetter med låst skjerm. Pause vedvarer til du velger Fortsett.
 - Naturstier i nærområdet, kart/fullskjerm, stiinfo, avstand og Min posisjon. Kamera/AR er beholdt.
-- Registrert distanse, fart, høydemeter og bevegelsestid. Egne strekk kan klippes med et synlig startmerke. 4×4-treneren ligger under Deg.
+- Registrert distanse, fart, høydemeter og bevegelsestid. Egne strekk kan klippes med et synlig startmerke. Treningsmodus kan slås på når som helst; 4×4 guider tempoet med tale og vibrasjon.
 - Automatiske GPS-tider for kartlagte stideler og egne strekk, separat per retning. Personlige milepæler beregnes fra egne spor.
 - Tidligere turer, strekk og eksport beholdes. Ingen gamle spor lastes opp til de nye spillproduktene.
 

@@ -19,7 +19,7 @@ import { TrailMap } from './src/ui/TrailMap';
 import { TrailFinder } from './src/ui/TrailFinder';
 import { ExploreSurface, type ExploreMode } from './src/ui/ExploreSurface';
 import { WorkoutCard } from './src/ui/Workout';
-import { createWorkout } from './src/domain/workout';
+import { workoutStatus } from './src/domain/workout';
 import { syncWorkoutCoach, workoutAvailable } from './src/services/workoutCoach';
 import { StretchResults } from './src/ui/StretchResults';
 import { Button, Icon, Metric } from './src/ui/components';
@@ -35,6 +35,7 @@ type Data = ReturnType<typeof snapshot>;
 export function Trakk({ initial }: { initial: Data }) {
   const [data, setData] = useState(initial), [now, setNow] = useState(Date.now());
   const [tab, setTab] = useState<'map' | 'log' | 'you'>('map');
+  const [trainingOpen, setTrainingOpen] = useState(false);
   const [mode, setMode] = useState<ExploreMode>('map');
   const [selected, setSelected] = useState<Discovery | null>(null), [detail, setDetail] = useState<Trip | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [loadingMap, setLoadingMap] = useState(false), [mapError, setMapError] = useState<string | null>(null);
@@ -90,6 +91,18 @@ export function Trakk({ initial }: { initial: Data }) {
     setBusy(true);
     void automaticRecorder.pause().catch(e => setError(String(e))).finally(() => { setBusy(false); refresh(); });
   };
+  const workout = data.active?.workout;
+  const workoutState = workout ? workoutStatus(workout, now) : null;
+  const training = !!workout && workout.endedAt === null && !workoutState!.complete;
+  const startTraining = () => { setTrainingOpen(false); void act(async () => {
+    // Choosing the explicitly labelled training action can resume registration;
+    // merely opening the selector never overrides a deliberate GPS pause.
+    if (!getStore().active()) await automaticRecorder.enable();
+    const current = getStore().active();
+    if (!current) throw new Error('Registreringen kunne ikke starte.');
+    const updated = getStore().startWorkout(current.id);
+    await syncWorkoutCoach(updated);
+  }); };
   const earned = new Set(timing.results.filter(r => r.source === 'nature').map(r => r.itemId)).size;
   return <SafeAreaView style={s.screen}><StatusBar style="dark" />
     <View style={[s.between, { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }]}><View style={s.row}><View style={{ width: 38, height: 38, backgroundColor: colors.ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Image source={require('./assets/trakk-icon.png')} style={{ width: 38, height: 38, borderRadius: 12 }} /></View><Text style={{ fontSize: 28, fontWeight: '800', color: colors.ink, letterSpacing: -1.2 }}>tråkk<Text style={{ color: colors.coral }}>.</Text></Text></View></View>
@@ -97,9 +110,10 @@ export function Trakk({ initial }: { initial: Data }) {
       {data.preference === 'unconfigured' && <View style={s.card}><Text style={s.heading}>Åpne Tråkk. Gå ut.</Text><Text style={s.body}>Tråkk registrerer når du åpner appen, også med låst skjerm. Stitider og egne strekk måles automatisk. Du kan alltid pause. GPS bruker batteri. Pause stopper registreringen helt.</Text><Button title="Tillat automatisk registrering" disabled={busy} onPress={() => void act(() => automaticRecorder.enable())} /><Text style={s.small}>Sporene blir på mobilen. Dette oppsettet gjøres én gang.</Text></View>}
       {(error || data.error) && <View style={s.notice}><Text style={s.body}>{error ?? data.error}</Text><Button secondary title="Prøv registrering igjen" disabled={busy} onPress={() => void act(() => automaticRecorder.ensure())} /><Button secondary title="Åpne tillatelser" onPress={() => void Linking.openSettings()} /></View>}
       {data.preference !== 'unconfigured' && <View style={[s.between, { flexWrap: 'wrap' }]}><View style={{ flex: 1 }}><Text style={s.subheading}>{busy ? 'Finner GPS …' : data.active ? '● Registrering på' : data.preference === 'paused' ? 'Registrering pauset' : data.limited ? '8 timer lagret · klar for mer' : 'Registrering venter'}</Text>{data.active && <Text style={s.small}>{stale ? 'Venter på fersk GPS' : 'Stitider måles automatisk'}</Text>}</View>{(data.preference === 'paused' || (!data.active && !busy)) ? <Button secondary title="Fortsett" disabled={busy} onPress={() => void act(() => automaticRecorder.enable())} /> : <Button secondary title="Pause" onPress={pause} />}</View>}
+      {workoutAvailable && <Button secondary title={training ? `4×4 · ${workoutState!.paused ? 'pauset' : workoutState!.current?.label}` : 'Treningsmodus · fritt tempo'} onPress={() => setTrainingOpen(true)} />}
       {tab === 'map' && <>
         <RadiusPicker radius={nearby.radius} onRadius={nearby.setRadius} />
-        <ExploreSurface mode={mode} onMode={setMode} enabled={!detail} map={<TrailMap onLocate={locate} locating={nearby.pending || busy} position={position} positionStale={stale} focus={position} recenter={recenter} discoveries={items} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} selectedDiscovery={selected} height={350} />} camera={<TrailFinder embedded items={items} trails={data.trails} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} busy={loadingMap} onRefresh={() => setMapRetry(n => n + 1)} onMap={target => { setSelected(target.item); setMode('map'); }} />} />
+        <ExploreSurface mode={mode} onMode={setMode} enabled={!detail && !trainingOpen} map={<TrailMap onLocate={locate} locating={nearby.pending || busy} position={position} positionStale={stale} focus={position} recenter={recenter} discoveries={items} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} selectedDiscovery={selected} height={350} />} camera={<TrailFinder embedded items={items} trails={data.trails} trips={data.trips} current={metrics?.points} segmentStart={peg?.point} busy={loadingMap} onRefresh={() => setMapRetry(n => n + 1)} onMap={target => { setSelected(target.item); setMode('map'); }} />} />
         {selected && <Pressable accessibilityRole="button" accessibilityLabel="Fjern kartvalg" onPress={() => setSelected(null)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={s.small}>{selected.name} · Lukk ×</Text></Pressable>}
         {mapError ? <View style={s.notice}><Text style={s.body}>{mapError}</Text><Button secondary title="Hent stier igjen" onPress={() => setMapRetry(n => n + 1)} disabled={loadingMap} /></View> : loadingMap ? <Text style={s.small}>Henter naturstier …</Text> : !items.length ? <Text style={s.body}>Ingen naturstier med tilstrekkelige kartdata her ennå. Prøv større radius. Asfalt og usikre gangforbindelser fremheves ikke.</Text> : null}
         {metrics && <View style={s.card}><View style={s.row}><Metric value={kmLabel(metrics.meters)} label="km registrert" /><Metric value={metrics.speedKmh === null ? '—' : metrics.speedKmh.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} label="km/t nå" /><Metric value={metrics.hasElevation ? String(Math.round(metrics.ascent)) : '—'} label="høydemeter opp" /></View><Text style={s.small}>{durationLabel(moving)} i bevegelse · også adkomst til stiene</Text></View>}
@@ -111,11 +125,9 @@ export function Trakk({ initial }: { initial: Data }) {
         {timing.pending && <Text style={s.small}>Oppdaterer stitider …</Text>}{timing.error && <Text style={s.body}>Stitider kunne ikke beregnes: {timing.error}</Text>}
         {!!timing.results.length && <StretchResults results={timing.results.slice(0, 20)} />}
         {!timing.results.length && <Text style={s.body}>Tider dukker opp når du går en kartlagt stidel eller et eget strekk fra ende til ende. Retningene måles hver for seg. GPS-hull gir ingen tid.</Text>}
-        {data.trips.filter(trip => !trip.automatic || tripMetrics(trip).meters >= 10).map(trip => <Pressable key={trip.id} accessibilityRole="button" onPress={() => setDetail(trip)} style={s.card}><Text style={s.subheading}>{trip.automatic ? new Date(trip.startedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }) : trip.name}</Text><Text style={s.small}>{kmLabel(tripMetrics(trip).meters)} km · {trip.automatic ? 'Automatisk registrering' : 'Tidligere tur'} →</Text></Pressable>)}
+        {data.trips.filter(trip => !trip.automatic || !!trip.workout || !!trip.workoutHistory?.length || tripMetrics(trip).meters >= 10).map(trip => <Pressable key={trip.id} accessibilityRole="button" onPress={() => setDetail(trip)} style={s.card}><Text style={s.subheading}>{trip.automatic ? new Date(trip.startedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }) : trip.name}</Text><Text style={s.small}>{kmLabel(tripMetrics(trip).meters)} km · {trip.automatic ? 'Automatisk registrering' : 'Tidligere tur'} →</Text></Pressable>)}
       </>}
       {tab === 'you' && <>
-        {data.active?.workout && <WorkoutCard trip={data.active} now={now} onChange={refresh} />}
-        {data.active && !data.active.workout && workoutAvailable && <Button secondary title="4×4-trener" onPress={() => void act(async () => { getStore().setSetting(`workout:${data.active!.id}`, createWorkout(Date.now(), true)); await syncWorkoutCoach(getStore().active()); })} />}
         <Text style={s.heading}>Dine stier</Text><View style={s.card}><Text style={s.heading}>{earned} stideler gått</Text><Text style={s.body}>{data.trails.length} egne strekk · {timing.results.length} målte gjennomføringer</Text><Text style={s.small}>Kartet kan dele samme navngitte sti i flere deler. Personlige tider sammenlignes innen samme del, geometri og retning.</Text></View>
         <View style={s.card}><Text style={s.subheading}>Personlige milepæler</Text>{[{ title: 'Første stitid', done: earned >= 1 }, { title: 'Fem stideler utforsket', done: earned >= 5 }, { title: 'Ti gjennomføringer', done: timing.results.length >= 10 }, { title: 'Ditt første strekk', done: data.trails.length >= 1 }].map(m => <Text key={m.title} style={s.body}>{m.done ? '✓' : '○'} {m.title}</Text>)}</View>
         {data.trails.map(trail => <Pressable key={trail.id} accessibilityRole="button" onPress={() => { setSelected(trailChoices([], [trail])[0].item); setTab('map'); setMode('map'); }} style={s.card}><Text style={s.subheading}>{trail.name}</Text><Text style={s.small}>Vis strekk på kartet →</Text></Pressable>)}
@@ -124,7 +136,12 @@ export function Trakk({ initial }: { initial: Data }) {
       </>}
     </ScrollView>
     <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: colors.line }}>{([{ id: 'map', title: 'Utforsk', icon: 'map' }, { id: 'log', title: 'Målinger', icon: 'book' }, { id: 'you', title: 'Deg', icon: 'user' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); if (t.id !== 'map') setMode('map'); }} style={{ flex: 1, alignItems: 'center', gap: 5, paddingVertical: 14, backgroundColor: tab === t.id ? colors.pale : colors.paper }}><Icon name={t.icon} /><Text style={s.chipText}>{t.title}</Text></Pressable>)}</View>
-    {detail && <Modal onRequestClose={() => setDetail(null)}><SafeAreaView style={s.screen}><Button secondary title="← Målinger" onPress={() => setDetail(null)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>{detail.name}</Text><TrailMap current={detail.points} fitRoute height={330} /><Text style={s.body}>{kmLabel(tripMetrics(detail).meters)} km · {durationLabel(movementTime(detail))} i bevegelse</Text><Button secondary title="Slett registreringen" onPress={() => Alert.alert('Slette registreringen?', 'Strekk laget fra denne registreringen slettes også.', [{ text: 'Behold', style: 'cancel' }, { text: 'Slett', style: 'destructive', onPress: () => { getStore().deleteTrip(detail.id); setDetail(null); refresh(); } }])} /></ScrollView></SafeAreaView></Modal>}
+    {trainingOpen && <Modal onRequestClose={() => setTrainingOpen(false)}><SafeAreaView style={s.screen}><Button secondary title="← Tilbake" onPress={() => setTrainingOpen(false)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>Treningsmodus</Text>
+      {data.active?.workout && <WorkoutCard trip={data.active} now={now} onChange={refresh} />}
+      {!training && <><Text style={s.body}>4×4 leder deg gjennom rask og rolig gange med tale og vibrasjon. Etter 35 minutter fortsetter du i fritt tempo.</Text><Button title={data.active ? '4×4 · skru på' : '4×4 · fortsett registrering'} disabled={busy} onPress={startTraining} /></>}
+      {!!data.active?.workoutHistory?.length && <Text style={s.small}>{data.active.workoutHistory.length} tidligere treningsøkter er lagret i denne registreringen.</Text>}
+    </ScrollView></SafeAreaView></Modal>}
+    {detail && <Modal onRequestClose={() => setDetail(null)}><SafeAreaView style={s.screen}><Button secondary title="← Målinger" onPress={() => setDetail(null)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>{detail.name}</Text><TrailMap current={detail.points} fitRoute height={330} /><Text style={s.body}>{kmLabel(tripMetrics(detail).meters)} km · {durationLabel(movementTime(detail))} i bevegelse</Text>{[...(detail.workoutHistory ?? []), ...(detail.workout ? [detail.workout] : [])].map((w, i) => <Text key={w.id ?? i} style={s.body}>4×4 · {durationLabel(workoutStatus(w, detail.endedAt ?? now).elapsed)} · {workoutStatus(w, detail.endedAt ?? now).rounds} av 4 drag</Text>)}<Button secondary title="Slett registreringen" onPress={() => Alert.alert('Slette registreringen?', 'Strekk laget fra denne registreringen slettes også.', [{ text: 'Behold', style: 'cancel' }, { text: 'Slett', style: 'destructive', onPress: () => { getStore().deleteTrip(detail.id); setDetail(null); refresh(); } }])} /></ScrollView></SafeAreaView></Modal>}
   </SafeAreaView>;
 }
 class Boundary extends React.Component<{ children: React.ReactNode }, { error: boolean }> {

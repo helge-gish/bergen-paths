@@ -1,5 +1,7 @@
 export type Workout = {
   kind: '4x4';
+  id?: string;
+  startedAt?: number;
   elapsedMs: number;
   runningSince: number | null;
   endedAt: number | null;

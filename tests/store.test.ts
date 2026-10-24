@@ -342,3 +342,33 @@ test('one active peg survives move, save, reopen and undo without losing the tri
   assert.equal(reopened.getTrip(t.id)!.points.length, 8);
   raw.close();
 });
+
+test('training can start mid-walk and restart without replacing the track or losing previous sessions', () => {
+  const { store, db, raw } = database();
+  const trip = store.begin(null, false, 1000); store.append(trip.id, [point]);
+  const first = store.startWorkout(trip.id, '4x4', 61000);
+  assert.equal(first.startedAt, 1000); assert.equal(first.points.length, 1);
+  assert.equal(first.workout?.startedAt, 61000); assert.ok(first.workout?.id);
+  assert.throws(() => store.startWorkout(trip.id, '4x4', 62000), /pågår/);
+  store.updateWorkout(trip.id, 'pause', 91000);
+  assert.throws(() => store.startWorkout(trip.id, '4x4', 92000), /pågår/);
+  store.updateWorkout(trip.id, 'resume', 101000); store.updateWorkout(trip.id, 'stop', 131000);
+  assert.equal(store.active()?.endedAt, null);
+  const second = store.startWorkout(trip.id, '4x4', 140000);
+  assert.notEqual(second.workout?.id, first.workout?.id);
+  assert.equal(second.workoutHistory?.length, 1); assert.equal(second.workoutHistory?.[0].elapsedMs, 60000);
+  assert.equal(second.id, trip.id); assert.equal(second.points.length, 1);
+  store.finish(trip.id, 161000);
+  const reopened = createStore(db), saved = reopened.getTrip(trip.id)!;
+  assert.equal(saved.workoutHistory?.[0].endedAt, 131000); assert.equal(saved.workout?.elapsedMs, 21000);
+  assert.equal(JSON.parse(JSON.stringify(saved)).workoutHistory.length, 1);
+  reopened.deleteTrip(trip.id); assert.equal(reopened.setting(`workoutHistory:${trip.id}`, null), null); raw.close();
+});
+test('starting another 4x4 after natural completion archives the exact program end and keeps GPS running', () => {
+  const { store, raw } = database(); const trip = store.begin(null, false, 1000);
+  store.startWorkout(trip.id, '4x4', 10000);
+  const again = store.startWorkout(trip.id, '4x4', 3000000);
+  assert.equal(again.workoutHistory?.[0].elapsedMs, 2100000);
+  assert.equal(again.workoutHistory?.[0].endedAt, 2110000);
+  assert.equal(again.endedAt, null); assert.equal(again.workout?.elapsedMs, 0); raw.close();
+});

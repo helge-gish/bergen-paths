@@ -24,9 +24,9 @@ Publiseringsflyten må kontrollere områdegrenser, faktisk tilgjengelige møtest
 
 ## Varig identitet og kraft
 
-Brukeren ønsker én figur som bygges videre og tas med inn i ulike gameplays; alle krefter og alt utstyr skal beholdes. Anbefalt arbeidshypotese er derfor varig figur og fullt inventar på tvers av arenaen. Lokale spill kan gi samme evne ulike konkrete bruksområder gjennom felles begreper som lys, vern, sansing, kunnskap og påvirkning.
+Brukeren ønsker én figur som bygges videre og tas med inn i ulike gameplays; alle krefter og alt utstyr skal beholdes. Brukeren har sluttet seg til varig figur og fullt inventar på tvers av arenaen. Lokale spill kan gi samme evne ulike konkrete bruksområder gjennom felles begreper som lys, vern, sansing, kunnskap og påvirkning.
 
-Forslag til utprøving: velg et begrenset aktivt utrustningssett før et spill, mens alle øvrige eiendeler fortsatt finnes i inventaret. En lykt kan ha verdi både i rollespillkamp og i et mysterium. Dette er en anbefaling gitt som svar på brukerens ønske om hva som er smartest/gøyest, ikke en endelig godkjent begrensning eller en ferdig kompatibilitetsstandard. Test med to ulike spill før reglene låses.
+Et valgt aktivt utrustningssett brukes før et spill, mens alle øvrige eiendeler fortsatt finnes i inventaret. En lykt kan ha verdi både i rollespillkamp og i et mysterium. Retningen er akseptert; nøyaktig antall plasser, samvirkende egenskaper og kompatibilitetsformat må prøves med to ulike spill før detaljene låses.
 
 ## Byggerekkefølge
 

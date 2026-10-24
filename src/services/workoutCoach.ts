@@ -10,7 +10,7 @@ export function syncWorkoutCoach(trip: Trip | null): Promise<void> {
   if (!native) return Promise.resolve();
   const w = trip?.workout;
   const json = trip && trip.endedAt === null && w && w.endedAt === null
-    ? JSON.stringify({ id: trip.id, elapsedMs: w.elapsedMs, runningSince: w.runningSince, running: w.runningSince !== null, audio: w.audioEnabled, routeAudio: trip.audioEnabled, routeKey: trip.ghostId,
+    ? JSON.stringify({ id: w.id ? `${trip.id}:${w.id}` : trip.id, elapsedMs: w.elapsedMs, runningSince: w.runningSince, running: w.runningSince !== null, audio: w.audioEnabled, routeAudio: trip.audioEnabled, routeKey: trip.ghostId,
       dialect: getStore().setting('localDialect', 'neutral'), vibrate: true, totalMs: WORKOUT_MS, phases: workoutPhases, cues: workoutCues }) : null;
   if (json === configured) return sequence;
   configured = json;

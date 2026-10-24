@@ -1,4 +1,4 @@
-import { createWorkout, changeWorkout, type Workout } from '../domain/workout';
+import { createWorkout, changeWorkout, workoutStatus, WORKOUT_MS, type Workout } from '../domain/workout';
 import { defaultTripName } from '../domain/tripNames';
 import { fallbackStretchName, stretchName } from '../domain/stretchNames';
 import type { Discovery } from '../domain/discoveries';
@@ -38,8 +38,9 @@ export function createStore(db: Database) {
   const hydrate = (row: Row): Trip => {
     const workout = store.setting<Workout | null>(`workout:${row.id}`, null);
     const mode = store.setting<'normal' | 'ghost'>(`mode:${row.id}`, row.ghostId ? 'ghost' : 'normal');
+    const workoutHistory = store.setting<Workout[]>(`workoutHistory:${row.id}`, []);
     const automatic = store.setting(`automatic:${row.id}`, false);
-    const metadata = JSON.stringify([row, workout, mode, automatic]);
+    const metadata = JSON.stringify([row, workout, mode, automatic, workoutHistory]);
     const revision = db.getFirstSync<{ count: number; latest: number | null }>('SELECT COUNT(*) AS count, MAX(timestamp) AS latest FROM points WHERE tripId = ?', row.id)!;
     const old = hydrated.get(row.id);
     // append() only inserts immutable points. Polling during a GPS outage must
@@ -47,7 +48,7 @@ export function createStore(db: Database) {
     const samePoints = old?.count === revision.count && old.latest === revision.latest;
     if (samePoints && old.metadata === metadata) return old.trip;
     const points = samePoints ? old.trip.points : db.getAllSync<{ data: string }>('SELECT data FROM points WHERE tripId = ? ORDER BY timestamp', row.id).map(r => JSON.parse(r.data) as Fix);
-    const trip = { ...row, workout, mode, ...(automatic ? { automatic: true } : {}), audioEnabled: !!row.audioEnabled, points };
+    const trip = { ...row, workout, mode, ...(automatic ? { automatic: true } : {}), ...(workoutHistory.length ? { workoutHistory } : {}), audioEnabled: !!row.audioEnabled, points };
     hydrated.set(row.id, { ...revision, metadata, trip });
     return trip;
   };
@@ -87,6 +88,22 @@ export function createStore(db: Database) {
       });
     },
     finish(tripId: string, now = Date.now()) { db.withTransactionSync(() => { store.updateWorkout(tripId, 'stop', now); db.runSync('UPDATE trips SET endedAt = MAX(startedAt, ?) WHERE id = ? AND endedAt IS NULL', now, tripId); }); },
+    startWorkout(tripId: string, kind: '4x4' = '4x4', now = Date.now(), audioEnabled = true) {
+      if (kind !== '4x4') throw new Error('Treningsformen er ikke tilgjengelig ennå.');
+      db.withTransactionSync(() => {
+        const trip = store.getTrip(tripId);
+        if (!trip || trip.endedAt !== null || !Number.isFinite(now) || now < trip.startedAt) throw new Error('Registrering må være på for å bruke treningsmodus.');
+        const previous = trip.workout;
+        if (previous && previous.endedAt === null && !workoutStatus(previous, now).complete) throw new Error('En treningsøkt pågår allerede. Fortsett den eller velg fritt tempo først.');
+        if (previous) {
+          const end = previous.endedAt ?? (previous.runningSince === null ? now : Math.min(now, previous.runningSince + Math.max(0, WORKOUT_MS - previous.elapsedMs)));
+          const archived = { ...changeWorkout(previous, 'stop', end), startedAt: previous.startedAt ?? trip.startedAt };
+          store.setSetting(`workoutHistory:${tripId}`, [...(trip.workoutHistory ?? []), archived]);
+        }
+        store.setSetting(`workout:${tripId}`, { ...createWorkout(now, audioEnabled), id: id(), startedAt: now });
+      });
+      return store.getTrip(tripId)!;
+    },
     updateWorkout(tripId: string, action: 'pause' | 'resume' | 'stop' | 'mute' | 'unmute', now = Date.now()) {
       const trip = db.getFirstSync<Row>('SELECT * FROM trips WHERE id = ? AND endedAt IS NULL', tripId);
       const workout = store.setting<Workout | null>(`workout:${tripId}`, null);
@@ -103,14 +120,14 @@ export function createStore(db: Database) {
         db.runSync("UPDATE trips SET ghostId = NULL WHERE ghostId = ? OR ghostId IN (SELECT 'trail:' || id FROM trails WHERE tripId = ?)", tripId, tripId);
         db.runSync('DELETE FROM trails WHERE tripId = ?', tripId);
         deleted = db.runSync('DELETE FROM trips WHERE id = ?', tripId).changes === 1;
-        db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`, `workout:${tripId}`);
+        db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`, `workout:${tripId}`, `workoutHistory:${tripId}`);
         // Rebuild collection stamps from the remaining history on the next snapshot.
         store.setSetting('osmAwards', {});
       });
       if (deleted) hydrated.delete(tripId);
       return deleted;
     },
-    cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`, `workout:${tripId}`); }); },
+    cancelEmpty(tripId: string) { db.withTransactionSync(() => { if (db.runSync('DELETE FROM trips WHERE id = ? AND NOT EXISTS (SELECT 1 FROM points WHERE tripId = ?)', tripId, tripId).changes) db.runSync('DELETE FROM settings WHERE key IN (?, ?, ?, ?, ?)', `segments:${tripId}`, `mode:${tripId}`, `automaticName:${tripId}`, `workout:${tripId}`, `workoutHistory:${tripId}`); }); },
     rename(tripId: string, name: string) { const value = name.trim().slice(0, 80); if (!value) throw new Error('Gi turen et navn først.'); db.withTransactionSync(() => { db.runSync('UPDATE trips SET name = ? WHERE id = ?', value, tripId); store.setSetting(`automaticName:${tripId}`, false); }); },
     suggestName(tripId: string, name: string) { if (name.trim() && store.setting(`automaticName:${tripId}`, false)) db.runSync('UPDATE trips SET name = ? WHERE id = ?', name.trim().slice(0, 80), tripId); },
     leaveGhost(tripId: string) {

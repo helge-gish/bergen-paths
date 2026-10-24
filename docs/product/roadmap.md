@@ -2,7 +2,7 @@
 
 ## Besluttet sammen med brukeren
 
-Tråkk er naturstier i nærområdet og enkel trening. Appåpning aktiverer registrering, også med låst skjerm. Ingen turstart i normal bruk. Brukeren kan alltid pause; bevisst pause vedvarer ved gjenåpning. Personlige tider og prestasjoner beholdes. Avatar, utstyr, gatesamling og konkurranser flyttes ut. Eksisterende turer og strekk skal bevares.
+Tråkk er naturstier i nærområdet og enkel trening. Appåpning aktiverer registrering, også med låst skjerm. Ingen turstart i normal bruk. Brukeren kan alltid pause; bevisst pause vedvarer ved gjenåpning. Personlige tider og prestasjoner beholdes. Treningsmoduser kan slås på når som helst; 4×4 er første program, tale/vibrasjon guider tempoet og vanlig registrering fortsetter etter programslutt. Flere økter i samme registrering må bevares. Avatar, utstyr, gatesamling og konkurranser flyttes ut. Eksisterende turer og strekk skal bevares.
 
 Gatekampen er et eget produkt for gater, aldri trapper. Først private vennegrupper med invitasjon; åpne konkurranser senere. Kontoer og varige, serverkontrollerte konkurranser må være med fra første spillbare nettutgave.
 
