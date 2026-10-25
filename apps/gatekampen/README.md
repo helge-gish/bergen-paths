@@ -1,4 +1,4 @@
-# Gatekampen 0.1.0
+# Gatekampen 0.1.1 — klargjort, venter på nettprøve
 
 Egen Android-app for gater. Kart, personlig samling, fem ledetrådoppgaver og bakgrunnsregistrering. Trapper er utelatt, men kan vurderes senere. Ende-til-ende er direkte gjenbruk av Tråkks testede algoritme.
 
@@ -12,7 +12,7 @@ APK: `python3 scripts/build-gatekampen.py` fra repo-roten. Krever Java 17 og And
 
 ## Koble til vennegrupper
 
-Database og GPS-verifikator er satt i drift 25. oktober 2026 i Gatekampen-prosjektet i Frankfurt. Se `backend/deployment.json`. Første APK (0.1.0) er fortsatt lokal; neste APK venter på e-postoppsett og publiserte konkurranseområder. `publicConfig.ts` inneholder kun prosjektets offentlige klientnøkkel. Ingen falske kontoer eller resultater.
+Database og GPS-verifikator er satt i drift 25. oktober 2026 i Gatekampen-prosjektet i Frankfurt. Se `backend/deployment.json`. Første APK (0.1.0) er fortsatt lokal; 0.1.1 er bygget med tilkoblingen, men venneprøven venter på e-postoppsett og publiserte konkurranseområder. Se [oppsett og resterende steg](../../docs/product/gatekampen-supabase-setup.md). `publicConfig.ts` inneholder kun prosjektets offentlige klientnøkkel. Ingen falske kontoer eller resultater.
 
 **Ikke kjør bootstrap-SQL på nytt i det tilkoblede prosjektet.** De følgende stegene beskriver oppsett av et nytt prosjekt.
 

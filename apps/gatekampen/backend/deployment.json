@@ -20,12 +20,24 @@
   "verified": [
     "live PostgreSQL role and RLS smoke test; all fixtures rolled back",
     "private groups, invites, verified completions, replay and team coverage",
-    "local PostgreSQL verification-budget and transaction checks"
+    "local PostgreSQL verification-budget and transaction checks",
+    "313 automated tests and TypeScript; Android 0.1.1 package/signature/bundle checked"
   ],
   "pending": [
     "Email OTP template and live sign-in",
     "SMTP sender for friends outside Supabase organization",
     "Reviewed whole-street OSM competition catalogues",
-    "End-to-end HTTP/Edge verification and next Android APK"
-  ]
+    "End-to-end HTTP/Edge verification and two-player field test"
+  ],
+  "android_candidate": {
+    "package": "no.gatekampen.app",
+    "version": "0.1.1",
+    "architecture": "arm64-v8a",
+    "size_bytes": 40762127,
+    "sha256": "e4443d573dcb97669f6ed8859f45dc073ad30395a0c03c456d09094e6d9d6a70",
+    "signer_sha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "background_location": true,
+    "online_backend_configured": true,
+    "status": "built and signed; not cleared for friend field test"
+  }
 }
