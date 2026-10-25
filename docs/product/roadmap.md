@@ -63,3 +63,11 @@ Medaljer knyttes til turen og vises ved avslutning og i LOGG. Fem turkategorier:
 Feltprøven avdekket for store modeller og uklart valgt funn. Vis funn som miniatyrer, tilpass dem til kameraprojeksjonen ved plassering, og knytt et lesbart navneskilt til figuren med stiplet linje. Kompakt handling og målvelger; ikke bytt valgt funn automatisk ved GPS-endringer. Denne utgaven beholder lokale bakkeankre og eksisterende spillprogresjon. Geografiske ankere og mer detaljert kunst er egne senere steg.
 
 Feltprøvejustering: Funnet dukker opp automatisk når GPS tillater møtet og ARCore finner bakken. Direkte trykk på objekt/navneskilt åpner interaksjonen; manuell omplassering er bare en hjelpehandling.
+
+### Herebound 0.3.3: eventyrkart og spillerretning
+
+ULTIMA X velger et generisk pergamenttema via SDK-et. Feltkartet viser en liten
+utstyrsbasert spillerfigur, kompasspil korrigert for kartrotasjon, nordreset og
+recentrering. Reelle stier/veier og utforskingsmasken beholdes. Et separat
+fontenebær-funn ved inngangen til Meyermarken gir en kortere feltprøve; plasseringen
+er foreløpig og må bekreftes mot fontenen ute.

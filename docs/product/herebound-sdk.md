@@ -77,3 +77,17 @@ Simulatorens tidsstempel og kontrollklokke oppdateres fra samme klokkeavlesning.
 Neste prioriterte leveranse er [felttest med ekte kart og AR](herebound-field-test.md), før utvidelse til andre spilltyper eller større plattformfunksjoner.
 
 Gjeldende avhengighetsgrenser og byggerekkefølge: [Herebound-arkitekturen](herebound-architecture.md).
+
+## Kartpresentasjon 0.3.3
+
+Spillpakker kan velge `mapTheme: 'standard' | 'parchment'`. Utelatt verdi bruker
+vanlig kart; ukjent verdi avvises ved registrering. Herebound eier de bundlete
+kartstilene og posisjons-/kompassvisningen. ULTIMA X velger `parchment`; verten
+kjenner ingen Ultima-ID i kartkomponenten. Utforskingsmasken og rettigheten til
+å møte/samle ting endres ikke av temaet. Egen spillgrafikk erstatter ikke kartets
+virkelige stier og terreng.
+
+Figuren på feltkartet gjenspeiler kontoens utseende, skin, nivå og påkledde
+sekk/stav/lykt. En separat pil viser telefonens kompassretning minus kartets
+rotasjon. Ingen pil vises med foreldet GPS eller kompass. Sensoren stoppes i
+bakgrunn og når kartet erstattes av AR.

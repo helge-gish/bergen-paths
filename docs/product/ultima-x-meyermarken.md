@@ -53,3 +53,13 @@ Brukeren foreslo Bjelke eller Meyer som utgangspunkt for forsvinningen. Dette er
 - [Meyerminen](https://www.bergenbyarkiv.no/bergenbyleksikon/arkiv/date/2001/01/page/53) var et steinbrudd på Rotthaugen eid av Otto Meyer. En tunnel eller underverden under Fløyen er ikke dokumentert av denne kilden.
 
 Anbefalt fiksjonsretning: «Meyers hemmelighet». I en fantasiversjon av området er Meyer forsvunnet etter et funn i steinbruddet. Spilleren kan følge regnskaper, handle med vitner eller undersøke magiske spor i fri rekkefølge. En oppdiktet journal knyttet til Bjelke kan åpne et sidespor. Magi, forsvinning, journal og sammenhengen mellom personene er spillfiksjon, ikke historiske påstander. Unngå å flytte første test bort fra Meyermarken; bruk virtuelle møter der, selv om bakgrunnshistorien omfatter større områder.
+
+### 0.3.3: ekstra funn ved inngangen/fontenen
+
+Et nytt, separat bærfunn (`fountain-rowan`) gjør det mulig å teste uten å gå til
+lekebingen eller nullstille tidligere funn. Foreløpig kartpunkt: 60.40418,
+5.32665, omtrent 21 meter vest for teststarten, med 35 meters møteradius.
+Plasseringen er et anslag for fonteneområdet brukeren markerte på satellittbildet,
+ikke et verifisert fontenekoordinat. Bekreft eller juster i neste feltprøve.
+Startsonen på 80 meter dekker også dette punktet. Eksisterende møte-ID-er og
+pakkeversjon beholdes.

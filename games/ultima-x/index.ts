@@ -4,11 +4,15 @@ const center = { latitude: 60.39852082424811, longitude: 5.343193886616334 };
 // Test entrance: Meyermarken park centre, OSM way 27461162.
 // https://mapcarta.com/W27461162 — exact meeting locations still need a field check.
 const testStart = { latitude: 60.40418, longitude: 5.32703 };
-// Compact field test: encounters stay within 15 m of the park centre.
+// Core encounters stay within 15 m of the park centre.
+// Extra fountain test: approximate western entrance, 21 m west of centre.
+// Fountain coordinate is NOT survey-verified; confirm in the next field test.
+const fountainTest = { latitude: 60.40418, longitude: 5.32665 };
 // Keep pack version and encounter IDs stable: moving content must not reset progress.
 /** Original test story. Exact ground placement still needs a field check. */
 export const ultimaX: GamePack = {
   sdkVersion: 1, id: 'ultima-x', version: 1, title: 'ULTIMA X', subtitle: 'Lyktene under Fløyen',
+  mapTheme: 'parchment',
   description: 'Vokteren Iver er borte. Lyktene slukner én etter én. Følg ryktene, handle med dem du møter, og finn dine egne veier inn i mysteriet.',
   areaName: 'Fløyvarden · Bergen', area: { center, radiusMeters: 5000 }, spawn: testStart,
   start: { name: 'Meyermarken', position: testStart, radiusMeters: 80, presentation: { motif: 'rune-gate', accent: '#f3c878', label: 'VOKTERPORTEN' } }, simulationOnly: false, currency: { name: 'gull', unitsPerCredit: 1 },
@@ -29,6 +33,10 @@ export const ultimaX: GamePack = {
     { id: 'ultima-x:staff', name: 'Vandrestav', wearable: { slot: 'hand', visual: 'staff' }, weightGrams: 1500, kind: 'equipment', description: 'En stav av mørkt tre. Kan bæres i hånden og vises på Herebound-figuren.' },
   ],
   encounters: [
+    { id: 'fountain-rowan', name: 'Rognebær ved fontenen', mapLabel: 'Fontenebær', visual: 'berries', rumor: 'Røde bær ved fontenen', kind: 'landmark', position: fountainTest, radiusMeters: 35,
+      description: 'En liten klase virtuelle rognebær ved inngangen til Meyermarken.', greeting: 'Det gløder svakt mellom bærene.', topics: [],
+      interaction: { id: 'pick-fountain-rowan', label: 'Plukk 2 rognebær', costs: [], reward: { itemId: 'herebound:rowanberry', amount: 2 }, xp: 5, clue: { id: 'fountain-rowan-picked', title: 'Bærene ved fontenen', text: 'Du fant to rognebær ved inngangen til Meyermarken. De ligger nå i sekken.' } },
+    },
     { id: 'stash', name: 'En gjenglemt tursekk', mapLabel: 'Tursekk', rumor: 'Lær mellom røttene', visual: 'satchel', kind: 'landmark', position: { latitude: testStart.latitude + .00007, longitude: testStart.longitude + .00014 }, radiusMeters: 25, description: 'En liten tursekk ligger tørr under en rot. En lapp sier: Til den neste som går videre.', greeting: 'Solid lær, reparerte sømmer. Denne har sett mange stier.', topics: [], interaction: { id: 'take-satchel', label: 'Ta tursekken', costs: [], reward: { itemId: 'ultima-x:satchel', amount: 1 }, xp: 5, clue: { id: 'satchel-found', title: 'En sekk til veien', text: 'Du fant en tursekk. Åpne Figur & sekk → Utstyr for å ta den på. Den er foreløpig kosmetisk og endrer ikke bæreevnen.' } } },
     { id: 'rowan', name: 'Rognebær', mapLabel: 'Rognebær', visual: 'berries', rumor: 'Røde bær ved stien', kind: 'landmark', position: { latitude: testStart.latitude + .00008, longitude: testStart.longitude - .00014 }, radiusMeters: 25,
       description: 'En klase røde rognebær lyser i spillets verden. Dette er virtuelle bær du kan samle i Herebound-sekken.', greeting: 'Rusk kunne sikkert fortalt hva disse kan brukes til.', topics: [],

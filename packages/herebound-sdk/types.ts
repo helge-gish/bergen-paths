@@ -20,6 +20,7 @@ export type Encounter = {
 export type GamePack = {
   sdkVersion: 1; id: string; version: number; title: string; subtitle: string;
   description: string; areaName: string; area: Area; spawn: Point;
+  mapTheme?: 'standard' | 'parchment';
   start: { name: string; position: Point; radiusMeters: number; presentation?: { motif: 'rune-gate' | 'beacon' | 'camp'; accent: string; label: string } };
   currency?: { name: string; unitsPerCredit: number };
   skins?: Skin[];

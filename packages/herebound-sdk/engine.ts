@@ -15,6 +15,7 @@ export function validatePack(pack: GamePack, catalogue: ReadonlyMap<string, Item
       metersBetween(pack.start.position, pack.area.center) + pack.start.radiusMeters > pack.area.radiusMeters ||
       typeof pack.simulationOnly !== 'boolean' || !Array.isArray(pack.items) || !Array.isArray(pack.encounters)) throw new Error('Spillpakken støtter ikke denne Herebound-versjonen.');
   const portal = pack.start.presentation;
+  if (pack.mapTheme !== undefined && !['standard','parchment'].includes(pack.mapTheme)) throw new Error('Ukjent karttema.');
   if (portal && (!['rune-gate','beacon','camp'].includes(portal.motif) || !/^#[0-9a-fA-F]{6}$/.test(portal.accent) || !portal.label?.trim() || portal.label.length > 30)) throw new Error('Ugyldig startportal.');
   if (pack.currency && (!pack.currency.name?.trim() || !Number.isSafeInteger(pack.currency.unitsPerCredit) || pack.currency.unitsPerCredit < 1 || pack.currency.unitsPerCredit > 1000)) throw new Error('Ugyldig valutaomregning.');
   const helperIds = new Set<string>();

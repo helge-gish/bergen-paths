@@ -58,8 +58,8 @@ test('trail voice deduplicates replay, does not narrate historical results and l
  const names=namedNature([item],{forest:{name:'Min sti',stars:5}});assert.equal(names[0].name,'Min sti');assert.equal(item.name,'Skogsti');
 });
 test('Meyermarken field-test encounters remain in one compact cluster and keep saved-progress IDs',()=>{
- assert.deepEqual(ultimaX.encounters.map(e=>e.id),['stash','rowan','maren','rusk','lantern']);
- for(const encounter of ultimaX.encounters)assert.ok(distance(ultimaX.start.position,encounter.position)<=15,encounter.id);
+ assert.deepEqual(ultimaX.encounters.filter(e=>e.id!=='fountain-rowan').map(e=>e.id),['stash','rowan','maren','rusk','lantern']);
+ for(const encounter of ultimaX.encounters.filter(e=>e.id!=='fountain-rowan'))assert.ok(distance(ultimaX.start.position,encounter.position)<=15,encounter.id);
  assert.equal(ultimaX.version,1);
 });
 test('connected cartographic pieces become one measured trail; branches and unnamed trails remain separate',async()=>{
