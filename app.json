@@ -6,7 +6,7 @@
       "android",
       "ios"
     ],
-    "version": "0.4.5",
+    "version": "0.4.6",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "trakk",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "no.trakk.app",
-      "versionCode": 39,
+      "versionCode": 40,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED"

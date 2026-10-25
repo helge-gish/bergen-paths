@@ -45,3 +45,7 @@ Brukeren mener fartstaket på 6 m/s (21,6 km/t) er for høyt. Senking er notert,
 ## Tydelighet i 0.4.5
 
 Logoen får «utforsk stiene nær deg». Området merkes med stedsnavn fra det festede sentrumspunktet, med koordinater som ærlig reserve når navn ikke finnes. Fullført sti/strekk vises øverst i Utforsk og Logg. Navnløs sti får «Gi stien et navn», navnefelt først og valgfrie stjerner. Ingen tvungen navngiving; lukkede varsler skal ikke spilles av igjen. Talevarsler fra 0.4.4 beholdes.
+
+## Valg og avbryt i 0.4.6
+
+Finn sti/strekk skal ha synlig avbryt både på kartet og i AR, også i fullskjerm og infovisning. Avbryt fjerner mål og veivisning samlet, beholder kart/kamera åpent og påvirker ikke turregistreringen. Ingen bekreftelsesdialog er nødvendig for denne reversible handlingen.

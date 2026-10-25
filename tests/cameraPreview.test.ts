@@ -269,9 +269,27 @@ test('ground anchor status follows native tracking and target identity; stale GP
   assert.equal(tree.root.findAllByProps({ testID: 'approximate-callout-a' }).length, 0);
   await act(() => tree.update(React.createElement(h.Component, { ...props, detailsOpen: true, details: React.createElement('Text', {}, 'Stiinfo') })));
   assert.equal(cameras(tree)[0].props.guide, null);
-  assert.ok(tree.root.findByProps({ title: 'Vis retning i kamera' }));
+  assert.ok(tree.root.findByProps({ accessibilityLabel: 'Tilbake til kamera' }));
   await act(() => tree.update(React.createElement(h.Component, { ...props, now: now + 31000 })));
   assert.equal(cameras(tree)[0].props.guide, null);
   assert.equal(tree.root.findAllByProps({ testID: 'ground-guide-status' }).length, 0);
   assert.ok(tree.root.findByProps({ testID: 'camera-proximity' }));
+});
+
+test('cancel is visible in embedded AR, fullscreen details and camera, and leaves scanning open', async t=>{
+ const h=harness(),target={id:'a',name:'Skogsti',item:{kind:'trail'},meters:100,bearing:0};
+ function Finder(){
+  const [selected,setSelected]=React.useState<any>(target),[open,setOpen]=React.useState(true);
+  return React.createElement(h.Component,{...h.props,targets:[target],selected,detailsOpen:open,details:React.createElement('Text',{},'Stiinfo'),onCloseDetails:()=>setOpen(false),onSelect:(v:any)=>{setSelected(v);setOpen(true);},onCancel:()=>{setSelected(null);setOpen(false);}});
+ }
+ let tree!:ReactTestRenderer;await act(()=>{tree=create(React.createElement(Finder));});t.after(async()=>act(()=>tree.unmount()));
+ assert.ok(tree.root.findByProps({accessibilityLabel:'Avbryt valgt sti eller strekk'}));
+ await act(()=>tree.root.findByProps({accessibilityLabel:'Åpne kamera i fullskjerm'}).props.onPress());
+ const modal=()=>tree.root.findByType('Modal' as any);
+ assert.ok(modal().findByProps({accessibilityLabel:'Avbryt valgt sti eller strekk'}));
+ await act(()=>modal().findByProps({accessibilityLabel:'Tilbake til kamera'}).props.onPress());
+ await act(()=>modal().findByProps({accessibilityLabel:'Avbryt valgt sti eller strekk'}).props.onPress());
+ assert.equal(modal().findAllByProps({testID:'camera-selection-details'}).length,0);
+ assert.equal(modal().findAllByProps({accessibilityLabel:'Avbryt valgt sti eller strekk'}).length,0);
+ assert.ok(modal().findByProps({accessibilityLabel:'Minimer kameraet'}));
 });

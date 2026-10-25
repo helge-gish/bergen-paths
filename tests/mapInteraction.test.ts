@@ -70,6 +70,12 @@ test('AR guides to a fixed saved-stretch start, signals arrival once and never r
  assert.equal(camera().props.selected.coordinate.latitude,60);assert.equal(spoken.length,0);
  await act(()=>receive({...first,timestamp:Date.now()}));assert.equal(spoken.length,1);assert.match(spoken[0],/ved starten/);
  await act(()=>receive({...first,timestamp:Date.now(),latitude:60.00001}));assert.equal(spoken.length,1);
+ await act(()=>camera().props.onCancel());
+ assert.equal(camera().props.selected,null);assert.equal(camera().props.detailsOpen,false);
+ assert.equal(tree.root.findAllByProps({title:'Avbryt veivisning'}).length,0);
+ await act(()=>receive({...first,timestamp:Date.now()}));assert.equal(camera().props.selected,null,'GPS does not restore a cancelled target');
+ await act(()=>camera().props.onSelect(camera().props.targets[0]));
+ assert.equal(camera().props.detailsOpen,true,'a new target is one tap away');
  await act(()=>tree.unmount());
 });
 
@@ -289,4 +295,24 @@ test('selected distance stays in the fullscreen viewport; recenter preserves sel
   assert.match(label(), /20 m unna/);
   await act(() => tree.update(React.createElement(TrailMap, { ...props, position: null })));
   assert.match(label(), /Trenger posisjon for avstand/);
+});
+
+test('selected map trail can be cancelled in fullscreen and selected again without changing recording', async()=>{
+ const p={latitude:60,longitude:5},item={id:'one',name:'Skogsti',kind:'trail',geometry:[p,{...p,latitude:60.001}],...p};
+ let cleared=0,tree!:ReactTestRenderer;
+ await act(()=>{tree=create(React.createElement(TrailMap,{position:p,selectedDiscovery:item,discoveries:[item],onClearSelection:()=>cleared++}));});
+ assert.ok(tree.root.findByProps({testID:'map-selected-distance'}));
+ await act(()=>tree.root.findByProps({accessibilityLabel:'Åpne kart i fullskjerm'}).props.onPress());
+ await act(()=>tree.root.findByProps({accessibilityLabel:'Avbryt valgt sti eller strekk'}).props.onPress());
+ assert.equal(cleared,1);assert.equal(tree.root.findAllByProps({testID:'map-selected-distance'}).length,0);
+ assert.equal(tree.root.findAllByType('Modal' as any).length,1,'cancelling keeps the map open');
+ const source=tree.root.findByProps({id:'discoveries'});
+ await act(()=>source.props.onPress({nativeEvent:{features:source.props.data.features,lngLat:[5,60.0005]},stopPropagation(){}}));
+ assert.ok(tree.root.findByProps({testID:'map-selected-distance'}));
+ await act(()=>tree.root.findByProps({accessibilityLabel:'Avbryt valgt sti eller strekk'}).props.onPress());
+ assert.equal(tree.root.findAllByProps({testID:'map-selected-distance'}).length,0);
+ // A new external selection also works after cancellation.
+ await act(()=>tree.update(React.createElement(TrailMap,{position:p,selectedDiscovery:{...item,id:'two'},discoveries:[item],onClearSelection:()=>cleared++})));
+ assert.ok(tree.root.findByProps({testID:'map-selected-distance'}));
+ await act(()=>tree.unmount());
 });

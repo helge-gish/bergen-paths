@@ -16,8 +16,8 @@ import { TrailMap } from './TrailMap';
 import { Button } from './components';
 import { colors, styles as s } from './theme';
 
-export function TrailFinder({ items, trails, trips, current, segmentStart, busy, onRefresh, onMap, onStart, onGhost, initialTargetId, recording = true, embedded = false }: {
-  recording?: boolean; initialTargetId?: string | null; embedded?: boolean; items: Discovery[]; trails: Trail[]; trips: Trip[]; current: Fix[] | undefined; segmentStart?: Coordinate | null; busy: boolean; onRefresh: () => void;
+export function TrailFinder({ items, trails, trips, current, segmentStart, busy, onRefresh, onMap, onStart, onGhost, onClearSelection, initialTargetId, recording = true, embedded = false }: {
+  onClearSelection?: () => void; recording?: boolean; initialTargetId?: string | null; embedded?: boolean; items: Discovery[]; trails: Trail[]; trips: Trip[]; current: Fix[] | undefined; segmentStart?: Coordinate | null; busy: boolean; onRefresh: () => void;
   onMap: (target: NearbyTrail) => void; onStart?: (target: NearbyTrail) => void; onGhost?: (trail: Trail) => void;
 }) {
   const [position, setPosition] = useState<Fix | null>(() => {
@@ -56,12 +56,13 @@ export function TrailFinder({ items, trails, trips, current, segmentStart, busy,
   const cameraChoices = useMemo(() => [...choices, ...cameraStreetChoices(items)], [choices, items]);
   const nearby = useMemo(() => position ? nearbyTrails(cameraChoices, position, 5000) : [], [cameraChoices, position]);
   const listed = mode === 'camera' ? nearby : nearby.filter(target => target.item.kind !== 'street');
-  useEffect(()=>{if(!initialTargetId||initialHandled.current===initialTargetId)return;const match=nearby.find(t=>t.id===initialTargetId||t.memberIds?.includes(initialTargetId));if(match){initialHandled.current=initialTargetId;setSelectedId(match.id);setDetailsOpen(true);}},[initialTargetId,nearby]);
+  useEffect(()=>{if(!initialTargetId){initialHandled.current=null;return;}if(initialHandled.current===initialTargetId)return;const match=nearby.find(t=>t.id===initialTargetId||t.memberIds?.includes(initialTargetId));if(match){initialHandled.current=initialTargetId;setSelectedId(match.id);setDetailsOpen(true);}},[initialTargetId,nearby]);
   const selected = nearby.find(item => item.id === selectedId) ?? null;
   useEffect(() => { if (selectedId && !selected && position) { setSelectedId(null); setDetailsOpen(false); setGuide(null); } }, [selectedId, selected]);
   const guided=guide&&selected&&guide.id===selected.id&&position?targetAtStart(selected,guide.point,position):null;
   const gate=startPointGate(guide?.point,position,now);
   useEffect(()=>{if(!guided||!gate.ready||arrived.current)return;arrived.current=true;if(getStore().setting('trailVoice',true))void speak(`Du er ved starten av ${selected!.name}. ${recording?'Gå inn på stien eller strekket, så måles passeringen automatisk.':'Trykk Start tur i Utforsk hvis du vil registrere passeringen.'}`);},[guided?.id,gate.ready]);
+  const clearSelection=()=>{setSelectedId(null);setDetailsOpen(false);setGuide(null);arrived.current=false;onClearSelection?.();};
   const beginGuide=()=>{if(!selected)return;const point=trailStart(selected);if(!point)return;arrived.current=false;setGuide({id:selected.id,point});setDetailsOpen(false);setMode('camera');};
   const live = freshPosition(position, now) && position!.accuracy <= 25;
   const selectionDetails = selected && <View style={[s.card, { borderColor: colors.coral }]}>
@@ -71,7 +72,7 @@ export function TrailFinder({ items, trails, trips, current, segmentStart, busy,
       {onStart && <ReadingButton title={selected.item.kind === 'street' ? 'Velg gate og start tur' : 'Velg sti og start tur'} onPress={() => onStart(selected)} />}
       <ReadingButton secondary title="Vis på kartet" onPress={() => onMap(selected)} />
       {selected.saved && onGhost && <ReadingButton secondary icon="ghost" title="Gå strekket med skygge" onPress={() => onGhost(selected.saved!)} />}
-      <Pressable accessibilityRole="button" onPress={() => { setSelectedId(null); setDetailsOpen(false); setGuide(null); }} style={{ minHeight: 44, justifyContent: 'center' }}><ReadingText style={s.small}>Fjern valg</ReadingText></Pressable>
+      <Pressable accessibilityRole="button" onPress={clearSelection} style={{ minHeight: 44, justifyContent: 'center' }}><ReadingText style={s.small}>Avbryt valg</ReadingText></Pressable>
     </View>;
   const select = (target: NearbyTrail) => { if(target.id!==selectedId)setGuide(null);setSelectedId(target.id); setDetailsOpen(true); };
   return <View style={{ gap: 16 }}>
@@ -81,8 +82,8 @@ export function TrailFinder({ items, trails, trips, current, segmentStart, busy,
     </View>}
     {mode === 'map'
       ? <TrailMap trips={trips} current={current} segmentStart={segmentStart} position={position} positionStale={!live} focus={selected?.coordinate ?? position} selectedDiscovery={selected?.item} discoveries={items} height={340} />
-      : <TrailCamera active={active} position={position} targets={cameraChoicesNear(nearby, selectedId).map(t=>guided&&t.id===guided.id?guided:t)} selected={guided??selected} details={selectionDetails} detailsOpen={detailsOpen} onCloseDetails={() => setDetailsOpen(false)} now={now} onSelect={select} onRetryGps={() => setRetry(value => value + 1)} />}
-    {guided&&<View style={s.notice}><Text accessibilityLiveRegion="polite" style={s.subheading}>{gate.ready?'✓ Du er ved start':`${shortDistance(guided.meters)} til start`}</Text><Text style={s.body}>{selected!.name}</Text><Text style={s.small}>{!live?'Venter på fersk GPS':gate.ready?recording?'Gå inn på stien eller strekket. Målingen starter automatisk.':'Start tur for å registrere passeringen.':'Følg pilen mot start · luftlinje.'}</Text><Button secondary title="Avslutt veivisning" onPress={()=>setGuide(null)} /></View>}
+      : <TrailCamera onCancel={clearSelection} active={active} position={position} targets={cameraChoicesNear(nearby, selectedId).map(t=>guided&&t.id===guided.id?guided:t)} selected={guided??selected} details={selectionDetails} detailsOpen={detailsOpen} onCloseDetails={() => setDetailsOpen(false)} now={now} onSelect={select} onRetryGps={() => setRetry(value => value + 1)} />}
+    {guided&&<View style={s.notice}><Text accessibilityLiveRegion="polite" style={s.subheading}>{gate.ready?'✓ Du er ved start':`${shortDistance(guided.meters)} til start`}</Text><Text style={s.body}>{selected!.name}</Text><Text style={s.small}>{!live?'Venter på fersk GPS':gate.ready?recording?'Gå inn på stien eller strekket. Målingen starter automatisk.':'Start tur for å registrere passeringen.':'Følg pilen mot start · luftlinje.'}</Text><Button secondary title="Avbryt veivisning" onPress={clearSelection} /></View>}
     {error && <View style={s.notice}><Text style={s.body}>{error}</Text><Button secondary title="Prøv GPS igjen" onPress={() => setRetry(value => value + 1)} /><Button secondary title="Åpne tillatelser" onPress={() => void Linking.openSettings()} /></View>}
     {mode === 'map' && !live && !error && <Text style={s.small}>{position ? 'Viser stier ved sist kjente posisjon. Venter på fersk GPS.' : 'Finner posisjonen din …'}</Text>}
     {mode === 'map' && selectionDetails}

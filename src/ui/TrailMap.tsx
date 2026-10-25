@@ -21,7 +21,7 @@ const EMPTY_TRIPS: Trip[] = [];
 const EMPTY_TRAILS: Trail[] = [];
 const EMPTY_DISCOVERIES: Discovery[] = [];
 const EMPTY_PEAKS: Peak[] = [];
-type Props = { showHeading?: boolean; areaMarker?: Coordinate | null; onChooseArea?: (point: Coordinate) => void; onLocate?: () => void; locating?: boolean; onStartTrail?: (item: Discovery) => void; positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
+type Props = { onClearSelection?: () => void; showHeading?: boolean; areaMarker?: Coordinate | null; onChooseArea?: (point: Coordinate) => void; onLocate?: () => void; locating?: boolean; onStartTrail?: (item: Discovery) => void; positionStale?: boolean; segmentStart?: Coordinate | null; segmentEnd?: Coordinate | null; startPosition?: Coordinate; guideStart?: boolean; recenter?: number; fitRoute?: boolean; fitReference?: boolean; selectedDiscovery?: Discovery | null; trips?: Trip[]; trails?: Trail[]; discoveries?: Discovery[]; awards?: Record<string, number>; peaks?: Peak[]; current?: Fix[]; reference?: Fix[]; ghost?: Coordinate | null; position?: Coordinate | null; focus?: Coordinate | null; onPeak?: (peak: Peak) => void; height?: number; };
 function lines(paths: Fix[][]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: paths.flatMap(p => segments(cleanPoints(p))).filter(p => p.length > 1).map((p, i) => ({ type: 'Feature', id: i, properties: {}, geometry: { type: 'LineString', coordinates: p.map(f => [f.longitude, f.latitude]) } })) };
 }
@@ -33,11 +33,14 @@ export const TrailMap = memo(function TrailMap(props: Props) {
   const { height: screenHeight } = useWindowDimensions();
   const [inspected, setInspected] = useState<Discovery | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
-  useEffect(() => { setInspected(null); }, [props.selectedDiscovery?.id]);
+  const [clearedId, setClearedId] = useState<string | null>(null);
+  const clearSelection = () => { setInspected(null); setClearedId(props.selectedDiscovery?.id ?? null); props.onClearSelection?.(); };
+  const selectedDiscovery = props.selectedDiscovery?.id === clearedId ? null : props.selectedDiscovery;
+  useEffect(() => { setInspected(null); setClearedId(null); }, [props.selectedDiscovery?.id]);
   const pick = (item: Discovery) => { setInspected(item); setKeyOpen(false); };
-  const details = <View style={{ paddingHorizontal: 6, paddingBottom: 6 }}>{inspected && <MapTrailCard item={inspected} onStart={props.onStartTrail ? () => { setFull(false); props.onStartTrail!(inspected); } : undefined} onClose={() => setInspected(null)} />}<MapKey track={!!props.current?.length} history={!!props.trips?.length} reference={!!props.reference?.length} expanded={keyOpen} onToggle={() => setKeyOpen(value => !value)} /></View>;
+  const details = <View style={{ paddingHorizontal: 6, paddingBottom: 6 }}>{inspected && <MapTrailCard item={inspected} onStart={props.onStartTrail ? () => { setFull(false); props.onStartTrail!(inspected); } : undefined} onClose={clearSelection} />}<MapKey track={!!props.current?.length} history={!!props.trips?.length} reference={!!props.reference?.length} expanded={keyOpen} onToggle={() => setKeyOpen(value => !value)} /></View>;
   const choose = (value: MapBackground) => { setBackground(value); getStore().setSetting('mapBackground', value); };
-  const shared = { ...props, inspected, onPick: pick, background, onBackground: choose, restoredView: view.current, onView: (value: ViewState) => { view.current = value; } };
+  const shared = { ...props, selectedDiscovery, onClear: clearSelection, inspected, onPick: pick, background, onBackground: choose, restoredView: view.current, onView: (value: ViewState) => { view.current = value; } };
   return <>
     {!full ? <View style={{ gap: 4 }}><MapSurface {...shared} onExpand={() => setFull(true)} />{details}</View> : <View style={{ height: props.height ?? 330 }} />}
     {full && <Modal visible hardwareAccelerated animationType="fade" onRequestClose={() => setFull(false)}><SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
@@ -47,8 +50,8 @@ export const TrailMap = memo(function TrailMap(props: Props) {
     </SafeAreaView></Modal>}
   </>;
 });
-type SurfaceProps = Props & { inspected: Discovery | null; onPick: (item: Discovery) => void; fullscreen?: boolean; onExpand: () => void; background: MapBackground; onBackground: (value: MapBackground) => void; restoredView: ViewState | null; onView: (view: ViewState) => void };
-function MapSurface({ showHeading = false, areaMarker, onChooseArea, inspected, onPick, onLocate, locating = false, positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330, fullscreen = false, onExpand, background, onBackground, restoredView, onView }: SurfaceProps) {
+type SurfaceProps = Props & { onClear: () => void; inspected: Discovery | null; onPick: (item: Discovery) => void; fullscreen?: boolean; onExpand: () => void; background: MapBackground; onBackground: (value: MapBackground) => void; restoredView: ViewState | null; onView: (view: ViewState) => void };
+function MapSurface({ onClear, showHeading = false, areaMarker, onChooseArea, inspected, onPick, onLocate, locating = false, positionStale = false, segmentStart, segmentEnd, startPosition, guideStart = false, recenter = 0, fitRoute = false, fitReference = false, selectedDiscovery, trips = EMPTY_TRIPS, trails = EMPTY_TRAILS, discoveries = EMPTY_DISCOVERIES, peaks = EMPTY_PEAKS, current = EMPTY_POINTS, reference = EMPTY_POINTS, ghost, position, focus, onPeak, height = 330, fullscreen = false, onExpand, background, onBackground, restoredView, onView }: SurfaceProps) {
   const heading=useMapHeading(showHeading&&!positionStale),[mapBearing,setMapBearing]=useState(restoredView?.bearing??0);
   const mapCenter = focus ?? position ?? current.at(-1) ?? reference[0] ?? trips[0]?.points.at(-1) ?? trails[0]?.points[0] ?? selectedDiscovery;
   const camera = useRef<CameraRef>(null);
@@ -124,8 +127,8 @@ function MapSurface({ showHeading = false, areaMarker, onChooseArea, inspected, 
     }} /></View>}
     {background === 'satellite' && <Pressable accessibilityRole="link" accessibilityLabel="MapTiler" onPress={() => void Linking.openURL('https://www.maptiler.com/copyright/')} style={{ position: 'absolute', bottom: 6, left: 6, backgroundColor: 'white', padding: 3 }}><SvgUri uri="https://api.maptiler.com/resources/logo.svg" width={90} height={24} /></Pressable>}
     <View pointerEvents="box-none" style={{ position: 'absolute', top: 60, left: 10, right: 10, gap: 6 }}>
-      {highlighted && <View testID="map-selected-distance" pointerEvents="none" style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: colors.paper, borderLeftWidth: 4, borderLeftColor: colors.coral, elevation: 3 }}>
-        <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '600', color: colors.ink }}>{highlighted.name || (highlighted.kind === 'steps' ? 'Valgt trapp' : 'Valgt sti')}</Text>
+      {highlighted && <View testID="map-selected-distance" style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: colors.paper, borderLeftWidth: 4, borderLeftColor: colors.coral, elevation: 3 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text numberOfLines={1} style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink }}>{highlighted.name || (highlighted.kind === 'steps' ? 'Valgt trapp' : 'Valgt sti')}</Text><MapControl title="× Avbryt" label="Avbryt valgt sti eller strekk" onPress={onClear} /></View>
         <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>{selectedDistance === null ? (position ? 'Avstand ikke tilgjengelig' : 'Trenger posisjon for avstand') : `Ca. ${shortDistance(selectedDistance)} unna · luftlinje`}</Text>
         {positionStale && position && <Text style={{ fontSize: 12, color: colors.muted }}>Fra sist kjente posisjon</Text>}
       </View>}

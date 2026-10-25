@@ -10,7 +10,7 @@ import { freshPosition, usablePosition } from '../domain/position';
 import { shortDistance } from '../domain/metrics';
 import { Button } from './components';
 import { styles as s } from './theme';
-import { ReadingPanel, ReadingButton } from './ReadingPanel';
+import { ReadingPanel } from './ReadingPanel';
 import { GroundCamera, installGroundAr } from './GroundCamera';
 import { groundGuide, type GroundState } from '../domain/groundAr';
 
@@ -21,21 +21,25 @@ const headingSensor = requireOptionalNativeModule<{
 }>('TrakkCameraHeading');
 
 type CameraProps = { active: boolean; position: Fix | null; targets: NearbyTrail[]; now: number; onSelect: (target: NearbyTrail) => void; onRetryGps: () => void;
-  selected?: NearbyTrail | null; details?: ReactNode; detailsOpen?: boolean; onCloseDetails?: () => void;
+  onCancel?: () => void; selected?: NearbyTrail | null; details?: ReactNode; detailsOpen?: boolean; onCloseDetails?: () => void;
 };
 export function TrailCamera(props: CameraProps) {
   const [attempt, setAttempt] = useState(0);
   const [full, setFull] = useState(false);
   const session = <TrailCameraSession key={attempt} {...props} onSelect={target => { setFull(true); props.onSelect(target); }} fullscreen={full} onRetry={() => setAttempt(value => value + 1)} />;
   return <View style={{ gap: 8 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Åpne kamera i fullskjerm" onPress={() => setFull(true)} style={{ alignSelf: 'flex-end', minHeight: 44, padding: 10 }}><Text style={s.chipText}>Fullskjerm ⛶</Text></Pressable>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      {props.selected && props.onCancel ? <Pressable accessibilityRole="button" accessibilityLabel="Avbryt valgt sti eller strekk" onPress={props.onCancel} style={{ minHeight: 48, padding: 12 }}><Text style={s.chipText}>× Avbryt</Text></Pressable> : <View />}
+      <Pressable accessibilityRole="button" accessibilityLabel="Åpne kamera i fullskjerm" onPress={() => setFull(true)} style={{ minHeight: 48, padding: 12 }}><Text style={s.chipText}>Fullskjerm ⛶</Text></Pressable>
+    </View>
     {!full ? session : <View style={{ height: 380 }} />}
     {full && <Modal visible hardwareAccelerated animationType="fade" onRequestClose={() => setFull(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: '#102A24' }}>
-        <View style={{ flex: 1 }}>
-        {session}
-        <Pressable accessibilityRole="button" accessibilityLabel="Minimer kameraet" onPress={() => setFull(false)} style={{ position: 'absolute', zIndex: 10, top: 8, right: 8, minHeight: 44, padding: 12, borderRadius: 12, backgroundColor: '#F7F5EEF2' }}><Text style={s.chipText}>Minimer ↙</Text></Pressable>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F7F5EE' }}>
+          {props.selected && props.onCancel ? <Pressable accessibilityRole="button" accessibilityLabel="Avbryt valgt sti eller strekk" onPress={props.onCancel} style={{ minHeight: 48, padding: 12 }}><Text style={s.chipText}>× Avbryt</Text></Pressable> : <View />}
+          <Pressable accessibilityRole="button" accessibilityLabel="Minimer kameraet" onPress={() => setFull(false)} style={{ minHeight: 48, padding: 12 }}><Text style={s.chipText}>Minimer ↙</Text></Pressable>
         </View>
+        {session}
       </SafeAreaView>
     </Modal>}
   </View>;
@@ -146,7 +150,7 @@ function TrailCameraSession({ fullscreen, onRetry, active, position, targets, no
     {fullscreen && !detailsOpen && <Pressable accessibilityRole="button" accessibilityLabel="Vis GPS- og kompasstatus" onPress={() => setShowStatus(value => !value)} style={{ position: 'absolute', top: 8, left: 8, right: 136, minHeight: 44, padding: 12, borderRadius: 12, backgroundColor: '#102A24ED', zIndex: 3 }}><Text numberOfLines={1} style={{ color: '#DAF5E9', fontWeight: '700' }}>{compactStatus} ⓘ</Text></Pressable>}
     {detailsOpen && selected && details && <View testID="camera-selection-details" style={[StyleSheet.absoluteFillObject, { zIndex: 3, backgroundColor: '#F7F5EE' }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Tilbake til kamera" onPress={onCloseDetails} style={{ minHeight: 56, padding: 12, paddingRight: fullscreen ? 136 : 12 }}><Text style={s.chipText}>← Kamera</Text></Pressable>
-      <ReadingPanel><ReadingButton title="Vis retning i kamera" onPress={onCloseDetails ?? (() => {})} />{details}</ReadingPanel>
+      <ReadingPanel>{details}</ReadingPanel>
     </View>}
     </View>
     {(!fullscreen || (showStatus && !detailsOpen)) && <View accessibilityLiveRegion="polite" style={{ gap: 8, ...(fullscreen ? { position: 'absolute', top: 60, left: 8, right: 8, padding: 14, borderRadius: 12, backgroundColor: '#F7F5EE', zIndex: 5 } : {}) }}>
