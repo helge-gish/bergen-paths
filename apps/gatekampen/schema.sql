@@ -1,6 +1,6 @@
 -- Supabase/PostgreSQL foundation. Run in a dedicated project, never Tråkk's DB.
 -- Accounts use Supabase Auth; public clients never receive a service-role key.
-create extension if not exists pgcrypto;
+-- gen_random_uuid() is built into PostgreSQL 13+. No extension required.
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null check (char_length(display_name) between 2 and 40),

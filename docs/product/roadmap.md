@@ -4,7 +4,7 @@
 
 Tråkk er naturstier i nærområdet og enkel trening. Appåpning aktiverer registrering, også med låst skjerm. Ingen turstart i normal bruk. Brukeren kan alltid pause; bevisst pause vedvarer ved gjenåpning. Personlige tider og prestasjoner beholdes. Treningsmoduser kan slås på når som helst; 4×4 er første program, tale/vibrasjon guider tempoet og vanlig registrering fortsetter etter programslutt. Flere økter i samme registrering må bevares. Avatar, utstyr, gatesamling og konkurranser flyttes ut. Eksisterende turer og strekk skal bevares.
 
-Gatekampen er et eget produkt for gater, aldri trapper. Først private vennegrupper med invitasjon; åpne konkurranser senere. Kontoer og varige, serverkontrollerte konkurranser må være med fra første spillbare nettutgave.
+Gatekampen er et eget produkt for gater. Trapper er utenfor første utgave; brukeren åpnet 25. oktober for at de kanskje kan legges til senere. Først private vennegrupper med invitasjon; åpne konkurranser senere. Kontoer og varige, serverkontrollerte konkurranser må være med fra første spillbare nettutgave.
 
 Den tredje appen er en utendørs spillarena som viser spill i nærheten, med maksimalt 5 km radius per spill. Den skal på sikt åpnes for andre utviklere. Første spilltype er rollespill med Ultima-gameplay. Bergen Ultima XXVII er arbeidstittel for det første lokale fjelleventyret inspirert av klassiske rollespill. Første område er Sandviksfjellet/Fløyen. Samarbeid, handel og felles hendelser er valgt retning. Én figur beholder alle krefter og alt utstyr på tvers av rollespillets eventyrpakker. Stedlige møter og AR skal støtte historien.
 

@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Gatekampen",
+    "slug": "gatekampen",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "gatekampen",
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "no.gatekampen.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#162D50"
+      }
+    },
+    "plugins": [
+      "@maplibre/maplibre-react-native",
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Gatekampen kjenner igjen gatene du går.",
+          "locationAlwaysAndWhenInUsePermission": "Gatekampen registrerer gatene også med låst skjerm. Trykk Pause for å stoppe.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ],
+    "experiments": {
+      "autolinkingModuleResolution": true
+    }
+  }
+}

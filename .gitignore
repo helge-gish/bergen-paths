@@ -52,3 +52,6 @@ __pycache__/
 /apps/herebound/ios/
 /apps/herebound/modules/*/android/build/
 /apps/herebound/modules/*/android/.cxx/
+/apps/gatekampen/android/
+/apps/gatekampen/ios/
+/apps/gatekampen/backend/supabase/functions/gatekampen-verify/index.ts

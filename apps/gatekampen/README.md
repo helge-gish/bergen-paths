@@ -1,19 +1,35 @@
-# Gatekampen — første milepæl
+# Gatekampen 0.1.0
 
-Besluttet: private vennegrupper først, åpne konkurranser senere. En sesong varer foreslått fire uker. Hver fullført gate gir ett poeng i sesongen, og personlig samling varer etter at sesongen er over. Ingen hastighetskonkurranse. Samme fryste gatesett gjelder alle i gruppen; radius rundt hver enkelt bestemmer ikke konkurransens vanskelighet. Trapper og gangstier filtreres bort før gatenavn grupperes.
+Egen Android-app for gater. Kart, personlig samling, fem ledetrådoppgaver og bakgrunnsregistrering. Trapper er utelatt, men kan vurderes senere. Ende-til-ende er direkte gjenbruk av Tråkks testede algoritme.
 
-## Implementert grunnlag
+[Produktplan](../../docs/product/gatekampen-v1.md).
 
-- `rules.ts`: gatenes kildefilter og idempotent poengberegning per spiller/sesong, med halvåpent tidsvindu. Klientoppgitte poeng er ikke en datakilde.
-- `schema.sql`: separat konto-/gruppemodell for Supabase Auth/PostgreSQL, sesonger, gatesnapshot, serververifiserte gjennomføringer og private invitasjoner. RLS er slått på; vanlige klienter kan ikke skrive medlemskap eller resultater.
+## Kjør og bygg
 
-## Neste vertikale leveranse
+Fra repo-roten: `npm ci`, `npm run typecheck`, `npm test`.
+Fra appmappen: `npx expo start`. Krever native development build, ikke Expo Go.
+APK: `python3 scripts/build-gatekampen.py` fra repo-roten. Krever Java 17 og Android SDK 36. Standard arm64 passer Pixel 6a. Behold signeringsnøkkelen i generert Android-prosjekt for senere oppdateringer; dette er testsignering.
 
-1. Opprett et eget Supabase-prosjekt i europeisk region og konfigurer e-post/OTP og appens redirect. Ingen backend-konto eller driftsmiljø er tilkoblet i denne arbeidsøkten.
-2. Kjør og integrasjonstest migrasjonen med to brukere, en utenforstående og utløpte sesjoner. SQL er foreløpig et grunnlag, ikke en verifisert produksjonsmigrasjon.
-3. Implementer transaksjonelle API-er for opprett gruppe og bruk invitasjon (utløp, maksimalt antall bruk, låst invitasjonsrad, rate limit). Vis gruppemedlemmers valgte navn gjennom en autorisert medlems-API; profiler er ikke offentlige.
-4. Egen app-id `no.gatekampen.app`, innlogging, gruppeliste og sesong. Tokens i OS-beskyttet lagring. Ingen Tråkk-spor eller persondata importeres automatisk.
-5. Last opp frivillig delte GPS-aktiviteter. Serveren beregner gatesamsvar mot sesongens katalog, dedupliserer hendelser og skriver gjennomføringer. GPS-data er ikke bevis mot bevisst spoofing; ha kontrollregler og tvist-/moderatorflyt før åpne konkurranser.
-6. Realtidsoppdateringer av gruppens resultater. Venners posisjon eller råspor vises ikke på resultatlisten.
+## Koble til vennegrupper
 
-Ingen spillbar nettapp eller live-konkurranse er publisert ennå. Drift/innlogging og integrasjonstester gjenstår før venner inviteres.
+Nettjenesten er ikke publisert. Uten konfigurasjon fungerer lokal registrering, og appen sier at vennegrupper ikke er åpnet. Ingen falske kontoer eller resultater.
+
+1. Opprett eget Supabase-prosjekt i Europa. Aktiver e-post-OTP med mailmal som inkluderer `{{ .Token }}`. Konfigurer e-postlevering/rate limits.
+2. Kjør `schema.sql`, deretter `backend/002_competitions.sql`, i tom database. Ikke Tråkk/Herebound-databasen.
+3. Fra repo-roten: `node scripts/bundle-gatekampen-verifier.cjs`. Genererer `backend/supabase/functions/gatekampen-verify/index.ts` fra den delte Tråkk-algoritmen. Generert fil er ignorert i Git.
+4. Fra `backend`: `supabase functions deploy gatekampen-verify --project-ref <prosjekt>`. Funksjonen validerer brukerens token gjennom Auth. Standard Supabase URL, anon key og service-role key må finnes i Edge-miljøet. Service-role-nøkkelen skal aldri i appen.
+5. Hent hele OSM-ways i administrativt gateområde. Kjør `npx tsx scripts/gatekampen-catalogue.ts --input hele-området.json --area nordnes-v1 --scope <OSM-area-id> --output /tmp/nordnes.json`. Gjennomgå grensene/gatene på kart. Sett inn i `catalogues` administrativt og sett `published_at` etter kontroll. Publiserte rader er fryst.
+6. Bygg med `EXPO_PUBLIC_GATEKAMPEN_SUPABASE_URL=https://<ref>.supabase.co` og `EXPO_PUBLIC_GATEKAMPEN_SUPABASE_KEY=<offentlig anon/publishable key>`. Aldri hemmelige nøkler med `EXPO_PUBLIC_`.
+7. Test OTP, profil, gruppe, invitasjon, medlemskap og frivillig opplasting med to brukere. Gruppen får én 28-dagerssesong. Ny sesong i samme gruppe er neste iterasjon.
+
+RPC-er autoriserer hver mutasjon. Medlemskap/invitasjoner/innsending bruker transaksjoner og låsing. Klienten kan ikke skrive resultater. Serveren krever dekning innen både sesongen og medlemsperioden. En gate teller én gang. Lagdekning er union av medlemmenes godkjente gater, aldri summerte halve gater.
+
+## Databasekontroll
+
+Installer `@electric-sql/pglite` i separat verktøymappe og kjør fra roten:
+
+```
+NODE_PATH=/sti/til/verktøy/node_modules node scripts/test-gatekampen-db.cjs
+```
+
+Faktisk PostgreSQL i WASM; Auth-tabell og JWT-kontekst er testfixturer. Tester privat tilgang, eierinvitasjon, rate limit, poengskriving, idempotens, ugyldig bevis og fryste kataloger. E-postlevering, Edge-hosting og fysisk GPS må testes separat.
