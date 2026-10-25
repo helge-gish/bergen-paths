@@ -4,6 +4,7 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { createStore, type Database } from '../src/data/store';
 import type { Fix } from '../src/domain/types';
 import type { Discovery } from '../src/domain/discoveries';
+import { finalizeTourMedals } from '../src/services/tourMedals';
 function database() {
   const raw = new DatabaseSync(':memory:');
   const db: Database = {
@@ -16,6 +17,40 @@ function database() {
   return { db, raw, store: createStore(db) };
 }
 const point: Fix = { timestamp: 1000, latitude: 60.39, longitude: 5.34, altitude: 100, altitudeAccuracy: 3, accuracy: 5, speed: 0 };
+test('medals finalize ended tours once, persist across restart and map edits, and follow trip deletion', async () => {
+  const { db, raw, store } = database();
+  const points = Array.from({ length: 41 }, (_, i) => ({ ...point, timestamp: 1000 + i * 10000, latitude: point.latitude + i * .0001, speed: 1.1 }));
+  const path: Discovery = { ...points[0], id: 'nature', name: 'Skogsti', kind: 'trail', osmHighway: 'path', surface: 'ground', geometry: points, sourceUrl: '', fetchedAt: 1 };
+  store.setSetting('natureDiscoveries', [path]);
+  const first = store.begin(null, true, 1000); store.append(first.id, points);
+  await finalizeTourMedals(store); assert.equal(store.tourResults().length, 0, 'no medals before ending');
+  store.finish(first.id, 401000);
+  await Promise.all([finalizeTourMedals(store), finalizeTourMedals(store)]);
+  const earned = store.tourResults();
+  assert.equal(earned.length, 1); assert.equal(earned[0].totals.trails, 1);
+  assert.equal(earned[0].medals.find(m => m.category === 'trail-time')?.color, 'gold');
+  assert.equal(store.saveTourResult({ ...earned[0], medals: [] }), false);
+  const reopened = createStore(db);
+  assert.deepEqual(reopened.tourResults(), earned);
+  store.setSetting('natureDiscoveries', []);
+  await finalizeTourMedals(store); assert.deepEqual(store.tourResults(), earned, 'map changes cannot rewrite medals');
+  store.setSetting('natureDiscoveries', [path]);
+  const second = store.begin(null, true, 1000000);
+  store.append(second.id, points.map((p, i) => ({ ...p, timestamp: 1000000 + i * 8000 })));
+  store.finish(second.id, 1320000);
+  // Recovery after closing the app between finish and medal finalization.
+  await finalizeTourMedals(reopened);
+  const newer = reopened.tourResults().find(r => r.tripId === second.id)!;
+  const pb = newer.medals.find(m => m.category === 'trail-time')!;
+  assert.equal(pb.color, 'gold'); assert.equal(pb.first, false); assert.ok(pb.previousBest! > pb.value);
+  assert.deepEqual(reopened.tourResults().find(r => r.tripId === first.id), earned[0]);
+  reopened.deleteTrip(first.id);
+  assert.deepEqual(reopened.tourResults(), [newer], 'other tours keep their earned medals');
+  assert.equal(reopened.saveTourResult(earned[0]), false, 'cannot resurrect deleted awards');
+  await finalizeTourMedals(reopened); assert.deepEqual(reopened.tourResults(), [newer]);
+  raw.close();
+});
+
 test('live and retrospective stretches get local endpoint titles while chosen names survive reopening', () => {
   const { store, db, raw } = database();
   const points = Array.from({ length: 21 }, (_, i) => ({ ...point, latitude: point.latitude + i * .0001, timestamp: 1000 + i * 10000 }));

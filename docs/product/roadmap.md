@@ -53,3 +53,7 @@ Finn sti/strekk skal ha synlig avbryt både på kartet og i AR, også i fullskje
 ## Treningslogg i 0.4.7
 
 Fullførte og avbrutte treningsøkter vises i samme kronologiske Logg som stier/strekk. Naturlig fullføring av trening krever ikke at turen avsluttes. Tidspunkt og pauser bevares; nye økter får egne identiteter. Minuttintervaller (30 min) og pyramide (23 min) føyes til de tre eksisterende planene. «Turen er lagret» er en kort lokal bekreftelse etter avslutning, aldri en oppstartstilstand.
+
+### Tråkk 0.4.8: personlige medaljer på avsluttede turer
+
+Medaljer knyttes til turen og vises ved avslutning og i LOGG. Fem turkategorier: ulike stier og egne strekk gått ende til ende, distanse, stigning og tid i bevegelse. Topp tre ulike resultater gir gull/sølv/bronse på tildelingstidspunktet; første resultat merkes, uavgjort gir ingen ny medalje. Tidsrekorder for hver sti og hvert strekk vurderes separat per retning og referansegeometri. Tildelinger beholdes når bedre resultater kommer senere. Detaljer og avgrensninger: `docs/release-0.4.8.md`.

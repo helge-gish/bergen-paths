@@ -1,3 +1,5 @@
+import { useTourMedals } from './src/ui/useTourMedals';
+import { MedalCount, TourMedals } from './src/ui/TourMedals';
 import { workoutLog } from './src/domain/workoutLog';
 import { useAreaName } from './src/ui/useAreaName';
 import { completionNotice } from './src/domain/completionNotice';
@@ -47,6 +49,7 @@ export function Trakk({ initial }: { initial: Data }) {
   const [data, setData] = useState(initial), [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const [savedUntil, setSavedUntil] = useState(0);
+  const [finishedTripId, setFinishedTripId] = useState<string | null>(null);
   const running = useRef(false), mounted = useRef(true);
   const refresh = useCallback(() => { if (mounted.current) { setData(snapshot()); setNow(Date.now()); } }, []);
   const act = useCallback(async (fn: () => unknown | Promise<unknown>) => {
@@ -66,20 +69,25 @@ export function Trakk({ initial }: { initial: Data }) {
     // Pause is accepted even during an in-flight permission/start request.
     setBusy(true);
     getStore().setSetting('automaticPauseReason', null);
-    const hadTrip = !!getStore().active();
-    void automaticRecorder.pause().then(() => { if (hadTrip && mounted.current) setSavedUntil(Date.now() + 4000); }).catch(e => setError(String(e))).finally(() => { setBusy(false); refresh(); });
+    const finished = getStore().active();
+    void automaticRecorder.pause().then(() => { if (finished && mounted.current) { setSavedUntil(Date.now() + 4000); setFinishedTripId(finished.id); } }).catch(e => setError(String(e))).finally(() => { setBusy(false); refresh(); });
   };
 
-  return <ActiveTrakk data={data} now={now} error={error} busy={busy} act={act} refresh={refresh} pause={pause} justSaved={savedUntil>now} start={()=>{setSavedUntil(0);void act(()=>automaticRecorder.enable());}} />;
+  return <ActiveTrakk finishedTripId={finishedTripId} dismissSummary={()=>setFinishedTripId(null)} data={data} now={now} error={error} busy={busy} act={act} refresh={refresh} pause={pause} justSaved={savedUntil>now} start={()=>{setSavedUntil(0);void act(()=>automaticRecorder.enable());}} />;
 }
-type ActiveProps = { justSaved: boolean; data: Data; now: number; error: string | null; busy: boolean; act: (fn: () => unknown | Promise<unknown>) => Promise<void>; refresh: () => void; pause: () => void; start: () => void };
-function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start, justSaved }: ActiveProps) {
+type ActiveProps = { finishedTripId: string | null; dismissSummary: () => void; justSaved: boolean; data: Data; now: number; error: string | null; busy: boolean; act: (fn: () => unknown | Promise<unknown>) => Promise<void>; refresh: () => void; pause: () => void; start: () => void };
+function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start, justSaved, finishedTripId, dismissSummary }: ActiveProps) {
   const [tab, setTab] = useState<'map' | 'log'>('map');
   const [settingsOpen, setSettingsOpen] = useState(false), [areaOpen, setAreaOpen] = useState(false);
   const [areaCandidate, setAreaCandidate] = useState<HomeArea | null>(null);
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [mode, setMode] = useState<ExploreMode>('map');
   const [selected, setSelected] = useState<Discovery | null>(null), [detail, setDetail] = useState<Trip | null>(null);
+  const medals = useTourMedals(data.trips);
+  const resultsByTrip = useMemo(() => new Map(medals.results.map(r => [r.tripId, r])), [medals.results]);
+  const allMedals = useMemo(() => medals.results.flatMap(r => r.medals), [medals.results]);
+  useEffect(() => { if (finishedTripId) { const trip=data.trips.find(t=>t.id===finishedTripId); if (trip) { setDetail(trip); setTrainingOpen(false); setSettingsOpen(false); setReview(null); setMode('map'); } } }, [finishedTripId, data.trips]);
+  const closeDetail = () => { setDetail(null); if (finishedTripId) dismissSummary(); };
   const [loadingMap, setLoadingMap] = useState(false), [mapError, setMapError] = useState<string | null>(null);
   const [recenter, setRecenter] = useState(0), [mapRetry, setMapRetry] = useState(0);
   const nearby = useNearbyArea();
@@ -189,16 +197,18 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start, justS
         <View style={s.card}><Text style={s.heading}>{progressLabel}</Text><Text style={s.small}>5 km rundt {areaName}{activity.pending?' · oppdaterer …':''}</Text></View>
         <View style={s.card}><Text style={s.subheading}>Totalt</Text><Text style={s.body}>{totals.trails} stier · {totals.stretches} strekk gått</Text><Text style={s.small}>{totals.passes} fullføringer · {kmLabel(lifetime.meters)} km · {Math.round(lifetime.ascent)} høydemeter opp</Text><Text style={s.small}>{durationLabel(lifetime.moving)} i bevegelse</Text>{trainingLog.length>0&&<Text style={s.small}>{completedTrainings} {completedTrainings===1?'treningsøkt':'treningsøkter'} fullført</Text>}</View>
         {activity.error&&<Text style={s.body}>Kunne ikke oppdatere stihistorikken. Åpne Logg igjen for å prøve på nytt.</Text>}
+        <MedalCount medals={allMedals} />
+        {medals.error&&<Button secondary title="Prøv medaljer igjen" onPress={medals.retry} />}
         <Text style={s.subheading}>Historikk</Text>
         {!timeline.length&&!activity.pending&&<Text style={s.body}>Ingen stier, strekk eller trening registrert ennå.</Text>}
         {timeline.slice(0,logLimit).map(entry=>{
           if(entry.kind==='workout'){const w=entry.event;return <Pressable key={w.id} accessibilityRole="button" accessibilityLabel={`${w.name} · ${w.complete?'Fullført':'Avsluttet tidlig'}`} onPress={()=>setDetail(allTracks.find(t=>t.id===w.tripId)??null)} style={s.card}><Text style={s.subheading}>{w.complete?'✓ ':''}{w.name}</Text><Text style={s.small}>Trening · {w.complete?'Fullført':'Avsluttet tidlig'} · {new Date(w.timestamp).toLocaleString('nb-NO')}</Text><Text style={s.body}>{durationLabel(w.elapsed)} · {w.rounds} av {w.totalRounds} drag</Text></Pressable>;}
-          const event=entry.event;return <View key={event.id} style={s.card}><Pressable accessibilityRole="button" onPress={()=>showItem(event)}><Text style={s.subheading}>{event.status==='completed'?'✓ ':''}{event.name}</Text><Text style={s.small}>{event.source==='nature'?'Sti':'Eget strekk'} · {event.status==='completed'?'Ende til ende':'Vært innom'} · {new Date(event.timestamp).toLocaleString('nb-NO')}{event.seconds!==undefined?` · ${durationLabel(event.seconds*1000)}`:''}</Text></Pressable>{event.status==='completed'&&event.source==='nature'&&<Button secondary title={(data.personal?.[event.itemId]?.stars?'★'.repeat(data.personal[event.itemId].stars!)+' · ':'')+reviewLabel(event)} onPress={()=>setReview(data.items.find(i=>i.id===event.itemId)??null)} />}</View>;
+          const event=entry.event;return <View key={event.id} style={s.card}><Pressable accessibilityRole="button" onPress={()=>showItem(event)}><Text style={s.subheading}>{event.status==='completed'?'✓ ':''}{event.name}</Text><Text style={s.small}>{event.source==='nature'?'Sti':'Eget strekk'} · {event.status==='completed'?'Ende til ende':'Vært innom'} · {new Date(event.timestamp).toLocaleString('nb-NO')}{event.seconds!==undefined?` · ${durationLabel(event.seconds*1000)}`:''}</Text></Pressable><MedalCount medals={resultsByTrip.get(event.tripId)?.medals.filter(m=>m.eventId===event.id) ?? []} />{event.status==='completed'&&event.source==='nature'&&<Button secondary title={(data.personal?.[event.itemId]?.stars?'★'.repeat(data.personal[event.itemId].stars!)+' · ':'')+reviewLabel(event)} onPress={()=>setReview(data.items.find(i=>i.id===event.itemId)??null)} />}</View>;
         })}
         {timeline.length>logLimit&&<Button secondary title="Vis eldre hendelser" onPress={()=>setLogLimit(n=>n+40)} />}
         {metrics && <View style={s.card}><Text style={s.subheading}>Denne turen</Text><View style={s.row}><Metric value={kmLabel(walking?.meters??0)} label="km registrert" /><Metric value={(metrics.speedKmh === null || metrics.speedKmh > 21.6) ? '—' : metrics.speedKmh.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} label="km/t nå" /><Metric value={walking?.hasElevation ? String(Math.round(walking.ascent)) : '—'} label="høydemeter opp" /></View><Text style={s.small}>{durationLabel(moving)} i bevegelse</Text></View>}
         <Text style={s.subheading}>Turer</Text>
-        {data.trips.filter(trip => !trip.automatic || !!trip.workout || !!trip.workoutHistory?.length || walkingMetrics(trip).meters >= 10).map(trip => <Pressable key={trip.id} accessibilityRole="button" onPress={() => setDetail(trip)} style={s.card}><Text style={s.subheading}>{trip.automatic ? new Date(trip.startedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }) : trip.name}</Text><Text style={s.small}>{kmLabel(walkingMetrics(trip).meters)} km →</Text></Pressable>)}
+        {data.trips.filter(trip => !trip.automatic || !!trip.workout || !!trip.workoutHistory?.length || walkingMetrics(trip).meters >= 10).map(trip => <Pressable key={trip.id} accessibilityRole="button" onPress={() => setDetail(trip)} style={s.card}><Text style={s.subheading}>{trip.automatic ? new Date(trip.startedAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }) : trip.name}</Text><Text style={s.small}>{kmLabel(walkingMetrics(trip).meters)} km →</Text><MedalCount medals={resultsByTrip.get(trip.id)?.medals ?? []} /></Pressable>)}
       </>}
     </ScrollView>
     <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: colors.line }}>{([{ id: 'map', title: 'Utforsk', icon: 'map' }, { id: 'log', title: 'Logg', icon: 'book' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); if (t.id !== 'map') setMode('map'); }} style={{ flex: 1, alignItems: 'center', gap: 5, paddingVertical: 14, backgroundColor: tab === t.id ? colors.pale : colors.paper }}><Icon name={t.icon} /><Text style={s.chipText}>{t.title}</Text></Pressable>)}</View>
@@ -207,7 +217,7 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start, justS
       {areaOpen && <View style={s.card}><Text style={s.subheading}>Fest området</Text><Text style={s.small}>Trykk i kartet for å plassere midtpunktet. Området er 5 km rundt merket.</Text><TrailMap focus={areaCandidate ?? position} position={position} areaMarker={areaCandidate} onChooseArea={p => setAreaCandidate(natureArea(null, p))} height={340} /><Button secondary title="Bruk posisjonen min" onPress={() => { if (position) setAreaCandidate(natureArea(null, position)); }} /><Button title="Utforsk dette området" disabled={!areaCandidate || busy} onPress={() => void act(() => { if (!areaCandidate) return; if (position && needsAreaConsent(areaCandidate, position)) throw new Error('Velg et område nær deg. Når du reiser, foreslår Tråkk området der du kommer.'); getStore().setSetting('activeNatureArea', areaCandidate); getStore().setSetting('pendingNatureArea', null); setCenter(areaCandidate); setSelected(null); setAreaOpen(false); setSettingsOpen(false); setTab('map'); })} />{error && <Text style={s.body}>{error}</Text>}</View>}
       <Button secondary title={getStore().setting('trailVoice',true)?'Talevarsler: på':'Talevarsler: av'} onPress={()=>void act(()=>{const enabled=!getStore().setting('trailVoice',true);getStore().setSetting('trailVoice',enabled);if(data.active)getStore().setAudio(data.active.id,enabled);})} />
       <ProfileSettings />
-      <Button secondary title="Eksporter logg" onPress={() => void act(() => exportLog(data.trips, data.trails, getStore().setting<Discovery[]>('osmDiscoveries', []), getStore().setting('osmAwards', {})))} />
+      <Button secondary title="Eksporter logg" onPress={() => void act(() => exportLog(data.trips, data.trails, getStore().setting<Discovery[]>('osmDiscoveries', []), getStore().setting('osmAwards', {}), medals.results))} />
     </ScrollView></SafeAreaView></Modal>}
     {trainingOpen && <Modal onRequestClose={() => setTrainingOpen(false)}><SafeAreaView style={s.screen}><Button secondary title="← Tilbake" onPress={() => setTrainingOpen(false)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>Treningsmodus</Text>
       {data.active?.workout && <WorkoutCard trip={data.active} now={now} onChange={refresh} />}
@@ -215,7 +225,7 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start, justS
       {!!data.active?.workoutHistory?.length && <Text style={s.small}>{data.active.workoutHistory.length} tidligere treningsøkter er lagret i denne registreringen.</Text>}
     </ScrollView></SafeAreaView></Modal>}
     {review&&<TrailReview item={review} value={data.personal?.[review.id]} onClose={()=>setReview(null)} onSave={value=>{getStore().setSetting('trailPersonalization',{...data.personal,[review.id]:value});setReview(null);refresh();}} />}
-    {detail && <Modal onRequestClose={() => setDetail(null)}><SafeAreaView style={s.screen}><Button secondary title="← Logg" onPress={() => setDetail(null)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>{detail.name}</Text><TrailMap current={detail.points} fitRoute height={330} /><Text style={s.body}>{kmLabel(walkingMetrics(detail).meters)} km · {durationLabel(walkingMetrics(detail).moving)} i bevegelse</Text>{workoutLog([detail],now).map(w=><View key={w.id} style={{gap:4}}><Text style={s.subheading}>{w.name} · {w.complete?'Fullført':'Avsluttet tidlig'}</Text><Text style={s.small}>{new Date(w.timestamp).toLocaleString('nb-NO')} · {durationLabel(w.elapsed)} · {w.rounds} av {w.totalRounds} drag</Text></View>)}<Button secondary title="Slett registreringen" onPress={() => Alert.alert('Slette registreringen?', 'Strekk laget fra denne registreringen slettes også.', [{ text: 'Behold', style: 'cancel' }, { text: 'Slett', style: 'destructive', onPress: () => { getStore().deleteTrip(detail.id); setDetail(null); refresh(); } }])} /></ScrollView></SafeAreaView></Modal>}
+    {detail && <Modal onRequestClose={closeDetail}><SafeAreaView style={s.screen}><Button secondary title={finishedTripId===detail.id ? "Ferdig" : "← Tilbake"} onPress={closeDetail} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>{finishedTripId===detail.id ? "Turen er ferdig" : detail.name}</Text><Text style={s.small}>{new Date(detail.startedAt).toLocaleString('nb-NO')}</Text>{detail.endedAt === null ? <Text style={s.small}>Medaljer deles ut når du avslutter turen.</Text> : resultsByTrip.has(detail.id) ? <TourMedals result={resultsByTrip.get(detail.id)!} /> : medals.error ? <Button secondary title="Prøv medaljer igjen" onPress={medals.retry} /> : <Text accessibilityLiveRegion="polite" style={s.body}>Beregner turens medaljer …</Text>}<TrailMap current={detail.points} fitRoute height={330} />{detail.endedAt===null&&<Text style={s.body}>{kmLabel(walkingMetrics(detail).meters)} km · {durationLabel(walkingMetrics(detail).moving)} i bevegelse</Text>}{workoutLog([detail],now).map(w=><View key={w.id} style={{gap:4}}><Text style={s.subheading}>{w.name} · {w.complete?'Fullført':'Avsluttet tidlig'}</Text><Text style={s.small}>{new Date(w.timestamp).toLocaleString('nb-NO')} · {durationLabel(w.elapsed)} · {w.rounds} av {w.totalRounds} drag</Text></View>)}<Button secondary title="Slett registreringen" onPress={() => Alert.alert('Slette registreringen?', 'Strekk laget fra denne registreringen slettes også.', [{ text: 'Behold', style: 'cancel' }, { text: 'Slett', style: 'destructive', onPress: () => { getStore().deleteTrip(detail.id); closeDetail(); refresh(); } }])} /></ScrollView></SafeAreaView></Modal>}
   </SafeAreaView>;
 }
 class Boundary extends React.Component<{ children: React.ReactNode }, { error: boolean }> {

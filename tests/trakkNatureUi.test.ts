@@ -1,3 +1,4 @@
+import * as tourMedals from '../src/domain/tourMedals';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
@@ -17,16 +18,18 @@ import * as finder from '../src/domain/trailFinder';
 test('Start tur explicitly records; Avslutt tur stops recording, while map, AR and log remain usable', async t => {
   let preference: RecordingPreference = 'unconfigured', active: any = null, starts = 0, denyPermission = true, nearbyCalls = 0, appState: (s: string) => void = () => {};
   const items = [{ id: 'wood', name: 'Skogsti', kind: 'trail', osmHighway: 'path', surface: 'ground', latitude: 60, longitude: 5, geometry: [{ latitude: 60, longitude: 5 }, { latitude: 60.001, longitude: 5 }], sourceUrl: '', fetchedAt: 1 }, { id: 'city', name: 'Gangvei', kind: 'trail', osmHighway: 'footway', surface: 'asphalt', latitude: 60, longitude: 5, geometry: [{ latitude: 60, longitude: 5 }, { latitude: 60.001, longitude: 5 }], sourceUrl: '', fetchedAt: 1 }];
-  const trips: any[] = [], trails: any[] = [];
+  let trips: any[] = []; const trails: any[] = [];
   const settings: Record<string, unknown> = {};
   let report = trailActivity.emptyTrailActivity();
   let segment = { from: 1, draft: false }, saves = 0;
   const far = { ...items[0], id: 'far', longitude: 10, geometry: items[0].geometry.map(p => ({ ...p, longitude: 10 })) }; items.push(far);
   const store = { active: () => active, trips: () => trips, trails: () => trails, setting: (key: string, fallback: unknown) => key === 'automaticRecording' ? preference : key === 'natureDiscoveries' ? items : key === 'natureMapFetched' ? { '12000:1000:5000': Date.now() } : settings[key] ?? fallback, setSetting: (key: string, value: unknown) => { settings[key] = value; }, segmentWindow: () => segment, setSegmentStart: () => { segment = { from: active.points[0].timestamp, draft: true }; }, cancelSegmentDraft: () => { segment = { ...segment, draft: false }; }, clipSegment: () => { saves++; segment = { ...segment, draft: false }; return { name: 'Teststrekk' }; }, startWorkout: (_: string, kind: workout.WorkoutKind) => { active = { ...active, workout: { ...workout.createWorkout(Date.now(), true, kind), id: 'training' } }; return active; } };
-  const recorder = createAutomaticRecorder({ preference: () => preference, setPreference: p => { preference = p; }, active: () => !!active, running: async () => !!active, start: async () => { if (denyPermission) throw new Error('Gi posisjonstilgang'); starts++; active = { id: 'auto', startedAt: Date.now(), endedAt: null, points: [{ latitude: 60, longitude: 5, timestamp: Date.now(), accuracy: 5, speed: 1, altitude: null, altitudeAccuracy: null }], name: '', ghostId: null, audioEnabled: false, lastCueAt: 0 }; }, resume: async () => {}, finish: async () => { active = null; } });
+  const recorder = createAutomaticRecorder({ preference: () => preference, setPreference: p => { preference = p; }, active: () => !!active, running: async () => !!active, start: async () => { if (denyPermission) throw new Error('Gi posisjonstilgang'); starts++; active = { id: 'auto'+starts, startedAt: Date.now(), endedAt: null, points: [{ latitude: 60, longitude: 5, timestamp: Date.now(), accuracy: 5, speed: 1, altitude: null, altitudeAccuracy: null }], name: '', ghostId: null, audioEnabled: false, lastCueAt: 0 }; }, resume: async () => {}, finish: async () => { if(active) trips=[...trips,{...active,endedAt:Date.now()}]; active = null; } });
   const native = { ActivityIndicator: 'ActivityIndicator', Alert: { alert() {} }, AppState: { currentState: 'active', addEventListener: (_: string, cb: typeof appState) => { appState = cb; return { remove() {} }; } }, Image: 'Image', Linking: {}, Modal: 'Modal', Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View' };
   const { Trakk } = component('App.tsx', {
     './src/domain/workoutLog': trainingHistory,
+    './src/ui/useTourMedals': {useTourMedals:(trips:any[])=>({results:trips.map(t=>tourMedals.tourResult(t,report.log,[])),pending:false,error:false,retry() {}})},
+    './src/ui/TourMedals': {TourMedals:'TourMedals',MedalCount:'MedalCount'},
     './src/ui/useAreaName': {useAreaName: ()=>'Sandviken, Bergen'}, './src/domain/completionNotice': completion, './src/domain/discoveryGroups': groups,
     './src/domain/trailActivity': trailActivity, './src/ui/useTrailActivity': { useTrailActivity: () => ({report,pending:false,error:null}) }, './src/ui/TrailReview': { TrailReview: 'TrailReview' },
     'react-native': native, 'react-native-safe-area-context': { SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView' }, 'expo-status-bar': { StatusBar: 'StatusBar' }, './assets/trakk-icon.png': 1,
@@ -99,6 +102,10 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   await act(() => tree.root.findByProps({ title: 'Avslutt tur' }).props.onPress());
   assert.equal(preference, 'paused'); assert.equal(active, null);
   assert.match(allText(), /Turen er lagret/);
+  assert.match(allText(), /Turen er ferdig/);
+  assert.equal(tree.root.findByType('TourMedals' as any).props.result.tripId,'auto1');
+  await act(()=>tree.root.findByProps({title:'Ferdig'}).props.onPress());
+  assert.doesNotMatch(allText(), /Turen er ferdig/);
   await act(()=>appState('background'));
   assert.doesNotMatch(allText(), /Turen er lagret/);
   assert.equal(tree.root.findAllByType('TrailMap' as any).length, 1);
@@ -109,6 +116,7 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   await act(() => tree.unmount());
   await act(() => { tree = create(React.createElement(Trakk, { initial: initial() })); });
   assert.equal(starts, 1); assert.ok(nearbyCalls >= callsAtPause);
+  assert.equal(tree.root.findAllByType('TourMedals' as any).length,0,'reopening never replays the ending summary');
   assert.doesNotMatch(allText(), /Turen er lagret/);
   await act(() => tree.root.findByProps({ title: 'Start tur' }).props.onPress());
   assert.equal(starts, 2); assert.equal((active as any).workout, undefined);

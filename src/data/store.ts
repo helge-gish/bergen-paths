@@ -8,6 +8,7 @@ import type { Fix, Profile, Trail, Trip } from '../domain/types';
 import { trailReference } from '../domain/trailReference';
 import { cleanPoints } from '../domain/geo';
 import { latestPosition, type MapPosition } from '../domain/position';
+import type { TourResult } from '../domain/tourMedals';
 type Param = string | number | null;
 export interface Database {
   execSync(sql: string): void;
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS points (tripId TEXT NOT NULL REFERENCES trips(id) ON 
 CREATE INDEX IF NOT EXISTS points_timestamp ON points(timestamp);
 CREATE TABLE IF NOT EXISTS trails (id TEXT PRIMARY KEY, tripId TEXT NOT NULL REFERENCES trips(id), name TEXT NOT NULL, createdAt REAL NOT NULL, points TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS tour_results (tripId TEXT PRIMARY KEY REFERENCES trips(id) ON DELETE CASCADE, data TEXT NOT NULL);
 PRAGMA user_version = 1;
 `;
 const id = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -56,6 +58,14 @@ export function createStore(db: Database) {
   let trailsKey = '', savedTrails: Trail[] = [];
   const immutableSettings = new Map<string, { raw: string; value: unknown }>();
   const store = {
+    tourResults(): TourResult[] {
+      return db.getAllSync<{ data: string }>('SELECT data FROM tour_results').map(r => JSON.parse(r.data) as TourResult);
+    },
+    saveTourResult(result: TourResult): boolean {
+      // First write wins; never overwrite a medal already awarded. The SELECT
+      // also prevents a deleted or still-active trip from acquiring awards.
+      return db.runSync('INSERT OR IGNORE INTO tour_results (tripId, data) SELECT id, ? FROM trips WHERE id = ? AND endedAt IS NOT NULL', JSON.stringify(result), result.tripId).changes === 1;
+    },
     lastPosition(): MapPosition | null {
       const points = db.getAllSync<{ data: string }>('SELECT data FROM points ORDER BY timestamp DESC LIMIT 100').map(r => JSON.parse(r.data) as Fix);
       return latestPosition(store.setting<MapPosition | null>('lastMapPosition', null), ...points);
