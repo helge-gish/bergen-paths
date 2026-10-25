@@ -1,0 +1,33 @@
+# Gatekampen — Supabase tilkoblet 25. oktober 2026
+
+Prosjekt: `haerxrnhqmvpxmzaqcko`, Gatekampen, Frankfurt. Bløffl er ikke endret.
+
+## Utført
+
+- Tilkoblingen virker med prosjektlesing, migrasjon, SQL og Edge Function-publisering.
+- Migrasjonen `20261025084710_gatekampen_initial_private_competitions` oppretter seks offentlige og fire private tabeller. RLS er aktivert på alle.
+- Invitasjonskoder, kontrollkvitteringer og rate limits ligger i et ikke-eksponert `private`-skjema. Privilegerte funksjoner ligger der også; offentlige RPC-innganger kjører med innringerens privilegier og delegerer til eksplisitt autoriserte implementasjoner.
+- `gatekampen-verify` versjon 1 er aktiv med JWT-kontroll. Serveren validerer brukeren gjennom Auth, medlemskap og GPS før resultatet lagres. Rate limit reserveres atomisk før geometrianalysen.
+- Live SQL-test med to medlemmer og én utenforstående bestod: privat innsyn, invitasjon, sperret direkte poengskriving, verifisert poeng, idempotens og lagdekning. Alle testbrukere/grupper ble rullet tilbake; tomme datatabeller bekreftet etterpå.
+- Den offentlige publishable-nøkkelen er lagt i `apps/gatekampen/publicConfig.ts`. Ingen service-role- eller secret-nøkkel ligger i klientkoden.
+- Lokal PostgreSQL-test og TypeScript-kontroll bestod etter endringene.
+
+## Gjenstående før ny APK / venneprøve
+
+1. E-postmal for kodeinnlogging. Den installerte MCP-tilkoblingen tilbyr ikke endring av Auth-konfigurasjon. Sett Magic Link-malen til innholdet i `apps/gatekampen/backend/email-code.html` via [e-postmalene](https://supabase.com/dashboard/project/haerxrnhqmvpxmzaqcko/auth/templates). Kontroller også førstegangsregistreringens mail i en ekte innloggingstest. Ingen e-post er sendt automatisk.
+2. Supabases innebygde e-postsender begrenser mottakere til organisasjonens medlemmer. Egen SMTP-avsender må konfigureres før vanlige venner kan inviteres. Ikke legg venner til som databaseadministratorer for å komme rundt begrensningen. [Offisiell SMTP-veiledning](https://supabase.com/docs/guides/auth/auth-smtp).
+3. Hent og gjennomgå hele gatekataloger fra OSM for konkurranseområdene. Ingen katalog er publisert ennå. Den lokale kjøremaskinens nettpolicy blokkerer `overpass-api.de`; det konfigurerte domenet `overpass.api.de` er en annen adresse. Korrekt tillatelse må på plass før uttrekk kan hentes her. Ikke opprett fiktive eller radiusklippede konkurransegater.
+4. Test faktisk Auth/REST/Edge-sammenheng og to telefoner. SQL-testen dekker ikke e-postlevering eller HTTP/JWT-transport.
+5. Bygg og publiser neste APK etter at innlogging og konkurranseområder kan brukes. 0.1.0-APK-en blir ikke automatisk oppdatert av serveroppsettet.
+
+## Supabase-rådgivere
+
+Ingen sikkerhetsfeil eller advarsler. Fire INFO-punkter gjelder RLS uten policies på de private tabellene; dette er bevisst standardnekt for klienter, med tilgang bare gjennom autoriserte serverfunksjoner. [Forklaring av kontrollen](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+Ytelsesrådgiveren rapporterer ubrukte indekser fordi prosjektet er nytt og tomt. De beholdes for medlemsoppslag og fremmednøkler. [Forklaring av kontrollen](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index).
+
+## Oppsettshistorikk
+
+Første migrasjonsforsøk fikk `Invalid or expired requestState`. Tabellenes fravær ble kontrollert før ett nytt forsøk, som lyktes. Det er én migrasjon i prosjektet. Bootstrap-SQL skal ikke kjøres på nytt der.
+
+CLI-verktøyet kunne ikke startes i dette arbeidsmiljøet (nyeste utgave forsøkte å skrive til en skrivebeskyttet hjemmemappe; den pinnede 2.81.3-utgavens postinstall feilet). Den testede, ferdige migrasjonen ble derfor publisert gjennom Supabase MCP til den tomme fjernbasen. SQL-kildene og det faktiske migrasjonsnavnet/versjonen er bevart; ingen lokal migrasjonsfil med oppdiktet tidsstempel er laget.

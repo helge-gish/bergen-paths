@@ -1,7 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 import type { Trip } from '../../src/domain/types';
-const url=process.env.EXPO_PUBLIC_GATEKAMPEN_SUPABASE_URL?.replace(/\/$/,'')??'';
-const key=process.env.EXPO_PUBLIC_GATEKAMPEN_SUPABASE_KEY??'';
+import {supabaseUrl,supabasePublishableKey} from './publicConfig';
+const url=process.env.EXPO_PUBLIC_GATEKAMPEN_SUPABASE_URL?.replace(/\/$/,'')??supabaseUrl;
+const key=process.env.EXPO_PUBLIC_GATEKAMPEN_SUPABASE_KEY??supabasePublishableKey;
 export const onlineConfigured=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url)&&!!key;
 type Auth={access_token:string;refresh_token:string;expires_at:number;user:{id:string}};
 const storageKey='gatekampen-auth-v1';

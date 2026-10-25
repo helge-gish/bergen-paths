@@ -28,8 +28,7 @@ Deno.serve(async request=>{
     if(!s)return json({error:'Sesongen finnes ikke i dine grupper.'},403);
     const [membership]=await call(`/rest/v1/memberships?group_id=eq.${s.group_id}&player_id=eq.${user.id}&select=joined_at`);
     if(!membership)return json({error:'Du er ikke medlem.'},403);
-    const recent=await call(`/rest/v1/evidence_receipts?player_id=eq.${user.id}&created_at=gte.${encodeURIComponent(new Date(Date.now()-60000).toISOString())}&select=id&limit=7`,undefined,true);
-    if(recent.length>=6)return json({error:'Vent et minutt før du sender flere turer.'},429);
+    if(!await call('/rest/v1/rpc/claim_verification',{p_player:user.id},true))return json({error:'Vent et minutt før du sender flere turer.'},429);
     const [catalogue]=await call(`/rest/v1/catalogues?id=eq.${s.catalogue_id}&select=streets`);
     if(!catalogue?.streets?.length)return json({error:'Gateområdet mangler.'},400);
     const completions=await verifyWalk(trip,catalogue.streets,{startsAt:Date.parse(s.starts_at),endsAt:Date.parse(s.ends_at),joinedAt:Date.parse(membership.joined_at)});

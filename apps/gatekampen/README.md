@@ -12,7 +12,9 @@ APK: `python3 scripts/build-gatekampen.py` fra repo-roten. Krever Java 17 og And
 
 ## Koble til vennegrupper
 
-Nettjenesten er ikke publisert. Uten konfigurasjon fungerer lokal registrering, og appen sier at vennegrupper ikke er åpnet. Ingen falske kontoer eller resultater.
+Database og GPS-verifikator er satt i drift 25. oktober 2026 i Gatekampen-prosjektet i Frankfurt. Se `backend/deployment.json`. Første APK (0.1.0) er fortsatt lokal; neste APK venter på e-postoppsett og publiserte konkurranseområder. `publicConfig.ts` inneholder kun prosjektets offentlige klientnøkkel. Ingen falske kontoer eller resultater.
+
+**Ikke kjør bootstrap-SQL på nytt i det tilkoblede prosjektet.** De følgende stegene beskriver oppsett av et nytt prosjekt.
 
 1. Opprett eget Supabase-prosjekt i Europa. Aktiver e-post-OTP med mailmal som inkluderer `{{ .Token }}`. Konfigurer e-postlevering/rate limits.
 2. Kjør `schema.sql`, deretter `backend/002_competitions.sql`, i tom database. Ikke Tråkk/Herebound-databasen.

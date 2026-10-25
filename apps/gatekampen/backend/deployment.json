@@ -1,0 +1,31 @@
+{
+  "project_ref": "haerxrnhqmvpxmzaqcko",
+  "project_name": "gatekampen",
+  "region": "eu-central-1",
+  "url": "https://haerxrnhqmvpxmzaqcko.supabase.co",
+  "migration": {
+    "version": "20261025084710",
+    "name": "gatekampen_initial_private_competitions",
+    "sources": [
+      "../schema.sql",
+      "002_competitions.sql"
+    ]
+  },
+  "edge_function": {
+    "name": "gatekampen-verify",
+    "version": 1,
+    "verify_jwt": true,
+    "bundle_sha256": "5b175cfb80f227f771bab3bc535c2ad50d52ada7efc0946186503c4dedc22918"
+  },
+  "verified": [
+    "live PostgreSQL role and RLS smoke test; all fixtures rolled back",
+    "private groups, invites, verified completions, replay and team coverage",
+    "local PostgreSQL verification-budget and transaction checks"
+  ],
+  "pending": [
+    "Email OTP template and live sign-in",
+    "SMTP sender for friends outside Supabase organization",
+    "Reviewed whole-street OSM competition catalogues",
+    "End-to-end HTTP/Edge verification and next Android APK"
+  ]
+}
