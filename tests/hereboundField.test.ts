@@ -24,8 +24,9 @@ test('field entry trusts host GPS, not a fix supplied by a game command',()=>{
 test('berries become visible before collection range; AR and physical proximity are both required',()=>{
   let a=enter();const berry=at('rowan');
   assert.ok(isRevealed(ultimaX,progressFor(a)!,berry.position));
-  assert.ok(metersBetween(gps(),berry.position)+5>berry.radiusMeters);
-  assert.throws(()=>perform(a,{type:'discover',encounterId:'rowan'},gps(),'rowan'),/møtestedet/);
+  const outside=gps({...berry.position,latitude:berry.position.latitude+.0004});
+  assert.ok(metersBetween(outside,berry.position)+5>berry.radiusMeters);
+  assert.throws(()=>perform(a,{type:'discover',encounterId:'rowan'},outside,'rowan'),/møtestedet/);
   a=move(a,berry.position);
   assert.throws(()=>perform(a,{type:'discover',encounterId:'rowan'},gps(berry.position)),/AR/);
   a=perform(a,{type:'discover',encounterId:'rowan'},gps(berry.position),'rowan');

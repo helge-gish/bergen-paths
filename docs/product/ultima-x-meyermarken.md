@@ -39,3 +39,17 @@ Eksakte oppskrifter, grafikk og møteplasser utformes for denne korte delen. Ikk
 5. Feltprøve på Pixel 6a, med forbedringer ut fra det brukeren faktisk opplever.
 
 Det er disse behovene som former de neste SDK-funksjonene. Herebound beholder eierskap til posisjon, kamera, rendering, figur, sekk, hjelpere og transaksjoner. ULTIMA X leverer innhold, geografi og reglene for mysteriet.
+
+## Feltjustering 25. oktober 2026
+
+I Herebound 0.3.1 ligger alle fem møter/funn innen 15 meter fra teststarten midt på Meyermarken (60.40418, 5.32703). Testens kiste, rognebær, Maren, Rusk og lykt er samlet her for å gjøre AR-prøven enkel. Spillets radius er fortsatt 5 km rundt Fløyvarden. Møte-ID-er og innholdsversjon beholdes slik at oppgradering ikke avviser lagret fremgang. Det kompakte oppsettet må sjekkes ute; det er ikke den endelige utbredelsen av eventyret.
+
+## Lokalt historiestoff — forslag under vurdering
+
+Brukeren foreslo Bjelke eller Meyer som utgangspunkt for forsvinningen. Dette er undersøkt 25. oktober 2026; historien i spillpakken er foreløpig ikke skrevet om.
+
+- [Løytnant Bjelkes gate](https://www.bergenbyarkiv.no/bergenbyleksikon/arkiv/1422171) er oppkalt etter sjøoffiseren Johan Christian August Bielke (1781–1846). Han ledet kanonbåter mot den britiske fregatten Tartar ved Alvøen 16. mai 1808. [Tartargaten](https://www.bergenbyarkiv.no/bergenbyleksikon/arkiv/1424849) viser til samme hendelse.
+- [Meyermarken](https://www.bergenbyarkiv.no/bergenbyleksikon/arkiv/1424843) var Otto Meyers eiendom på Ladegårdens grunn. [Ladegården](https://www.bergenbyarkiv.no/bergenbyleksikon/arkiv/1425033) var i familien Meyers eie fra 1832 til 1908; hovedhuset lå ved dagens Rotthaugsgaten 1–7. Ikke bland denne personen med andre bergenske kjøpmenn som het Meyer.
+- [Meyerminen](https://www.bergenbyarkiv.no/bergenbyleksikon/arkiv/date/2001/01/page/53) var et steinbrudd på Rotthaugen eid av Otto Meyer. En tunnel eller underverden under Fløyen er ikke dokumentert av denne kilden.
+
+Anbefalt fiksjonsretning: «Meyers hemmelighet». I en fantasiversjon av området er Meyer forsvunnet etter et funn i steinbruddet. Spilleren kan følge regnskaper, handle med vitner eller undersøke magiske spor i fri rekkefølge. En oppdiktet journal knyttet til Bjelke kan åpne et sidespor. Magi, forsvinning, journal og sammenhengen mellom personene er spillfiksjon, ikke historiske påstander. Unngå å flytte første test bort fra Meyermarken; bruk virtuelle møter der, selv om bakgrunnshistorien omfatter større områder.

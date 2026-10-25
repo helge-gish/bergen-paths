@@ -11,21 +11,66 @@ import * as facts from '../src/domain/trailFacts';
 import * as metrics from '../src/domain/metrics';
 import * as groups from '../src/domain/discoveryGroups';
 import * as finder from '../src/domain/trailFinder';
+import * as gate from '../src/domain/startGate';
 import * as position from '../src/domain/position';
 import type { Fix, Trip } from '../src/domain/types';
 const native = { View: 'View', Text: 'Text', Pressable: 'Pressable', Modal: 'Modal', ScrollView: 'ScrollView', useWindowDimensions: () => ({ height: 800 }), Linking: { openURL: () => {} } };
 const theme = { colors: { ink: '#123', paper: '#fff' }, styles: {} };
 const details = component('src/ui/MapDetails.tsx', { 'react-native': native, '../domain/mapPresentation': presentation, '../domain/trailFacts': facts, '../domain/metrics': metrics, '../domain/discoveryGroups': groups, './theme': theme });
 const cameraMoves: any[] = [];
+let mapHeading:number|null=null;
 const Camera = React.forwardRef((props: any, ref) => {
   React.useImperativeHandle(ref, () => ({ flyTo: (value: any) => cameraMoves.push(value), fitBounds() {} }));
   return React.createElement('Camera', props);
 });
 const { TrailMap } = component('src/ui/TrailMap.tsx', {
+  './useMapHeading': { useMapHeading: (enabled:boolean) => enabled?mapHeading:null },
   'react-native': native, 'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' }, 'react-native-svg': { SvgUri: 'SvgUri' },
   '../data/native': { getStore: () => ({ setting: () => null, setSetting: () => {} }) }, '../domain/mapStyles': styles,
   '@maplibre/maplibre-react-native': { Map: 'Map', Camera, GeoJSONSource: 'GeoJSONSource', RasterSource: 'RasterSource', Layer: 'Layer', Marker: 'Marker' },
   '../domain/geo': geo, '../domain/metrics': metrics, './theme': theme, './components': { Icon: 'Icon' }, '../domain/mapSelection': selection, '../domain/mapPresentation': presentation, './MapDetails': details,
+});
+
+test('MEG facing arrow follows compass relative to the rotated map and hides without heading',async()=>{
+ mapHeading=90;let tree!:ReactTestRenderer;
+ await act(()=>{tree=create(React.createElement(TrailMap,{position:{latitude:60,longitude:5},showHeading:true}));});
+ const marker=()=>tree.root.findByProps({accessibilityLabel:'Din posisjon, mobilen peker 90 grader'});
+ const rotation=()=>marker().findAllByType('View' as any).find(n=>n.props.style?.transform)?.props.style.transform[0].rotate;
+ assert.equal(rotation(),'90deg');
+ await act(()=>tree.root.findByType('Map' as any).props.onRegionDidChange({nativeEvent:{bounds:[4.9,59.9,5.1,60.1],bearing:30}}));
+ assert.equal(rotation(),'60deg');
+ mapHeading=null;
+ await act(()=>tree.update(React.createElement(TrailMap,{position:{latitude:60,longitude:5},showHeading:true})));
+ assert.ok(tree.root.findByProps({accessibilityLabel:'Din posisjon, retning utilgjengelig'}));
+ await act(()=>tree.unmount());
+});
+
+test('AR guides to a fixed saved-stretch start, signals arrival once and never requires a new trip',async()=>{
+ const now=Date.now(),first:Fix={latitude:60,longitude:5,timestamp:now-500000,accuracy:4,altitude:null,altitudeAccuracy:null,speed:null};
+ const points=Array.from({length:11},(_,i)=>({...first,latitude:60+i*.0001,timestamp:first.timestamp+i*10000}));
+ const near={...points[8],timestamp:now};let receive:(v:Fix)=>void=()=>{};
+ const spoken:string[]=[];
+ const {TrailFinder}=component('src/ui/TrailFinder.tsx',{
+  '../domain/startGate':gate,'../services/voice':{speak:async(v:string)=>{spoken.push(v);}},
+  'react-native':{...native,AppState:{currentState:'active',addEventListener:()=>({remove(){}})}},
+  'expo-location':{Accuracy:{High:4},requestForegroundPermissionsAsync:async()=>({granted:true}),watchPositionAsync:async(_:any,callback:typeof receive)=>{receive=callback;return{remove(){}};}},
+  '../domain/trailFinder':finder,'../domain/position':position,'../domain/metrics':metrics,
+  '../data/native':{getStore:()=>({lastPosition:()=>near,setting:(_:string,f:any)=>f})},'../services/tracking':{toFix:(v:Fix)=>v},
+  './ReadingPanel':{ReadingText:'Text',ReadingButton:'Button'},
+  './TrailCamera':{TrailCamera:(props:any)=>React.createElement('TrailCamera',props,props.detailsOpen?props.details:null)},'./TrailMap':{TrailMap},'./components':{Button:'Button'},'./theme':theme,
+ });
+ let tree!:ReactTestRenderer;await act(()=>{tree=create(React.createElement(TrailFinder,{embedded:true,items:[],trails:[{id:'own',name:'Min bakke',points,tripId:'old',createdAt:now-100000}],trips:[],busy:false,initialTargetId:'saved:own',onRefresh(){},onMap(){}}));});
+ const camera=()=>tree.root.findByType('TrailCamera' as any);
+ assert.equal(camera().props.detailsOpen,true);
+ assert.equal(tree.root.findAllByProps({title:'Velg sti og start tur'}).length,0);
+ await act(()=>tree.root.findByProps({title:'Finn starten'}).props.onPress());
+ assert.equal(camera().props.detailsOpen,false);assert.equal(camera().props.selected.coordinate.latitude,60);
+ assert.match(camera().props.selected.name,/Start:/);assert.ok(camera().props.selected.meters>80);
+ await act(()=>receive({...first,timestamp:Date.now(),latitude:60.0005}));
+ assert.equal(camera().props.selected.coordinate.latitude,60);assert.equal(spoken.length,0);
+ await act(()=>receive({...first,timestamp:Date.now()}));assert.equal(spoken.length,1);assert.match(spoken[0],/ved starten/);
+ await act(()=>receive({...first,timestamp:Date.now(),latitude:60.00001}));assert.equal(spoken.length,1);
+ await act(()=>tree.unmount());
 });
 
 test('Finn sti renders saved and growing live tracks without fresh GPS, across fullscreen and camera switches', async t => {
@@ -33,6 +78,7 @@ test('Finn sti renders saved and growing live tracks without fresh GPS, across f
   const points = [point(0), point(1), point(2)];
   const saved: Trip = { id: 'saved', name: 'Min tur', points, startedAt: points[0].timestamp, endedAt: points[2].timestamp, ghostId: null, audioEnabled: false, lastCueAt: 0 };
   const { TrailFinder } = component('src/ui/TrailFinder.tsx', {
+    '../domain/startGate': gate, '../services/voice': {speak:async()=>{}},
     'react-native': { ...native, AppState: { currentState: 'background', addEventListener: () => ({ remove() {} }) } },
     'expo-location': {}, '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
     '../data/native': { getStore: () => ({ lastPosition: () => points[2] }) }, '../services/tracking': { toFix: (value: Fix) => value },
@@ -105,6 +151,7 @@ test('finder keeps asking for GPS while stationary and supplies named streets to
   const street = { id: 'gate', name: 'Gjeble Pedersens gate', kind: 'street', latitude: 60, longitude: 5, geometry: [point, { ...point, latitude: 60.001 }], fetchedAt: now, sourceUrl: '' };
   const requests: any[] = []; let receive: (value: Fix) => void = () => {}, removed = 0;
   const { TrailFinder } = component('src/ui/TrailFinder.tsx', {
+    '../domain/startGate': gate, '../services/voice': {speak:async()=>{}},
     'react-native': { ...native, AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
     'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: async () => ({ granted: true }), watchPositionAsync: async (options: unknown, callback: typeof receive) => { requests.push(options); receive = callback; return { remove() { removed++; } }; } },
     '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
@@ -141,6 +188,7 @@ test('Explore switches map/AR without losing map view or growing track; hiding s
   const point: Fix = { latitude: 60, longitude: 5, timestamp: Date.now(), accuracy: 4, altitude: null, altitudeAccuracy: null, speed: null };
   const item = { id: 'way/scan', name: 'Fjellstien', kind: 'trail', latitude: 60.001, longitude: 5, geometry: [{ ...point, latitude: 60.001 }, { ...point, latitude: 60.002 }], fetchedAt: 0, sourceUrl: '' };
   const { TrailFinder } = component('src/ui/TrailFinder.tsx', {
+    '../domain/startGate': gate, '../services/voice': {speak:async()=>{}},
     'react-native': { ...native, AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
     'expo-location': { Accuracy: { High: 4 }, requestForegroundPermissionsAsync: async () => ({ granted: true }), watchPositionAsync: async () => { watches++; return { remove() { removed++; } }; } },
     '../domain/trailFinder': finder, '../domain/position': position, '../domain/metrics': metrics,
@@ -167,7 +215,7 @@ test('Explore switches map/AR without losing map view or growing track; hiding s
   const view = { bounds: [4.9, 59.9, 5.1, 60.1], center: [5.01, 60.01], zoom: 16, userInteraction: true };
   await act(() => map.props.onRegionDidChange({ nativeEvent: view }));
   assert.equal(watches, 0);
-  await act(() => mode('Kamera · AR').props.onPress());
+  await act(() => mode('Finn sti/strekk').props.onPress());
   assert.equal(watches, 1); assert.equal(tree.root.findByType('Map' as any), map);
   assert.doesNotMatch(JSON.stringify(tree.toJSON()), /Finn en sti i nærheten og start/);
   await act(() => camera().props.onSelect(camera().props.targets[0]));
@@ -181,7 +229,7 @@ test('Explore switches map/AR without losing map view or growing track; hiding s
   await act(() => tree.root.findAllByProps({ accessibilityLabel: 'Minimer kartet' })[0].props.onPress());
 
   await act(() => tree.update(React.createElement(Explore, { recording: true, current: [point, { ...point, latitude: 60.0001, timestamp: point.timestamp + 10000 }] })));
-  await act(() => mode('Kamera · AR').props.onPress());
+  await act(() => mode('Finn sti/strekk').props.onPress());
   assert.equal(watches, 2);
   assert.equal(tree.root.findByProps({ id: 'live' }).props.data.features[0].geometry.coordinates.length, 2);
   await act(() => camera().props.onSelect(camera().props.targets[0]));
@@ -204,10 +252,10 @@ test('map trail start action closes fullscreen before handing off; absent while 
   await act(() => tree.root.findByProps({ accessibilityLabel: 'Åpne kart i fullskjerm' }).props.onPress());
   const source = tree.root.findByProps({ id: 'discoveries' });
   await act(() => source.props.onPress({ nativeEvent: { features: source.props.data.features, lngLat: [5, 60.0005] }, stopPropagation() {} }));
-  await act(() => tree.root.findByProps({ accessibilityLabel: 'Velg sti og start tur' }).props.onPress());
+  await act(() => tree.root.findByProps({ accessibilityLabel: 'Finn start med AR' }).props.onPress());
   assert.equal(selected.id, item.id); assert.equal(tree.root.findAllByType('Modal' as any).length, 0);
   await act(() => tree.update(React.createElement(TrailMap, { ...props, onStartTrail: undefined })));
-  assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Velg sti og start tur' }).length, 0);
+  assert.equal(tree.root.findAllByProps({ accessibilityLabel: 'Finn start med AR' }).length, 0);
   assert.match(JSON.stringify(tree.toJSON()), /Fjellstien/);
 });
 

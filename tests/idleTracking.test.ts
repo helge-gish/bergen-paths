@@ -10,6 +10,7 @@ for (const mode of ['free', 'paused', 'running'] as const) test(`rest pause stop
   const settings: Record<string, any> = { automaticRecording: 'enabled', idleRecording: { tripId: 'trip', evidence: { anchor: { ...fix, timestamp: now - 600000 }, since: now - 600000, lastSeen: now - 10000, samples: 60 } } };
   const store = { getTrip: () => active, active: () => active, finish: () => { active = null; }, append: () => { appended++; }, setting: (key: string, fallback: unknown) => settings[key] ?? fallback, setSetting: (key: string, value: unknown) => { settings[key] = value; } };
   component('src/services/tracking.ts', {
+    './trailActivity': {syncTrailActivity:async()=>{}},
     '../domain/idleRecording': idle, '../domain/workout': workout, './areaConsent': { stageAreaConsent: () => false }, '../domain/natureArea': {},
     '../domain/automaticRecording': { AUTOMATIC_LIMIT_MS: 28800000 }, '../domain/dialect': {}, './tripStatus': { syncTripStatus: async () => {} }, '../domain/metrics': {}, '../domain/commentary': {},
     './workoutCoach': { workoutAvailable: true, syncWorkoutCoach: async (trip: unknown) => { if (!trip) voiceStopped++; } },

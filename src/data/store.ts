@@ -240,7 +240,7 @@ export function createStore(db: Database) {
     setting<T>(key: string, fallback: T): T {
       const r = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key);
       if (!r) return fallback;
-      if (!['osmDiscoveries', 'natureDiscoveries', 'goals', 'goalCatalog'].includes(key)) return JSON.parse(r.value) as T;
+      if (!['osmDiscoveries', 'natureDiscoveries', 'trailPersonalization', 'goals', 'goalCatalog'].includes(key)) return JSON.parse(r.value) as T;
       const previous = immutableSettings.get(key);
       if (previous?.raw === r.value) return previous.value as T;
       const value = JSON.parse(r.value) as T;

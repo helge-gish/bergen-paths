@@ -28,15 +28,16 @@ export function WorkoutCard({ trip, now, onChange }: { trip: Trip; now: number; 
   const error = workoutVoiceError();
   return <View style={[s.card, { backgroundColor: status.current?.kind === 'fast' && !finished ? '#F5E9CF' : colors.pale }]}>
     <Text style={s.eyebrow}>{plan.name}</Text>
-    {finished ? <><View style={s.row}><Icon name={status.complete ? 'check' : 'clock'} /><Text style={[s.heading, { flex: 1 }]}>{status.complete ? `${plan.name} fullført!` : `${plan.name} avsluttet tidlig`}</Text></View><Text style={s.body}>{status.rounds} av {plan.rounds} drag fullført · {countdown(Math.floor(status.elapsed / 1000))} treningstid.</Text><Text style={s.small}>{status.complete ? 'Du fulgte hele tidsprogrammet. Innsats og puls er ikke målt.' : 'Fremgangen er lagret sammen med turen.'}{trip.endedAt === null ? ' Turen registreres videre i fritt tempo.' : ''}</Text></> : <>
-      <Text accessibilityLiveRegion="polite" style={s.heading}>{status.paused ? 'Treningen er satt på pause' : status.current?.label}</Text>
+    {finished ? <><View style={s.row}><Icon name={status.complete ? 'check' : 'clock'} /><Text style={[s.heading, { flex: 1 }]}>{status.complete ? 'Økt fullført' : 'Økt avsluttet'}</Text></View><Text style={s.body}>{status.rounds} av {plan.rounds} drag fullført · {countdown(Math.floor(status.elapsed / 1000))} treningstid.</Text><Text style={s.small}>{trip.endedAt === null ? 'Lagret. Turen fortsetter.' : 'Lagret med turen.'}</Text></> : <>
+      <Text accessibilityLiveRegion="polite" style={s.heading}>{status.paused ? 'Trening pauset' : status.current?.label}</Text>
       <Text accessibilityLabel={`${countdown(status.remaining)} igjen i fasen`} style={{ fontSize: 44, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>{countdown(status.remaining)}</Text>
-      <Text style={s.body}>{status.paused ? 'Treningsklokken står stille. Tid og GPS for hele turen fortsetter.' : `Neste: ${status.next?.label ?? 'Fritt tempo · økten er ferdig'}`}</Text>
+      <Text style={s.body}>{status.paused ? 'Turen registreres fortsatt.' : `Neste: ${status.next?.label ?? 'Fritt tempo · økten er ferdig'}`}</Text>
       <Text style={s.small}>{status.rounds} av {plan.rounds} drag fullført · {countdown(Math.ceil((plan.totalMs - status.elapsed) / 1000))} igjen av økten</Text>
-      <View style={s.between}><Text style={[s.body, { flex: 1 }]}>Taletrener og påminnelser</Text><Switch accessibilityLabel={`Lyd fra ${plan.name}`} value={w.audioEnabled} onValueChange={value => void change(value ? 'unmute' : 'mute')} /></View>
+      <View style={s.between}><Text style={[s.body, { flex: 1 }]}>Tale</Text><Switch accessibilityLabel={`Lyd fra ${plan.name}`} value={w.audioEnabled} onValueChange={value => void change(value ? 'unmute' : 'mute')} /></View>
       {error && <Text style={s.small}>{error}</Text>}
-      <Button secondary title={status.paused ? `Fortsett ${plan.name}` : `Pause ${plan.name}`} onPress={() => void change(status.paused ? 'resume' : 'pause')} />
-      <Button secondary title={`Fritt tempo · avslutt ${plan.name}`} onPress={() => void change('stop')} />
+      <Button secondary title={status.paused ? 'Fortsett trening' : 'Pause trening'} onPress={() => void change(status.paused ? 'resume' : 'pause')} />
+      <Button secondary title="Avslutt trening" onPress={() => void change('stop')} />
+      <Text style={s.small}>Turen fortsetter uten trening.</Text>
     </>}
   </View>;
 }

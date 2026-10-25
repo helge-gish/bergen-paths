@@ -10,7 +10,8 @@ function harness(preference: RecordingPreference = 'enabled') {
   });
   return { recorder, block(p: Promise<unknown>) { blocker = p; }, stopService() { service = false; }, state: () => ({ active, service, starts, finishes, resumes, preference }) };
 }
-test('launch waits for one-time setup, then repeated launch signals start exactly one recording', async () => {
+test('opening never starts a trip; explicit start and recovery create exactly one recording', async () => {
+  const legacy=harness('enabled');await legacy.recorder.ensure();assert.equal(legacy.state().starts,0);
   const h = harness('unconfigured'); await h.recorder.ensure(); assert.equal(h.state().starts, 0);
   await Promise.all([h.recorder.enable(), h.recorder.ensure(), h.recorder.ensure()]);
   assert.equal(h.state().starts, 1); assert.equal(h.state().active, true);
@@ -19,7 +20,7 @@ test('launch waits for one-time setup, then repeated launch signals start exactl
 test('pause wins over in-flight permissions and remains paused on reopening', async () => {
   const h = harness(); let release!: () => void;
   h.block(new Promise<void>(resolve => { release = resolve; }));
-  const starting = h.recorder.ensure(); await Promise.resolve(); await Promise.resolve();
+  const starting = h.recorder.enable(); await Promise.resolve(); await Promise.resolve();
   assert.equal(h.state().starts, 1);
   const paused = h.recorder.pause(); release(); await Promise.all([starting, paused]);
   assert.equal(h.state().active, false); assert.equal(h.state().service, false);
@@ -28,7 +29,7 @@ test('pause wins over in-flight permissions and remains paused on reopening', as
 });
 test('a denied startup does not poison later explicit retry or pause', async () => {
   const h = harness(); h.block(Promise.reject(new Error('Permission denied')));
-  await assert.rejects(h.recorder.ensure(), /Permission denied/);
+  await assert.rejects(h.recorder.enable(), /Permission denied/);
   h.block(Promise.resolve()); await h.recorder.pause(); await h.recorder.ensure();
   assert.equal(h.state().active, false);
   await h.recorder.enable(); assert.equal(h.state().active, true);

@@ -18,6 +18,8 @@ export type Discovery = Coordinate & {
   natureContext?: boolean;
   unnamed?: boolean;
   localName?: string;
+  /** Already resolved as a measurable nature route; don't regroup for display. */
+  routeUnit?: boolean;
   osmName?: string;
 };
 export type Progress = { fraction: number; collected: boolean; firstVisit: number | null; earnedTripId?: string; streetCheck?: { coveredMeters: number; totalMeters: number; endsVisited: number; endsTotal: number } };

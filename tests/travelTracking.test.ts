@@ -11,6 +11,7 @@ test('background travel stops GPS/coach before adding a distant fix and waits fo
   const store = { active: () => active, finish: () => { active = null; }, append: () => { appended++; }, setting: (key: string, fallback: unknown) => settings[key] ?? fallback, setSetting: (key: string, value: unknown) => { settings[key] = value; } };
   const consent = component('src/services/areaConsent.ts', { 'expo-location': {}, '../data/native': { getStore: () => store }, '../domain/natureArea': area, '../domain/position': positions });
   component('src/services/tracking.ts', {
+    './trailActivity': {syncTrailActivity:async()=>{}},
     '../domain/idleRecording': {}, '../domain/workout': {}, './areaConsent': consent, '../domain/natureArea': area,
     '../domain/automaticRecording': { AUTOMATIC_LIMIT_MS: 28800000 }, '../domain/dialect': {}, './tripStatus': { syncTripStatus: async () => {} }, '../domain/metrics': {}, '../domain/commentary': {},
     './workoutCoach': { workoutAvailable: true, syncWorkoutCoach: async (trip: unknown) => { if (trip === null) coachStopped++; } },

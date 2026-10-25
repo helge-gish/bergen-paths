@@ -5,23 +5,25 @@ export type StretchRun = { trailId: string; startedAt: number; endedAt: number; 
 export type StretchResult = StretchRun & { name: string; previousSeconds: number | null; bestSeconds: number | null; ghostSeconds: number | null };
 /** Directional, continuous traversal. Small timing gates inside both ends make
  * GPS timing comparable without requiring walkers to overshoot an intersection. */
-export function stretchRuns(trip: Trip, trail: Trail): StretchRun[] {
+export type StretchAnalysis = { runs: StretchRun[]; starts: number[]; active: { startedAt: number; fraction: number; timestamp: number } | null };
+export function analyzeStretch(trip: Trip, trail: Trail): StretchAnalysis {
+  const empty: StretchAnalysis = { runs: [], starts: [], active: null };
   const ref = cleanPoints(trail.points), live = cleanPoints(trip.id === trail.tripId ? trail.points : trip.points);
-  if (ref.length < 2 || live.length < 2) return [];
-  if (!live.some(p => distance(p, ref[0]) <= 35)) return [];
+  if (ref.length < 2 || live.length < 2) return empty;
+  if (!live.some(p => distance(p, ref[0]) <= 35)) return empty;
   const edges: { a: Fix; b: Fix; along: number; length: number; south: number; north: number; west: number; east: number }[] = [];
   let length = 0;
   for (let i = 1; i < ref.length; i++) {
-    if (ref[i].timestamp - ref[i - 1].timestamp > 30_000) return [];
+    if (ref[i].timestamp - ref[i - 1].timestamp > 30_000) return empty;
     const n = distance(ref[i - 1], ref[i]);
     if (n > .2) edges.push({ a: ref[i - 1], b: ref[i], along: length, length: n,
       south: Math.min(ref[i - 1].latitude, ref[i].latitude), north: Math.max(ref[i - 1].latitude, ref[i].latitude),
       west: Math.min(ref[i - 1].longitude, ref[i].longitude), east: Math.max(ref[i - 1].longitude, ref[i].longitude) });
     length += n;
   }
-  if (length < 15) return [];
+  if (length < 15) return empty;
   const gate = Math.min(8, length * .1), finish = length - gate;
-  const runs: StretchRun[] = [];
+  const runs: StretchRun[] = [], starts: number[] = [];
   let previous: { along: number; point: Fix } | null = null, startedAt: number | null = null;
   let missingSince: number | null = null;
   const latitude = ref.reduce((n, p) => Math.max(n, Math.abs(p.latitude)), 0);
@@ -72,7 +74,7 @@ export function stretchRuns(trip: Trip, trail: Trail): StretchRun[] {
     if (best.along <= gate) startedAt = null;
     if (previous) {
       const crossing = (target: number) => previous!.point.timestamp + (target - previous!.along) / (best!.along - previous!.along) * (point.timestamp - previous!.point.timestamp);
-      if (startedAt === null && previous.along <= gate && best.along > gate && best.error <= 12) startedAt = crossing(gate);
+      if (startedAt === null && previous.along <= gate && best.along > gate && best.error <= 12) { startedAt = crossing(gate); starts.push(startedAt); }
       if (startedAt !== null && previous.along < finish && best.along >= finish) {
         const endedAt = crossing(finish);
         if (endedAt > startedAt) runs.push({ trailId: trail.id, startedAt, endedAt, seconds: (endedAt - startedAt) / 1000 });
@@ -81,8 +83,9 @@ export function stretchRuns(trip: Trip, trail: Trail): StretchRun[] {
     }
     previous = { along: best.along, point };
   }
-  return runs;
+  return { runs, starts, active: startedAt !== null && previous && missingSince === null ? { startedAt, fraction: Math.min(1, previous.along / length), timestamp: previous.point.timestamp } : null };
 }
+export function stretchRuns(trip: Trip, trail: Trail): StretchRun[] { return analyzeStretch(trip, trail).runs; }
 
 // Finished tracks are immutable; keep repeated live/background reads inexpensive.
 const cache = new WeakMap<Trip, Map<string, { points: Fix[]; runs: StretchRun[] }>>();

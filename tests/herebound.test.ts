@@ -80,7 +80,8 @@ test('trade invariants: no negative stock, gold, count, remote trades, or duplic
   assert.equal(applyCommand(once.account, registry, cmd, now).account, once.account);
   assert.throws(() => applyCommand(once.account, registry, { ...cmd, action: trade('ultima-x:ginseng', 'buy') }, now), /allerede/);
   assert.throws(() => applyCommand(once.account, registry, { ...cmd, id: 'stale' }, now), /oppdatert/);
-  const far = action(a, { type: 'travel', position: ultimaX.encounters.find(e=>e.id==='rusk')!.position });
+  // Encounters are clustered for the park test; use a genuinely remote point.
+  const far = action(a, { type: 'travel', position: {...ultimaX.start.position,latitude:ultimaX.start.position.latitude+.002} });
   assert.throws(() => action(far, trade('ultima-x:garlic', 'buy')), /møtestedet/);
   assert.throws(() => action(a, { type: 'travel', position: { latitude: 0, longitude: 0 } }));
   let spend = action(a, trade('ultima-x:staff', 'buy', 2));

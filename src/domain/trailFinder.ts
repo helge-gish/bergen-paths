@@ -7,7 +7,7 @@ import { needsDiscoveryName } from './discoveryGroups';
 import { bearing, cleanPoints, distance, project, relativeBearing, segments } from './geo';
 import type { Coordinate, Fix, Trail } from './types';
 
-export type TrailChoice = { id: string; name: string; item: Discovery; saved?: Trail; facts: TrailFacts };
+export type TrailChoice = { id: string; name: string; item: Discovery; saved?: Trail; facts: TrailFacts; memberIds?: string[] };
 export type NearbyTrail = TrailChoice & { coordinate: Coordinate; meters: number; bearing: number };
 export type CameraHeading = { bearing: number; pitch: number; reliable: boolean; timestamp: number; quality?: 'precise' | 'approximate' | 'unreliable'; source?: 'rotation' | 'magnetic'; accuracy?: number; errorDegrees?: number | null; magneticAccuracy?: number; magneticMicrotesla?: number | null };
 const outlines = new WeakMap<Discovery, { paths: Coordinate[][]; south: number; north: number; west: number; east: number }>();
@@ -18,7 +18,7 @@ export function trailChoices(items: Discovery[], saved: Trail[]): TrailChoice[] 
       const item: Discovery = { id: `saved:${trail.id}`, name: trail.name, kind: 'trail', latitude: points[0]?.latitude ?? 0, longitude: points[0]?.longitude ?? 0, geometry: points, streetPaths: paths, sourceUrl: '', fetchedAt: trail.createdAt };
       return { id: item.id, name: trail.name, item, saved: trail, facts: trailFacts([], trail) };
     }),
-    ...discoveryRows(items.filter(item => item.kind === 'trail' || item.kind === 'steps')).map(row => ({ id: row.id, name: needsDiscoveryName(row.item) ? '' : row.item.name, item: row.item, facts: trailFacts(row.members) })),
+    ...discoveryRows(items.filter(item => item.kind === 'trail' || item.kind === 'steps')).map(row => ({ id: row.id, memberIds: row.members.map(i=>i.id), name: needsDiscoveryName(row.item) ? '' : row.item.name, item: row.item, facts: trailFacts(row.members) })),
   ];
 }
 export function cameraStreetChoices(items: Discovery[]): TrailChoice[] {
@@ -95,4 +95,8 @@ export function trailStart(target: Pick<NearbyTrail, 'saved' | 'item' | 'coordin
   if (target.saved) return cleanPoints(target.saved.points)[0];
   const endpoints = (target.item.streetPaths ?? [target.item.geometry]).flatMap(path => path.length > 1 ? [path[0], path[path.length - 1]] : []);
   return endpoints.sort((a, b) => distance(a, target.coordinate) - distance(b, target.coordinate))[0];
+}
+/** Lock this point when guidance is selected; do not switch ends as GPS moves. */
+export function targetAtStart(target:NearbyTrail,start:Coordinate,position:Fix):NearbyTrail {
+  return {...target,name:`Start: ${target.name}`,coordinate:start,meters:distance(position,start),bearing:bearing(position,start)};
 }

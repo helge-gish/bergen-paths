@@ -40,7 +40,7 @@ function referencePoints(path: Coordinate[]): Fix[] {
   }
   return traveled >= 30 ? result : [];
 }
-export type TimingReference = Trail & { source: 'nature' | 'personal'; direction: 'forward' | 'reverse'; itemId: string };
+export type TimingReference = Trail & { source: 'nature' | 'personal'; direction: 'forward' | 'reverse'; itemId: string; validFrom?: number };
 export function timingReferences(items: Discovery[], saved: Trail[]): TimingReference[] {
   const refs: TimingReference[] = [];
   const add = (id: string, name: string, path: Coordinate[], source: TimingReference['source'], itemId: string, tripId = '', createdAt = 0) => {
@@ -53,7 +53,9 @@ export function timingReferences(items: Discovery[], saved: Trail[]): TimingRefe
   for (const item of items.filter(isNatureTrail)) (item.streetPaths ?? [item.geometry]).forEach((path, i) => add(`nature:${item.id}:${i}`, item.name, path, 'nature', item.id));
   for (const trail of saved) {
     if (trail.points.some((p, i) => i > 0 && p.timestamp - trail.points[i - 1].timestamp > 30000)) continue;
+    const before=refs.length;
     add(`personal:${trail.id}`, trail.name, trail.points, 'personal', trail.id, trail.tripId, trail.createdAt);
+    for(const ref of refs.slice(before))ref.validFrom=trail.points[0]?.timestamp;
   }
   return refs;
 }

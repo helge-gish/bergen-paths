@@ -19,7 +19,7 @@ export function MapKey({ track, history, reference, expanded, onToggle }: { trac
       <Pressable accessibilityRole="button" accessibilityLabel="Tegnforklaring for kartet" accessibilityState={{ expanded }} onPress={onToggle} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={s.chipText}>{expanded ? 'Skjul forklaring ↑' : 'Tegnforklaring ⓘ'}</Text></Pressable>
     </View>
     {expanded && <View style={{ gap: 7 }}>
-      <Text style={s.small}>Blått med hvit kant er sporet som vises nå. Lilla viser tidligere turer. Den blå DU-markøren viser posisjonen din; SIST betyr sist kjente posisjon.</Text>
+      <Text style={s.small}>Blått med hvit kant er sporet som vises nå. Lilla viser tidligere turer. Den blå MEG-markøren viser posisjonen din. Pilen viser retningen mobilen peker når kompasset er tilgjengelig; SIST betyr sist kjente posisjon.</Text>
       <KeyLine color={mapInk.path} dashed label="Sti / småsti · stiplet" />
       <KeyLine color={mapInk.footway} label="Gangvei · heltrukket" />
       <Text style={s.small}>Korte, tette streker viser trapper. Stitypen sier ikke hvor lett eller godt vedlikeholdt stien er. Trykk på en fremhevet sti for informasjon.</Text>
@@ -36,7 +36,7 @@ export function MapTrailCard({ item, onClose, onStart }: { item: Discovery; onCl
   return <View accessibilityLiveRegion="polite" style={{ padding: 14, gap: 6, backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.line }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><View style={{ flex: 1 }}><Text style={s.subheading}>{needsDiscoveryName(item) ? label : item.name}</Text><Text style={s.small}>{label} · {shortDistance(facts.length)} kartlagt del</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Lukk stiinfo" onPress={onClose} style={{ padding: 12, minHeight: 44 }}><Text style={s.subheading}>×</Text></Pressable></View>
     <Text style={s.small}>Vanskelighetsgrad: {facts.grade ?? 'Ikke registrert'}{facts.grade ? ' (SAC)' : ''} · Høydemeter: ikke registrert</Text>
-    {onStart && <Pressable accessibilityRole="button" accessibilityLabel="Velg sti og start tur" onPress={onStart} style={{ minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: colors.paper, fontWeight: '700' }}>Velg sti og start tur →</Text></Pressable>}
+    {onStart && <Pressable accessibilityRole="button" accessibilityLabel="Finn start med AR" onPress={onStart} style={{ minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: colors.paper, fontWeight: '700' }}>Finn start med AR →</Text></Pressable>}
     <Text style={s.small}>Lengden gjelder den markerte stidelen, ikke en komplett tur. Kartdata: OpenStreetMap.</Text>
   </View>;
 }

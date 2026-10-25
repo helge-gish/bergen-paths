@@ -12,7 +12,7 @@ export function ExploreSurface({ mode, onMode, enabled, map, camera, trailing }:
 }) {
   return <View style={{ gap: 9 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-      {(['map', 'camera'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: mode === value }} onPress={() => onMode(value)} style={[s.chip, { backgroundColor: mode === value ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: mode === value ? colors.paper : colors.ink }]}>{value === 'map' ? 'Kart' : 'Kamera · AR'}</Text></Pressable>)}
+      {(['map', 'camera'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: mode === value }} onPress={() => onMode(value)} style={[s.chip, { backgroundColor: mode === value ? colors.ink : colors.pale }]}><Text style={[s.chipText, { color: mode === value ? colors.paper : colors.ink }]}>{value === 'map' ? 'Kart' : 'Finn sti/strekk'}</Text></Pressable>)}
       <View style={{ flex: 1 }} />{trailing}
     </View>
     <View style={{ display: mode === 'map' ? 'flex' : 'none' }} accessibilityElementsHidden={mode !== 'map'} importantForAccessibility={mode === 'map' ? 'auto' : 'no-hide-descendants'}>{map}</View>

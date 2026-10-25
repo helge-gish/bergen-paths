@@ -5,5 +5,5 @@ export const automaticRecorder = createAutomaticRecorder({
   preference: () => getStore().setting<RecordingPreference>('automaticRecording', 'unconfigured'),
   setPreference: value => getStore().setSetting('automaticRecording', value),
   active: () => !!getStore().active(), running: trackingRunning, resume: resumeTracking, finish: finishTracking,
-  start: () => startTracking(null, false, undefined, undefined, 'free', undefined, true),
+  start: () => startTracking(null, getStore().setting('trailVoice', true), undefined, undefined, 'free', undefined, true),
 });

@@ -24,6 +24,7 @@ test('coach and lock-screen bridge receive matching program duration, phases and
     '../data/native': { getStore: () => ({ setting: () => 'neutral' }) }, '../domain/workout': workout,
   });
   const { syncTripStatus } = component('src/services/tripStatus.ts', {
+    '../domain/natureTiming': {walkingMetrics:()=>({meters:50,ascent:5,hasElevation:true,moving:30000})},
     expo: { requireOptionalNativeModule: () => ({ updateTripStatus: async (json: string) => statuses.push(JSON.parse(json)) }) },
     '../domain/workout': workout, '../domain/metrics': { tripMetrics: () => ({ meters: 100, ascent: 10, hasElevation: true, points: [] }) },
     '../domain/commentary': { journeyContext: () => '' },

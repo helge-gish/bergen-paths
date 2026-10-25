@@ -2,6 +2,7 @@ import { cleanPoints, coordinateBounds, distance, validFix } from './geo';
 import { stretchRuns, type StretchResult, type StretchRun } from './stretchRuns';
 import type { TimingReference } from './nature';
 import type { Fix, Trip } from './types';
+import {tripMetrics} from './metrics';
 export type NatureResult = StretchResult & { source: TimingReference['source']; direction: TimingReference['direction']; itemId: string };
 /** Break at every bad/fast fix; filtering then connecting the survivors would
  * silently turn a GPS gap or car ride into a valid timed completion. */
@@ -23,7 +24,7 @@ function measured(trip: Trip, reference: TimingReference): StretchRun[] {
   const old = cached.get(reference); if (old) return old;
   const bounds = coordinateBounds(trip.points), ref = coordinateBounds(reference.points);
   if (!bounds || !ref || bounds[2] < ref[0] - .001 || bounds[0] > ref[2] + .001 || bounds[3] < ref[1] - .0005 || bounds[1] > ref[3] + .0005) { cached.set(reference, []); return []; }
-  const runs = walkingParts(trip).flatMap(part => stretchRuns(part, reference));
+  const runs = walkingParts(trip).flatMap(part => stretchRuns(part, {...reference,tripId:''}));
   cached.set(reference, runs); return runs;
 }
 export async function natureResults(references: TimingReference[], trips: Trip[], cancelled = () => false): Promise<NatureResult[] | null> {
@@ -51,4 +52,16 @@ export function movementTime(trip: Trip): number {
     if (dt <= 15000 && meters >= Math.max(2, (a.accuracy + b.accuracy) / 4) && meters / dt * 1000 <= 6) ms += dt;
   }
   return ms;
+}
+
+const walkingMetricsCache=new WeakMap<Trip,{meters:number;ascent:number;hasElevation:boolean;moving:number}>();
+/** Use the same walking-quality boundaries for totals as for trail awards.
+ * Keep raw recordings intact, but never bridge a rejected fix or count a fast ride. */
+export function walkingMetrics(trip:Trip){
+  const cached=walkingMetricsCache.get(trip);if(cached)return cached;
+  const value=walkingParts(trip).reduce((sum,part)=>{
+    const m=tripMetrics(part);
+    return {meters:sum.meters+m.meters,ascent:sum.ascent+m.ascent,hasElevation:sum.hasElevation||m.hasElevation,moving:sum.moving+movementTime(part)};
+  },{meters:0,ascent:0,hasElevation:false,moving:0});
+  walkingMetricsCache.set(trip,value);return value;
 }

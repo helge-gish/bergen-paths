@@ -20,7 +20,7 @@ export function discoveryRows(items: Discovery[]): DiscoveryRow[] {
   }
   const junctions = new Map<string, number>();
   unique.forEach((item, i) => {
-    if (!route(item) || needsDiscoveryName(item) || item.localName || !item.name.trim()) return;
+    if (!route(item) || item.routeUnit || needsDiscoveryName(item) || item.localName || !item.name.trim()) return;
     const name = item.name.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('nb');
     for (const path of paths(item)) for (const point of path) {
       if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) continue;

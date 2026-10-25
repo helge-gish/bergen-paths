@@ -1,3 +1,4 @@
+import {syncTrailActivity} from './trailActivity';
 import { idleEvidence, shouldPauseIdle, type IdleEvidence } from '../domain/idleRecording';
 import { workoutStatus } from '../domain/workout';
 import { currentAreaPosition, stageAreaConsent } from './areaConsent';
@@ -30,7 +31,7 @@ const trackingOptions: Location.LocationTaskOptions = {
   pausesUpdatesAutomatically: false,
   activityType: Location.ActivityType.Fitness,
   showsBackgroundLocationIndicator: true,
-  foregroundService: { notificationTitle: 'Tråkk · registrering på', notificationBody: 'Målinger og GPS-spor lagres. Åpne Tråkk og trykk Pause for å stoppe.', notificationColor: '#183E32', killServiceOnDestroy: false },
+  foregroundService: { notificationTitle: 'Tråkk · tur pågår', notificationBody: 'Turen lagres. Velg Avslutt tur i Tråkk for å stoppe registreringen.', notificationColor: '#183E32', killServiceOnDestroy: false },
 };
 export function toFix(location: Location.LocationObject): Fix {
   return { timestamp: location.timestamp, latitude: location.coords.latitude, longitude: location.coords.longitude, accuracy: location.coords.accuracy ?? 999, altitude: location.coords.altitude, altitudeAccuracy: location.coords.altitudeAccuracy, speed: location.coords.speed };
@@ -73,6 +74,9 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     // Keep raw fixes for the recorded history, but poor GPS cannot advance a
     // stretch or ghost. Do not replay those comparisons for unusable batches.
     if (!fixes.some(validFix)) return;
+    await syncTrailActivity();
+    // Nature and personal-route events share one detector, including reverse passages.
+    if (active.automatic) return;
     const current = store.getTrip(active.id)!, ghost = active.ghostId ? store.getReference(active.ghostId) : null;
     const now = Date.now();
     // Deduplicate events durably, including muted events, so reopening never
