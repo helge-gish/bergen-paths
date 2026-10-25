@@ -136,6 +136,12 @@ export function applyCommand(account: Account, registry: GameRegistry, command: 
     next.character.credits -= skin.price; next.character.ownedSkins[skin.id] = true;
     message = `${skin.name} er lagt i garderoben.`;
   } else if (a.type === 'leave') { next.currentGame = null; message = 'Fremgangen er bevart.'; }
+  else if (a.type === 'abandon') {
+    if (!Object.hasOwn(next.fieldGames ?? {}, a.gameId)) throw new Error('Spillet er ikke startet.');
+    delete next.fieldGames![a.gameId];
+    if (next.activeMode === 'field' && next.currentGame === a.gameId) next.currentGame = null;
+    message = 'Spillet er avbrutt. Figuren og sekken er bevart.';
+  }
   else if (a.type === 'enter') {
     const pack = registry.get(a.gameId);
     if (!pack) throw new Error('Spillet er ikke installert.');

@@ -22,9 +22,9 @@ export function canEnter(pack: GamePack, fix: PositionFix | null, now: number, s
 }
 
 export function entryStatus(pack: GamePack, fix: PositionFix | null, now: number, started: boolean): { ready: boolean; text: string } {
-  if (!fix || fix.source !== 'gps') return { ready:false, text:'Bruk GPS for å sjekke startsonen. Prøvemodus bruker simulert posisjon.' };
+  if (!fix || fix.source !== 'gps') return { ready:false, text:'Bruk posisjon for å finne startstedet.' };
   if (!Number.isFinite(fix.accuracy) || fix.accuracy > 50) return { ready:false, text:`GPS er for usikker${Number.isFinite(fix.accuracy)?` (±${Math.round(fix.accuracy)} m)`:''}. Trenger 50 m eller bedre. Prøv med fri sikt.` };
-  if (!freshPosition(fix,now)) return { ready:false, text:'Posisjonen er gammel. Trykk Start ute for å hente ny GPS.' };
+  if (!freshPosition(fix,now)) return { ready:false, text:'Posisjonen er gammel. Trykk på spillknappen for å hente ny GPS.' };
   if (canEnter(pack,fix,now,started)) return { ready:true, text:started?'Du er i spillområdet. Fortsett når du vil.':'Du er i startsonen. Klar til å spille!' };
   const distance=Math.round(metersBetween(fix,started?pack.area.center:pack.start.position));
   const radius=started?pack.area.radiusMeters:pack.start.radiusMeters;

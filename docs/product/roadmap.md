@@ -77,3 +77,8 @@ er foreløpig og må bekreftes mot fontenen ute.
 Flytt fontenebær 60 m sør, og fordel Rusk/lykten i samme sørlige del av marken.
 Bruk alltid spillkartet i Ultima; fjern turkartbryteren. Vis telefonretning med
 myk synsvifte og demp sensorstøy, uten pilspiss eller permanent forklaringstekst.
+
+Hovednavigasjonen er nå Finn spill / Mine spill / Profil. Ett feltspill per
+spill-ID kan fortsettes eller avbrytes med bekreftelse; ny start lager ny lokal
+historie, men beholder Herebound-figuren. Prøveknapper fjernes fra produktflyten.
+Journalen erstattes av spillspesifikke «Spor og notater» inne i eventyret.

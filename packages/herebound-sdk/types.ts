@@ -44,6 +44,7 @@ export type Action =
   | { type: 'buy-skin'; skinId: string }
   | { type: 'enter'; gameId: string; fix: PositionFix; mode?: 'simulation' | 'field' }
   | { type: 'leave' }
+  | { type: 'abandon'; gameId: string }
   | { type: 'observe' }
   | { type: 'interact'; encounterId: string }
   | { type: 'travel'; position: Point }

@@ -126,3 +126,23 @@ test('field start and meeting zones remain usable with ordinary GPS error; stale
  const e=at('rowan'),atBerry=gps({...e.position,latitude:e.position.latitude+.0001},20);
  assert.ok(canMeet(e,atBerry,clock));assert.equal(canMeet(e,{...atBerry,accuracy:50},clock),false);
 });
+
+test('abandon resets one field adventure, preserves the portable character, and a new start must meet the entrance again',()=>{
+ let a=enter();a=move(a,at('stash').position);
+ a=perform(a,{type:'discover',encounterId:'stash'},gps(at('stash').position),'stash');
+ a=perform(a,{type:'interact',encounterId:'stash'},gps(at('stash').position),'stash');
+ a=perform(a,{type:'equip',slot:'back',itemId:'ultima-x:satchel'});
+ const character=JSON.stringify(a.character),events=JSON.stringify(a.inventoryEvents);
+ a.fieldGames!['other-game']=JSON.parse(JSON.stringify(a.fieldGames![ultimaX.id]));
+ const saved=a.fieldGames![ultimaX.id];
+ a=enter(a);assert.equal(Object.keys(a.fieldGames!).filter(id=>id===ultimaX.id).length,1);assert.deepEqual(a.fieldGames![ultimaX.id].discovered,saved.discovered);
+ a=perform(a,{type:'abandon',gameId:ultimaX.id});
+ assert.equal(a.currentGame,null);assert.equal(a.fieldGames![ultimaX.id],undefined);assert.ok(a.fieldGames!['other-game']);
+ assert.equal(JSON.stringify(a.character),character);assert.equal(JSON.stringify(a.inventoryEvents),events);
+ assert.doesNotThrow(()=>decodeAccount(JSON.stringify(a)));
+ const far=gps({...ultimaX.start.position,latitude:ultimaX.start.position.latitude+.003});
+ assert.throws(()=>perform(a,{type:'enter',gameId:ultimaX.id,mode:'field',fix:far},far),/begynne/);
+ a=enter(a);assert.deepEqual(a.fieldGames![ultimaX.id].discovered,[]);assert.deepEqual(a.fieldGames![ultimaX.id].journal,[]);assert.equal(a.fieldGames![ultimaX.id].visits,1);
+ a=move(a,at('stash').position);a=perform(a,{type:'discover',encounterId:'stash'},gps(at('stash').position),'stash');
+ assert.equal(a.character.xp,JSON.parse(character).xp,'restart does not repeat discovery XP');
+});

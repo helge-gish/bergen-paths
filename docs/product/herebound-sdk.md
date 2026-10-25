@@ -91,3 +91,17 @@ Figuren på feltkartet gjenspeiler kontoens utseende, skin, nivå og påkledde
 sekk/stav/lykt. En separat pil viser telefonens kompassretning minus kartets
 rotasjon. Ingen pil vises med foreldet GPS eller kompass. Sensoren stoppes i
 bakgrunn og når kartet erstattes av AR.
+
+## Spilloversikt og avbryt 0.3.4
+
+Den vanlige appen tilbyr bare GPS-basert feltspill. `fieldGames[gameId]` er én
+pågående fremgang per spilltype; `enter` fortsetter den eksisterende oppføringen.
+Mine spill viser denne samlingen og kan åpnes uten GPS. GPS og start-/områdesonen
+kontrolleres når et spill åpnes. Simulatoren beholdes som intern SDK-testmekanisme,
+men har ingen synlig inngang i appen. Gamle simulatorlagringer slettes ikke.
+
+`abandon { gameId }` sletter bare den oppgitte feltfremgangen. Global figur,
+inventar, økonomi og XP-krav består. Aktiv AR-autorisasjon fjernes ved kommandot,
+og SQLite-skrivingen må lykkes før oversikten endres. Ny `enter` krever da
+startsonen igjen. UI viser en eksplisitt bekreftelse; vanlig fanebytte avbryter ikke
+spillet. Spillenes notater ligger inne i hvert spill, ikke i global navigasjon.

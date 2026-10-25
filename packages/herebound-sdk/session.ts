@@ -32,6 +32,6 @@ export class Session {
     if (!this.account) throw new Error('Opprett en figur først.');
     const next = applyCommand(this.account, this.registry, command, Date.now(), this.physicalFix, this.arEncounter && this.arEncounter.gameId === this.account.currentGame && this.arEncounter.until >= Date.now() ? this.arEncounter.id : null);
     if (next.account !== this.account) await this.persistence.write(JSON.stringify(next.account));
-    this.account = next.account; if (command.action.type === 'enter' || command.action.type === 'leave') this.arEncounter = null; return next;
+    this.account = next.account; if (command.action.type === 'enter' || command.action.type === 'leave' || command.action.type === 'abandon') this.arEncounter = null; return next;
   }); }
 }
