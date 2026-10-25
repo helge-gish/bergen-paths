@@ -4,10 +4,10 @@ const center = { latitude: 60.39852082424811, longitude: 5.343193886616334 };
 // Test entrance: Meyermarken park centre, OSM way 27461162.
 // https://mapcarta.com/W27461162 — exact meeting locations still need a field check.
 const testStart = { latitude: 60.40418, longitude: 5.32703 };
-// Core encounters stay within 15 m of the park centre.
-// Extra fountain test: approximate western entrance, 21 m west of centre.
-// Fountain coordinate is NOT survey-verified; confirm in the next field test.
-const fountainTest = { latitude: 60.40418, longitude: 5.32665 };
+// Field feedback: playground cluster was too far north. Fountain berries move
+// 60 m south; Rusk and the lantern spread across the southern lawn nearby.
+// These are approximate outdoor test positions, not surveyed AR anchors.
+const fountainTest = { latitude: 60.40364, longitude: 5.32665 };
 // Keep pack version and encounter IDs stable: moving content must not reset progress.
 /** Original test story. Exact ground placement still needs a field check. */
 export const ultimaX: GamePack = {
@@ -52,7 +52,7 @@ export const ultimaX: GamePack = {
       ],
       shop: [ { itemId: 'herebound:rowanberry', buy: 1, sell: 1, quantity: 6 }, { itemId: 'ultima-x:garlic', buy: 2, sell: 1, quantity: 8 }, { itemId: 'ultima-x:ginseng', buy: 3, sell: 1, quantity: 5 }, { itemId: 'ultima-x:silk', buy: 4, sell: 2, quantity: 3 }, { itemId: 'ultima-x:staff', buy: 8, sell: 4, quantity: 2 } ],
     },
-    { id: 'rusk', visual: 'sprite', recruit: { helperId: 'ultima-x:rusk', requires: 'rusk-rumor' }, name: 'Rusk', rumor: 'Noe rører seg ved steinen', kind: 'person', position: { latitude: testStart.latitude - .00007, longitude: testStart.longitude - .00014 }, radiusMeters: 35,
+    { id: 'rusk', visual: 'sprite', recruit: { helperId: 'ultima-x:rusk', requires: 'rusk-rumor' }, name: 'Rusk', rumor: 'Noe rører seg ved steinen', kind: 'person', position: { latitude: 60.40357, longitude: 5.32703 }, radiusMeters: 35,
       description: 'En liten skikkelse med løv i håret sitter på en flat stein. Et øye åpner seg når du nærmer deg.',
       greeting: '«Folk går så fort. De rekker aldri å høre hva steinene sier.»',
       topics: [
@@ -60,7 +60,7 @@ export const ultimaX: GamePack = {
         { id: 'light', label: 'De slukne lyktene', text: '«En lykt er ikke mørk bare fordi den ikke lyser. Iver la noe igjen i den gamle lykten. Jeg så det selv.»', clue: { id: 'rusk-rumor', title: 'Noe ble lagt igjen', text: 'Rusk så Iver legge noe i den gamle lykten. Det kan undersøkes uten å spørre Maren først.' } },
       ],
     },
-    { id: 'lantern', visual: 'lantern', name: 'Den gamle lykten', rumor: 'Et sluknet lys', kind: 'landmark', position: { latitude: testStart.latitude - .00008, longitude: testStart.longitude + .00014 }, radiusMeters: 35,
+    { id: 'lantern', visual: 'lantern', name: 'Den gamle lykten', rumor: 'Et sluknet lys', kind: 'landmark', position: { latitude: 60.40364, longitude: 5.32730 }, radiusMeters: 35,
       description: 'Glasset er helt, men innsiden er mørk. Et lite merke er skåret inn i foten.',
       greeting: 'Det kjennes som om lykten venter på noe.',
       interaction: { id: 'kindle', label: 'Tenn lykten · 1 rognebær + 1 hvitløk', requires: 'lantern-mark', costs: [{ itemId: 'herebound:rowanberry', amount: 1 }, { itemId: 'ultima-x:garlic', amount: 1 }], reward: { itemId: 'ultima-x:keeper-light', amount: 1 }, xp: 30, skinReward: 'ultima-x:keeper', clue: { id: 'first-light', title: 'Den første lykten er tent', text: 'Lys strømmer gjennom glasset. Ivers stemme hvisker: «Jeg fulgte lyset oppover. Noen slukket det bak meg. Finn den som husker stien.» En liten vokterglød blir igjen i sekken din. Første del er fullført; resten av fjellet venter.' } },

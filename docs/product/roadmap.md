@@ -71,3 +71,9 @@ utstyrsbasert spillerfigur, kompasspil korrigert for kartrotasjon, nordreset og
 recentrering. Reelle stier/veier og utforskingsmasken beholdes. Et separat
 fontenebær-funn ved inngangen til Meyermarken gir en kortere feltprøve; plasseringen
 er foreløpig og må bekreftes mot fontenen ute.
+
+### Herebound 0.3.4: kortere vei til testfunn og roligere kart
+
+Flytt fontenebær 60 m sør, og fordel Rusk/lykten i samme sørlige del av marken.
+Bruk alltid spillkartet i Ultima; fjern turkartbryteren. Vis telefonretning med
+myk synsvifte og demp sensorstøy, uten pilspiss eller permanent forklaringstekst.

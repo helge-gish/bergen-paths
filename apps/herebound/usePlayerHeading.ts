@@ -16,9 +16,9 @@ export function usePlayerHeading(enabled: boolean) {
       const degrees=value.trueHeading>=0?value.trueHeading:value.magHeading;
       if(value.accuracy<=0||!Number.isFinite(degrees)||degrees<0){setSample(null);return;}
       setSample(old=>{
-        // Smooth the short arc across north, not a 359-degree turn.
+        // Ignore tiny sensor tremors and gently follow the short arc across north.
         const delta=old?((degrees-old.degrees+540)%360)-180:0;
-        return {degrees:old?(old.degrees+delta*.4+360)%360:degrees,at:Date.now()};
+        return {degrees:old?Math.abs(delta)<=3?old.degrees:(old.degrees+delta*.15+360)%360:degrees,at:Date.now()};
       });
     }).then(value=>{watch=value;if(closed)value.remove();}).catch(()=>{if(!closed)setSample(null);});
     const timer=setInterval(()=>setSample(old=>old&&Date.now()-old.at>5000?null:old),1000);

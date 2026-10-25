@@ -63,3 +63,12 @@ Plasseringen er et anslag for fonteneområdet brukeren markerte på satellittbil
 ikke et verifisert fontenekoordinat. Bekreft eller juster i neste feltprøve.
 Startsonen på 80 meter dekker også dette punktet. Eksisterende møte-ID-er og
 pakkeversjon beholdes.
+
+### 0.3.4: feltkorrigering sør for lekeplassen
+
+Brukerens feltbilde avklarte at 0.3.3-fontenepunktet lå for langt nord.
+Fontenebær flyttes 60 m rett sørover til 60.40364, 5.32665. Rusk flyttes til
+60.40357, 5.32703 og lykten til 60.40364, 5.32730. Alle ligger innenfor den
+uendrede startsonen på 80 m. Nordlige funn beholdes; samme ID-er og pakkeversjon
+hindrer at tidligere samlede ting blir nye belønninger. Dette erstatter
+koordinatanslaget i 0.3.3-avsnittet over.

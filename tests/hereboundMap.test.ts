@@ -17,7 +17,8 @@ test('phone heading follows the short arc across north, expires, and stops in ba
  let heading:number|null=null;function Probe({enabled=true}:{enabled?:boolean}){heading=usePlayerHeading(enabled);return null;}
  let tree!:ReactTestRenderer;await act(()=>{tree=create(React.createElement(Probe));});
  await act(()=>sample({trueHeading:359,magHeading:20,accuracy:3}));assert.equal(heading,359);
- await act(()=>sample({trueHeading:1,magHeading:20,accuracy:3}));assert.ok(heading!>359&&heading!<360);
+ await act(()=>sample({trueHeading:1,magHeading:20,accuracy:3}));assert.equal(heading,359,'two-degree tremor stays still');
+ await act(()=>sample({trueHeading:9,magHeading:20,accuracy:3}));assert.ok(heading!<2,'gentle short-arc movement across north');
  assert.equal(relativeHeading(10,350),20);assert.equal(relativeHeading(0,90),270);
  now+=6000;await act(()=>tick());assert.equal(heading,null);
  await act(()=>sample({trueHeading:-1,magHeading:60,accuracy:1}));assert.equal(heading,60);
@@ -55,8 +56,12 @@ test('game chooses its map theme; figure follows map bearing and stale fixes can
  await act(()=>tree.root.findByProps({accessibilityLabel:'Vend kartet mot nord'}).props.onPress());assert.equal(stops[0].bearing,0);assert.equal(stops[0].center,undefined,'north reset preserves panned location');
  await act(()=>tree.root.findByProps({accessibilityLabel:'Tilbake til min posisjon'}).props.onPress());assert.deepEqual(Array.from(flights[0].center),[props.position.longitude,props.position.latitude]);
  assert.ok(tree.root.findByProps({id:'fog'}));
+ assert.equal(tree.root.findAllByType('Pressable' as any).length,2,'only north and recenter; no tourist-map switch');
  await act(()=>tree.update(React.createElement(FieldMap,{...props,positionLive:false})));assert.equal(figure().props.stale,true);assert.equal(figure().props.heading,null);assert.equal(enabled.at(-1),false);
  await act(()=>tree.update(React.createElement(FieldMap,{...props,pack:{...ultimaX,mapTheme:undefined}})));assert.equal(map().props.mapStyle,'https://tiles.openfreemap.org/styles/liberty');assert.ok(tree.root.findByProps({id:'fog'}));
+ await act(()=>tree.update(React.createElement(FieldMap,{...props,navigation:true})));
+ assert.equal(JSON.parse(map().props.mapStyle).name,'Herebound · Parchment','same game style on entrance preview');
+ assert.equal(tree.root.findAllByProps({id:'fog'}).length,0,'entrance directions remain visible before starting');
  await act(()=>tree.unmount());
 });
 test('parchment map keeps real terrain, walking paths, labels and attribution',()=>{
@@ -70,7 +75,7 @@ test('parchment map keeps real terrain, walking paths, labels and attribution',(
 });
 test('new fountain encounter is reachable from the entrance without resetting collected encounters',()=>{
  const e=ultimaX.encounters.find(e=>e.id==='fountain-rowan')!;
- assert.ok(sdk.metersBetween(e.position,ultimaX.start.position)<30);
+ assert.ok(sdk.metersBetween(e.position,ultimaX.start.position)>55);
  assert.ok(sdk.metersBetween(e.position,ultimaX.start.position)<ultimaX.start.radiusMeters);
  assert.equal(ultimaX.version,1);
  assert.ok(!ultimaX.encounters.filter(x=>x!==e).some(x=>x.interaction?.clue.id===e.interaction!.clue.id));
@@ -81,15 +86,17 @@ test('new fountain encounter is reachable from the entrance without resetting co
  run({type:'discover',encounterId:e.id});run({type:'interact',encounterId:e.id});run({type:'interact',encounterId:e.id});
  assert.equal(account.character.inventory['herebound:rowanberry'],2,'one reward even if tapped again');
 });
-test('avatar glyph rotates only its direction arrow and reflects equipped gear; stale position has no arrow',async()=>{
+test('avatar glyph rotates only its soft view fan and reflects equipped gear; stale position has no fan',async()=>{
  const {PlayerMarker}=component('apps/herebound/PlayerMarker.tsx',{
   'react-native':{View:'View',Text:'Text'},
-  'react-native-svg':{__esModule:true,default:'Svg',G:'G',Circle:'Circle',Ellipse:'Ellipse',Path:'Path',Rect:'Rect'},
+  'react-native-svg':{__esModule:true,default:'Svg',G:'G',Circle:'Circle',Ellipse:'Ellipse',Path:'Path',Rect:'Rect',Defs:'Defs',RadialGradient:'RadialGradient',Stop:'Stop'},
   '../../packages/herebound-sdk':sdk,'./usePlayerHeading':{relativeHeading:(a:number,b:number)=>(a-b+360)%360},
  });
  const player={appearance:sdk.DEFAULT_APPEARANCE,equipment:ultimaX.items.filter(i=>i.wearable),level:3,skin:ultimaX.skins![0]};
  let tree!:ReactTestRenderer;await act(()=>{tree=create(React.createElement(PlayerMarker,{player,heading:20,bearing:90}));});
  assert.equal(tree.root.findAllByType('G' as any).find(n=>n.props.rotation!==undefined)!.props.rotation,290);
+ assert.ok(tree.root.findByType('RadialGradient' as any));
+ assert.equal(tree.root.findAllByType('Path' as any).filter(n=>n.props.fill==='url(#player-view-fan)').length,1);
  assert.ok(tree.root.findAllByType('Rect' as any).some(n=>n.props.fill==='#ae7846'),'equipped satchel visible');
  assert.ok(tree.root.findAllByType('Text' as any).some(n=>n.children.join('')==='DEG · 3'));
  await act(()=>tree.update(React.createElement(PlayerMarker,{player,heading:20,bearing:90,stale:true})));

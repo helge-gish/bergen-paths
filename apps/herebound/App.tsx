@@ -183,7 +183,7 @@ export function Herebound({ games, store }: { games: GameRegistry; store: Persis
     });
   };
   const chooseAr = (e: Encounter) => { session.openArEncounter(e.id); arExpires.current=Date.now()+5*60_000; setArEncounter(e.id); setArRequested(null); setSelected(e.id); setMessage(''); };
-  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.3.3 · TEST</Text></View>;
+  const header = <View style={s.header}><Text accessibilityRole="header" style={s.logo}>◈ herebound</Text><Text style={s.version}>0.3.4 · TEST</Text></View>;
   const tabs = account && <View style={s.tabs}>{([{ id: 'world', title: pack ? 'Verden' : 'Spill' }, { id: 'journal', title: 'Journal' }, { id: 'character', title: 'Figur & sekk' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); setSelected(null); setMessage(''); }} style={[s.tab, tab === t.id && s.tabActive]}><Text style={[s.tabText, tab === t.id && s.tabTextActive]}>{t.title}</Text></Pressable>)}</View>;
 
   let body: React.ReactNode;

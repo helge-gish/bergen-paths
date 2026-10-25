@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Ellipse, G, Path, Rect, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { DEFAULT_APPEARANCE } from '../../packages/herebound-sdk';
 import type { Appearance, Item, Skin } from '../../packages/herebound-sdk';
 import { relativeHeading } from './usePlayerHeading';
@@ -15,7 +15,7 @@ export function PlayerMarker({ player, heading, bearing=0, stale=false }: { play
   const facing=heading!==null&&!stale;
   return <View accessible accessibilityLabel={stale?'Din figur, sist kjente posisjon':facing?`Din figur, mobilen peker ${Math.round(heading!)} grader`:'Din figur, kompass venter'} style={{width:100,height:100,alignItems:'center',opacity:stale?.65:1}}>
     <Svg width={100} height={100} viewBox="-14 -14 128 128">
-      {facing&&<G rotation={relativeHeading(heading!,bearing)} origin="50,50"><Path d="M50 50 L20 -4 Q50 -18 80 -4Z" fill="#f8d779" opacity={.25}/><Path d="M50 -10 L60 7 50 3 40 7Z" fill="#ffe293" stroke="#233d32" strokeWidth={2}/></G>}
+      {facing&&<G rotation={relativeHeading(heading!,bearing)} origin="50,50"><Defs><RadialGradient id="player-view-fan" cx={50} cy={50} r={72} gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor="#f8d779" stopOpacity={.28}/><Stop offset="0.65" stopColor="#f8d779" stopOpacity={.18}/><Stop offset="1" stopColor="#f8d779" stopOpacity={0}/></RadialGradient></Defs><Path d="M50 50 L4 4 Q50 -26 96 4Z" fill="url(#player-view-fan)"/></G>}
       <Ellipse cx={50} cy={52} rx={22} ry={12} fill="#162e29" opacity={.65}/><Ellipse cx={50} cy={50} rx={22} ry={12} fill="#425e48" stroke={stale?'#b2b5aa':'#ffe293'} strokeWidth={3}/>
       <Path d="M37 25 Q28 38 31 50 L48 56 69 49 Q69 37 62 25Z" fill={coat} stroke="#17352c" strokeWidth={2}/>
       {gear.some(i=>i.wearable?.visual==='satchel')&&<Rect x={64} y={29} width={12} height={19} rx={3} fill="#ae7846" stroke="#f3d495" strokeWidth={1.5}/>}

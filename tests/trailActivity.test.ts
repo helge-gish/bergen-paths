@@ -57,9 +57,15 @@ test('trail voice deduplicates replay, does not narrate historical results and l
  const near=trailCues(nearby,memory,start);assert.match(near.text,/Du er ved stien/);assert.equal(trailCues(nearby,near.memory,start+100000).text,'');
  const names=namedNature([item],{forest:{name:'Min sti',stars:5}});assert.equal(names[0].name,'Min sti');assert.equal(item.name,'Skogsti');
 });
-test('Meyermarken field-test encounters remain in one compact cluster and keep saved-progress IDs',()=>{
+test('Meyermarken encounters spread south within the entry zone and keep saved-progress IDs',()=>{
  assert.deepEqual(ultimaX.encounters.filter(e=>e.id!=='fountain-rowan').map(e=>e.id),['stash','rowan','maren','rusk','lantern']);
- for(const encounter of ultimaX.encounters.filter(e=>e.id!=='fountain-rowan'))assert.ok(distance(ultimaX.start.position,encounter.position)<=15,encounter.id);
+ for(const encounter of ultimaX.encounters){
+  const south=['fountain-rowan','rusk','lantern'].includes(encounter.id);
+  const meters=distance(ultimaX.start.position,encounter.position);
+  assert.ok(meters<ultimaX.start.radiusMeters,encounter.id);
+  if(south){assert.ok(meters>55,encounter.id);assert.ok(encounter.position.latitude<ultimaX.start.position.latitude-.00045,encounter.id);}
+  else assert.ok(meters<=15,encounter.id);
+ }
  assert.equal(ultimaX.version,1);
 });
 test('connected cartographic pieces become one measured trail; branches and unnamed trails remain separate',async()=>{
