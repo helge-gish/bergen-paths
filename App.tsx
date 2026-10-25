@@ -1,3 +1,6 @@
+import { useAreaName } from './src/ui/useAreaName';
+import { completionNotice } from './src/domain/completionNotice';
+import { needsDiscoveryName } from './src/domain/discoveryGroups';
 import { approveAreaHere, stageAreaConsent } from './src/services/areaConsent';
 import {useTrailActivity} from './src/ui/useTrailActivity';
 import {EMPTY_TRAIL_PERSONALIZATION,activityTotals,namedNature,type TrailPersonalization,type TrailActivity} from './src/domain/trailActivity';
@@ -33,11 +36,11 @@ import { colors, styles as s } from './src/ui/theme';
 
 function snapshot() {
   const store = getStore();
-  return { active: store.active(), trips: store.trips(), trails: store.trails(), items: store.setting<Discovery[]>('natureDiscoveries', []), personal: store.setting<TrailPersonalization>('trailPersonalization', EMPTY_TRAIL_PERSONALIZATION), preference: store.setting<RecordingPreference>('automaticRecording', 'unconfigured'), error: store.setting<string | null>('trackingError', null), limited: store.setting('automaticLimitReached', false), pendingArea: store.setting<HomeArea | null>('pendingNatureArea', null), pauseReason: store.setting<string | null>('automaticPauseReason', null) };
+  return { active: store.active(), trips: store.trips(), trails: store.trails(), items: store.setting<Discovery[]>('natureDiscoveries', []), personal: store.setting<TrailPersonalization>('trailPersonalization', EMPTY_TRAIL_PERSONALIZATION), preference: store.setting<RecordingPreference>('automaticRecording', 'unconfigured'), error: store.setting<string | null>('trackingError', null), limited: store.setting('automaticLimitReached', false), pendingArea: store.setting<HomeArea | null>('pendingNatureArea', null), dismissed: store.setting<string[]>('completionDismissed', []) };
 }
 type Data = ReturnType<typeof snapshot>;
 function Brand() { return (
-    <View style={[s.between, { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }]}><View style={s.row}><View style={{ width: 38, height: 38, backgroundColor: colors.ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Image source={require('./assets/trakk-icon.png')} style={{ width: 38, height: 38, borderRadius: 12 }} /></View><Text style={{ fontSize: 28, fontWeight: '800', color: colors.ink, letterSpacing: -1.2 }}>tråkk<Text style={{ color: colors.coral }}>.</Text></Text></View></View>
+    <View style={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16, flexShrink: 1, gap: 3 }}><View style={s.row}><View style={{ width: 38, height: 38, backgroundColor: colors.ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Image source={require('./assets/trakk-icon.png')} style={{ width: 38, height: 38, borderRadius: 12 }} /></View><Text style={{ fontSize: 28, fontWeight: '800', color: colors.ink, letterSpacing: -1.2 }}>tråkk<Text style={{ color: colors.coral }}>.</Text></Text></View><Text style={s.small}>utforsk stiene nær deg</Text></View>
 ); }
 export function Trakk({ initial }: { initial: Data }) {
   const [data, setData] = useState(initial), [now, setNow] = useState(Date.now());
@@ -103,6 +106,7 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start }: Act
   }, [cell, mapRetry, refresh]);
   const named = useMemo(() => namedNature(data.items, data.personal ?? {}), [data.items, data.personal]);
   const items = useMemo(() => areaNatureTrails(named, center), [named, center]);
+  const areaName = useAreaName(center, !!data.active);
   const activity = useTrailActivity(named, data.trails, data.trips, data.active);
   const totals = useMemo(() => activityTotals(activity.report), [activity.report]);
   const savedChoices = useMemo(() => trailChoices([],data.trails),[data.trails]);
@@ -122,7 +126,13 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start }: Act
   const window = data.active ? getStore().segmentWindow(data.active.id) : null;
   const peg = useMemo(() => data.active && window?.draft ? activePeg(data.active.startedAt, window?.from, metrics?.points ?? []) : null, [data.active?.id, window?.from, window?.draft, metrics?.points]);
   const canMarkSegment = !!trackPosition && now - trackPosition.timestamp <= 20000 && !stale;
-  const latest = activity.report.log.filter(e=>e.status==='completed'&&e.tripId===data.active?.id).slice(0,3);
+  const completed = completionNotice(activity.report, data.active?.id ?? null, data.dismissed ?? [], now);
+  const reviewLabel = (event: TrailActivity) => {
+    const item = data.items.find(i => i.id === event.itemId);
+    return item && needsDiscoveryName(item) && !data.personal?.[item.id]?.name ? 'Gi stien et navn' : 'Gi stjerner';
+  };
+  const dismissCompletion = (event: TrailActivity) => { getStore().setSetting('completionDismissed', [...(data.dismissed ?? []), event.id].slice(-1000)); refresh(); };
+
   const onTrail = activity.report.active.filter(e=>e.tripId===data.active?.id&&now-e.timestamp<=20000);
   const locate = () => { if (position && !stale) setRecenter(n => n + 1); else void act(async () => { await nearby.locate(); setRecenter(n => n + 1); }); };
   const workout = data.active?.workout;
@@ -141,9 +151,14 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start }: Act
   return <SafeAreaView style={s.screen}><StatusBar style="dark" />
     <View style={[s.between, { paddingRight: 20 }]}><Brand /><View style={s.row}><Pressable accessibilityRole="button" accessibilityLabel="Innstillinger" onPress={() => setSettingsOpen(true)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="settings" /></Pressable></View></View>
     <View style={{paddingHorizontal:22,paddingBottom:12,gap:8}}>
-      {data.active?<View style={s.between}><View><Text accessibilityLiveRegion="polite" style={s.subheading}>● På tur</Text><Text style={s.small}>{durationLabel(now-data.active.startedAt)}</Text></View><Button secondary title="Avslutt tur" disabled={busy} onPress={pause} /></View>:<><Button title="Start tur" disabled={busy||!!data.pendingArea} onPress={start} /><Text style={s.small}>{data.pauseReason==='idle'?'Turen ble avsluttet etter 10 minutter i ro.':data.preference==='paused'?'Turen er lagret.':'Kart og AR uten registrering.'}</Text></>}
+      {data.active?<View style={s.between}><View><Text accessibilityLiveRegion="polite" style={s.subheading}>● På tur</Text><Text style={s.small}>{durationLabel(now-data.active.startedAt)}</Text></View><Button secondary title="Avslutt tur" disabled={busy} onPress={pause} /></View>:<><Button title="Start tur" disabled={busy||!!data.pendingArea} onPress={start} /><Text style={s.small}>{data.preference==='paused'?'Turen er lagret.':'Kart og AR uten registrering.'}</Text></>}
       {!data.active&&data.preference==='unconfigured'&&<Text style={s.small}>Start tur lagrer sporet på mobilen, også med låst skjerm. Avslutt tur stopper registreringen.</Text>}
     </View>
+    {completed && <View style={{ marginHorizontal: 22, marginBottom: 10, padding: 14, borderRadius: 16, backgroundColor: colors.pale, gap: 6 }} accessibilityLiveRegion="polite">
+      <View style={s.between}><Text style={s.subheading}>{completed.source === 'nature' ? '✓ Sti fullført' : '✓ Strekk fullført'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Lukk fullføringsvarselet" onPress={() => dismissCompletion(completed)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Text style={s.subheading}>×</Text></Pressable></View>
+      <Text style={s.body}>{completed.name} · {durationLabel((completed.seconds ?? 0) * 1000)}</Text>
+      {completed.source === 'nature' && <Button secondary title={reviewLabel(completed)} onPress={() => { setReview(data.items.find(i => i.id === completed.itemId) ?? null); dismissCompletion(completed); }} />}
+    </View>}
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" removeClippedSubviews={false}>
       {data.pendingArea&&<View style={s.notice}><Text style={s.subheading}>Utforsk et nytt område?</Text><Text style={s.body}>Bytt til området rundt deg før neste tur.</Text><Button title="Utforsk her" disabled={busy} onPress={()=>void act(async()=>{const point=await approveAreaHere();setCenter(natureArea(null,point));setSelected(null);})} /></View>}
       {!position&&<Button secondary title="Finn posisjonen min" disabled={busy||nearby.pending} onPress={locate} />}
@@ -160,15 +175,14 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start }: Act
         {selected && <Pressable accessibilityRole="button" accessibilityLabel="Fjern kartvalg" onPress={() => setSelected(null)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={s.small}>{selected.name} · Lukk ×</Text></Pressable>}
         {mapError ? <View style={s.notice}><Text style={s.body}>{mapError}</Text><Button secondary title="Hent stier igjen" onPress={() => setMapRetry(n => n + 1)} disabled={loadingMap} /></View> : loadingMap ? <Text style={s.small}>Henter naturstier …</Text> : !items.length ? <Text style={s.body}>Ingen naturstier med tilstrekkelige kartdata i dette området ennå.</Text> : null}
 
-        {latest.map(event=><View key={event.id} style={s.card}><Text style={s.subheading}>✓ {event.name}</Text><Text style={s.small}>Ende til ende · {durationLabel((event.seconds??0)*1000)}</Text>{event.source==='nature'&&<Button secondary title="Vurder stien" onPress={()=>setReview(data.items.find(i=>i.id===event.itemId)??null)} />}</View>)}
       </>}
       {tab === 'log' && <>
-        <View style={s.card}><Text style={s.heading}>{progressLabel}</Text><Text style={s.small}>Aktivt område · 5 km{activity.pending?' · oppdaterer …':''}</Text></View>
+        <View style={s.card}><Text style={s.heading}>{progressLabel}</Text><Text style={s.small}>5 km rundt {areaName}{activity.pending?' · oppdaterer …':''}</Text></View>
         <View style={s.card}><Text style={s.subheading}>Totalt</Text><Text style={s.body}>{totals.trails} stier · {totals.stretches} strekk gått</Text><Text style={s.small}>{totals.passes} fullføringer · {kmLabel(lifetime.meters)} km · {Math.round(lifetime.ascent)} høydemeter opp</Text><Text style={s.small}>{durationLabel(lifetime.moving)} i bevegelse</Text></View>
         {activity.error&&<Text style={s.body}>Kunne ikke oppdatere stihistorikken. Åpne Logg igjen for å prøve på nytt.</Text>}
         <Text style={s.subheading}>Historikk</Text>
         {!activity.report.log.length&&!activity.pending&&<Text style={s.body}>Ingen stier eller strekk registrert ennå.</Text>}
-        {activity.report.log.slice(0,logLimit).map(event=><View key={event.id} style={s.card}><Pressable accessibilityRole="button" onPress={()=>showItem(event)}><Text style={s.subheading}>{event.status==='completed'?'✓ ':''}{event.name}</Text><Text style={s.small}>{event.source==='nature'?'Sti':'Eget strekk'} · {event.status==='completed'?'Ende til ende':'Vært innom'} · {new Date(event.timestamp).toLocaleString('nb-NO')}{event.seconds!==undefined?` · ${durationLabel(event.seconds*1000)}`:''}</Text></Pressable>{event.status==='completed'&&event.source==='nature'&&<Button secondary title={(data.personal?.[event.itemId]?.stars?'★'.repeat(data.personal[event.itemId].stars!)+' · ':'')+'Vurder stien'} onPress={()=>setReview(data.items.find(i=>i.id===event.itemId)??null)} />}</View>)}
+        {activity.report.log.slice(0,logLimit).map(event=><View key={event.id} style={s.card}><Pressable accessibilityRole="button" onPress={()=>showItem(event)}><Text style={s.subheading}>{event.status==='completed'?'✓ ':''}{event.name}</Text><Text style={s.small}>{event.source==='nature'?'Sti':'Eget strekk'} · {event.status==='completed'?'Ende til ende':'Vært innom'} · {new Date(event.timestamp).toLocaleString('nb-NO')}{event.seconds!==undefined?` · ${durationLabel(event.seconds*1000)}`:''}</Text></Pressable>{event.status==='completed'&&event.source==='nature'&&<Button secondary title={(data.personal?.[event.itemId]?.stars?'★'.repeat(data.personal[event.itemId].stars!)+' · ':'')+reviewLabel(event)} onPress={()=>setReview(data.items.find(i=>i.id===event.itemId)??null)} />}</View>)}
         {activity.report.log.length>logLimit&&<Button secondary title="Vis eldre hendelser" onPress={()=>setLogLimit(n=>n+40)} />}
         {metrics && <View style={s.card}><Text style={s.subheading}>Denne turen</Text><View style={s.row}><Metric value={kmLabel(walking?.meters??0)} label="km registrert" /><Metric value={(metrics.speedKmh === null || metrics.speedKmh > 21.6) ? '—' : metrics.speedKmh.toLocaleString('nb-NO', { maximumFractionDigits: 1 })} label="km/t nå" /><Metric value={walking?.hasElevation ? String(Math.round(walking.ascent)) : '—'} label="høydemeter opp" /></View><Text style={s.small}>{durationLabel(moving)} i bevegelse</Text></View>}
         <Text style={s.subheading}>Turer</Text>
@@ -177,11 +191,10 @@ function ActiveTrakk({ data, now, error, busy, act, refresh, pause, start }: Act
     </ScrollView>
     <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: colors.line }}>{([{ id: 'map', title: 'Utforsk', icon: 'map' }, { id: 'log', title: 'Logg', icon: 'book' }] as const).map(t => <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} onPress={() => { setTab(t.id); if (t.id !== 'map') setMode('map'); }} style={{ flex: 1, alignItems: 'center', gap: 5, paddingVertical: 14, backgroundColor: tab === t.id ? colors.pale : colors.paper }}><Icon name={t.icon} /><Text style={s.chipText}>{t.title}</Text></Pressable>)}</View>
     {settingsOpen && <Modal onRequestClose={() => { setSettingsOpen(false); setAreaOpen(false); }}><SafeAreaView style={s.screen}><Button secondary title="← Tilbake" onPress={() => { setSettingsOpen(false); setAreaOpen(false); }} /><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled"><Text style={s.heading}>Innstillinger</Text>
-      <View style={s.card}><Text style={s.subheading}>Aktivt område · 5 km</Text><Text style={s.small}>Festet der du utforsker. På reise spør Tråkk før et nytt område aktiveres.</Text><Button secondary title="Endre område" onPress={() => { setAreaCandidate(center); setAreaOpen(true); }} /></View>
+      <View style={s.card}><Text style={s.subheading}>{areaName}</Text><Text style={s.body}>5 km rundt sentrumspunktet</Text><Text style={s.small}>Festet der du utforsker. På reise spør Tråkk før et nytt område aktiveres.</Text><Button secondary title="Endre område" onPress={() => { setAreaCandidate(center); setAreaOpen(true); }} /></View>
       {areaOpen && <View style={s.card}><Text style={s.subheading}>Fest området</Text><Text style={s.small}>Trykk i kartet for å plassere midtpunktet. Området er 5 km rundt merket.</Text><TrailMap focus={areaCandidate ?? position} position={position} areaMarker={areaCandidate} onChooseArea={p => setAreaCandidate(natureArea(null, p))} height={340} /><Button secondary title="Bruk posisjonen min" onPress={() => { if (position) setAreaCandidate(natureArea(null, position)); }} /><Button title="Utforsk dette området" disabled={!areaCandidate || busy} onPress={() => void act(() => { if (!areaCandidate) return; if (position && needsAreaConsent(areaCandidate, position)) throw new Error('Velg et område nær deg. Når du reiser, foreslår Tråkk området der du kommer.'); getStore().setSetting('activeNatureArea', areaCandidate); getStore().setSetting('pendingNatureArea', null); setCenter(areaCandidate); setSelected(null); setAreaOpen(false); setSettingsOpen(false); setTab('map'); })} />{error && <Text style={s.body}>{error}</Text>}</View>}
       <Button secondary title={getStore().setting('trailVoice',true)?'Talevarsler: på':'Talevarsler: av'} onPress={()=>void act(()=>{const enabled=!getStore().setting('trailVoice',true);getStore().setSetting('trailVoice',enabled);if(data.active)getStore().setAudio(data.active.id,enabled);})} />
       <ProfileSettings />
-      <Text style={s.small}>Tråkk lagrer og avslutter turen etter 10 minutter i ro med pålitelig GPS. Trykk Start tur når du går videre. Pågående trening unntas.</Text>
       <Button secondary title="Eksporter logg" onPress={() => void act(() => exportLog(data.trips, data.trails, getStore().setting<Discovery[]>('osmDiscoveries', []), getStore().setting('osmAwards', {})))} />
     </ScrollView></SafeAreaView></Modal>}
     {trainingOpen && <Modal onRequestClose={() => setTrainingOpen(false)}><SafeAreaView style={s.screen}><Button secondary title="← Tilbake" onPress={() => setTrainingOpen(false)} /><ScrollView contentContainerStyle={s.content}><Text style={s.heading}>Treningsmodus</Text>

@@ -1,6 +1,4 @@
 import {syncTrailActivity} from './trailActivity';
-import { idleEvidence, shouldPauseIdle, type IdleEvidence } from '../domain/idleRecording';
-import { workoutStatus } from '../domain/workout';
 import { currentAreaPosition, stageAreaConsent } from './areaConsent';
 import { natureArea } from '../domain/natureArea';
 import type { WorkoutKind } from '../domain/workout';
@@ -53,20 +51,6 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
     void syncWorkoutCoach(active).catch(() => store.setSetting('audioError', 'Taletreneren kunne ikke starte. Åpne appen igjen.'));
     const fixes = data.locations.map(toFix);
     store.append(active.id, fixes);
-    if (active.automatic) {
-      const saved = store.setting<{ tripId: string; evidence: IdleEvidence | null } | null>('idleRecording', null);
-      let evidence = saved?.tripId === active.id ? saved.evidence : null;
-      const training = active.workout && active.workout.runningSince !== null && active.workout.endedAt === null && !workoutStatus(active.workout, Date.now()).complete;
-      if (training) evidence = null;
-      else for (const fix of [...fixes].sort((a, b) => a.timestamp - b.timestamp)) evidence = idleEvidence(evidence, fix, Date.now());
-      store.setSetting('idleRecording', { tripId: active.id, evidence });
-      if (shouldPauseIdle(evidence)) {
-        store.setSetting('automaticPauseReason', 'idle');
-        store.setSetting('automaticRecording', 'paused');
-        await finishTracking();
-        return;
-      }
-    }
     const last = fixes.filter(validFix).at(-1);
     if (last && Date.now() - last.timestamp <= 30000) store.setSetting('localDialect', localDialect(last));
     store.setSetting('trackingError', null);

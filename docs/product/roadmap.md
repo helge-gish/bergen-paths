@@ -10,7 +10,7 @@ Den tredje appen er en utendørs spillarena som viser spill i nærheten, med mak
 
 ## Rekkefølge og leveranser
 
-1. **Tråkk 0.4.4:** Start tur / Avslutt tur, naturstifilter, automatisk gjenkjenning under tur, målinger, egne strekk og Finn sti/strekk med AR. Automatisk gjenkjenning i begge retninger; skill retning i resultatene. Kartlagte OSM-deler må aldri kalles komplette navngitte turruter. GPS-hull og bilfart gir ingen rekord. Behold data og topp-logo. Test start/avslutning og kartklassifisering før APK.
+1. **Tråkk 0.4.5:** Start tur / Avslutt tur, naturstifilter, automatisk gjenkjenning under tur, målinger, egne strekk og Finn sti/strekk med AR. Automatisk gjenkjenning i begge retninger; skill retning i resultatene. Kartlagte OSM-deler må aldri kalles komplette navngitte turruter. GPS-hull og bilfart gir ingen rekord. Behold data og topp-logo. Test start/avslutning og kartklassifisering før APK.
 2. **Gatekampen grunnlag:** egne produktregler, kontomodell, sesonger, medlemskap, gatesnapshot og serverberegnet poeng. Første vertikale leveranse er ekte innlogging, opprett/bli med i gruppe og synlig sesong. Backend må konfigureres før den kan feltprøves med flere brukere; ingen lokal jukseinnlogging som erstatning.
 3. **Fjelleventyr-prototype:** ett lite gjennomspillbart kapittel med valg, inventar og lagret progresjon. Skill skrivebordssimulering fra stedsverifisering ute. Ingen belønning for tilfeldige GPS-punkter uten frisk posisjon og romslige, kontrollerte ankomstsoner. Eksisterende AR-motor gjenbrukes etter at spillflyten fungerer.
 4. **Feltrunde:** Pixel 6a, låst skjerm, pause, lang stillstand, GPS-bortfall, begge retninger, faktisk natursti vs asfalt, oppgradering fra 0.3.28. Fiks målefeil før mer spillinnhold.
@@ -22,7 +22,7 @@ Den tredje appen er en utendørs spillarena som viser spill i nærheten, med mak
 - Start og slutt på et strekk gjenkjennes av GPS. Retning og geometri bestemmer sammenligningen. Usikker eller avbrutt gjennomgang gir ingen tid. 0.4.4 sammenføyer tilknyttede, uforgrenede deler med samme navn. Forgreninger forblir separate; dette er ikke verifiserte komplette turruter.
 - Kartdata uten underlag eller tilstrekkelig stiklassifisering skal ikke late som de er verifiserte naturstier. Lokale rettelser og bedre naturkontekst er neste iterasjon.
 - Automatisk registrering må ikke kjøre ubegrenset tung analyse på hele historikken hvert sekund. Bakgrunn mottar GPS og lagrer. Derivert analyse kjører med cache/budsjett.
-- Automatisk avslutning etter lang stillstand og energisparing trenger egen feltrunde. 0.4.4 lagrer og avslutter etter 10 minutter med pålitelig stillstand, unntatt pågående trening. Ny tur krever Start tur. Den lover ikke aktivitetsgjenkjenning eller heldagsbatteri.
+- Fra 0.4.5 avsluttes ikke turen ved stillstand. Brukeren avslutter selv med Avslutt tur. Bakgrunns-GPS fortsetter under en aktiv tur; uten tur er det ingen bakgrunnsregistrering. Eksisterende åttetimersgrense og områdesamtykke ved reise beholdes. Automatisk energisparing uten å avslutte turen er et eget senere arbeid.
 
 ## Arkitektur og data
 
@@ -41,3 +41,7 @@ Gatekampen er satt på pause etter brukerens ønske. Tråkk prioriterer nå auto
 ## Oppfølging etter 0.4.4
 
 Brukeren mener fartstaket på 6 m/s (21,6 km/t) er for høyt. Senking er notert, men utsatt i denne runden. Dette taket filtrerer åpenbart for raske GPS-punkter; det er ikke pålitelig bil-/gangklassifisering. Treg kjøring kan fortsatt passere. Start tur / Avslutt tur er den viktigste brukergrensen nå.
+
+## Tydelighet i 0.4.5
+
+Logoen får «utforsk stiene nær deg». Området merkes med stedsnavn fra det festede sentrumspunktet, med koordinater som ærlig reserve når navn ikke finnes. Fullført sti/strekk vises øverst i Utforsk og Logg. Navnløs sti får «Gi stien et navn», navnefelt først og valgfrie stjerner. Ingen tvungen navngiving; lukkede varsler skal ikke spilles av igjen. Talevarsler fra 0.4.4 beholdes.

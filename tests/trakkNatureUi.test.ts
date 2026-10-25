@@ -10,19 +10,23 @@ import * as natureTiming from '../src/domain/natureTiming';
 import * as metrics from '../src/domain/metrics';
 import * as peg from '../src/domain/activePeg';
 import * as workout from '../src/domain/workout';
+import * as completion from '../src/domain/completionNotice';
+import * as groups from '../src/domain/discoveryGroups';
 import * as finder from '../src/domain/trailFinder';
 test('Start tur explicitly records; Avslutt tur stops recording, while map, AR and log remain usable', async t => {
   let preference: RecordingPreference = 'unconfigured', active: any = null, starts = 0, denyPermission = true, nearbyCalls = 0, appState: (s: string) => void = () => {};
   const items = [{ id: 'wood', name: 'Skogsti', kind: 'trail', osmHighway: 'path', surface: 'ground', latitude: 60, longitude: 5, geometry: [{ latitude: 60, longitude: 5 }, { latitude: 60.001, longitude: 5 }], sourceUrl: '', fetchedAt: 1 }, { id: 'city', name: 'Gangvei', kind: 'trail', osmHighway: 'footway', surface: 'asphalt', latitude: 60, longitude: 5, geometry: [{ latitude: 60, longitude: 5 }, { latitude: 60.001, longitude: 5 }], sourceUrl: '', fetchedAt: 1 }];
   const trips: any[] = [], trails: any[] = [];
   const settings: Record<string, unknown> = {};
+  let report = trailActivity.emptyTrailActivity();
   let segment = { from: 1, draft: false }, saves = 0;
   const far = { ...items[0], id: 'far', longitude: 10, geometry: items[0].geometry.map(p => ({ ...p, longitude: 10 })) }; items.push(far);
   const store = { active: () => active, trips: () => trips, trails: () => trails, setting: (key: string, fallback: unknown) => key === 'automaticRecording' ? preference : key === 'natureDiscoveries' ? items : key === 'natureMapFetched' ? { '12000:1000:5000': Date.now() } : settings[key] ?? fallback, setSetting: (key: string, value: unknown) => { settings[key] = value; }, segmentWindow: () => segment, setSegmentStart: () => { segment = { from: active.points[0].timestamp, draft: true }; }, cancelSegmentDraft: () => { segment = { ...segment, draft: false }; }, clipSegment: () => { saves++; segment = { ...segment, draft: false }; return { name: 'Teststrekk' }; }, startWorkout: (_: string, kind: workout.WorkoutKind) => { active = { ...active, workout: { ...workout.createWorkout(Date.now(), true, kind), id: 'training' } }; return active; } };
   const recorder = createAutomaticRecorder({ preference: () => preference, setPreference: p => { preference = p; }, active: () => !!active, running: async () => !!active, start: async () => { if (denyPermission) throw new Error('Gi posisjonstilgang'); starts++; active = { id: 'auto', startedAt: Date.now(), endedAt: null, points: [{ latitude: 60, longitude: 5, timestamp: Date.now(), accuracy: 5, speed: 1, altitude: null, altitudeAccuracy: null }], name: '', ghostId: null, audioEnabled: false, lastCueAt: 0 }; }, resume: async () => {}, finish: async () => { active = null; } });
   const native = { ActivityIndicator: 'ActivityIndicator', Alert: { alert() {} }, AppState: { currentState: 'active', addEventListener: (_: string, cb: typeof appState) => { appState = cb; return { remove() {} }; } }, Image: 'Image', Linking: {}, Modal: 'Modal', Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View' };
   const { Trakk } = component('App.tsx', {
-    './src/domain/trailActivity': trailActivity, './src/ui/useTrailActivity': { useTrailActivity: () => ({report:trailActivity.emptyTrailActivity(),pending:false,error:null}) }, './src/ui/TrailReview': { TrailReview: 'TrailReview' },
+    './src/ui/useAreaName': {useAreaName: ()=>'Sandviken, Bergen'}, './src/domain/completionNotice': completion, './src/domain/discoveryGroups': groups,
+    './src/domain/trailActivity': trailActivity, './src/ui/useTrailActivity': { useTrailActivity: () => ({report,pending:false,error:null}) }, './src/ui/TrailReview': { TrailReview: 'TrailReview' },
     'react-native': native, 'react-native-safe-area-context': { SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView' }, 'expo-status-bar': { StatusBar: 'StatusBar' }, './assets/trakk-icon.png': 1,
     './src/data/native': { getStore: () => store }, './src/services/automaticRecording': { automaticRecorder: recorder }, './src/services/natureMap': { fetchNatureMap: async () => { throw new Error('Cached map should be used'); } },
     './src/services/areaConsent': { stageAreaConsent: () => false, approveAreaHere: async () => { settings.pendingNatureArea = null; settings.activeNatureArea = natureArea.natureArea(null, { latitude: 60, longitude: 5 }); return {latitude:60,longitude:5}; } }, './src/ui/useNatureProgress': { useNatureProgress: () => ({ progress: {}, pending: false, error: null }) }, './src/ui/ProfileSettings': { ProfileSettings: 'ProfileSettings' }, './src/services/tripStatus': { syncTripStatus: async () => {} }, './src/domain/natureArea': natureArea, './src/domain/natureTiming': natureTiming, './src/domain/metrics': metrics, './src/domain/activePeg': peg, './src/domain/trailFinder': finder,
@@ -36,6 +40,7 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   t.after(async () => act(() => tree.unmount()));
   assert.equal(starts, 0); assert.ok(nearbyCalls > 0);
   assert.equal(tree.root.findAllByType('Image' as any).length, 1);
+  assert.ok(tree.root.findAllByType('Text' as any).some(n=>n.children.join('')==='utforsk stiene nær deg'));
   assert.equal(tree.root.findAllByType('TrailMap' as any).length, 1);
   assert.equal(tree.root.findAllByProps({ accessibilityRole: 'tab' }).length, 2);
   assert.ok(tree.root.findByProps({title:'Start tur'}));assert.equal(tree.root.findAllByProps({title:'Avslutt tur'}).length,0);
@@ -69,6 +74,8 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   assert.equal(tree.root.findAllByProps({ accessibilityRole: 'tab' }).length, 2);
   await act(() => tree.root.findAllByProps({ accessibilityRole: 'tab' })[1].props.onPress());
   assert.match(allText(), /0 av 1 stier gått/);
+  assert.match(allText(), /5 km rundt Sandviken, Bergen/);
+  assert.doesNotMatch(allText(), /10 minutter i ro/);
   assert.equal(tree.root.findAllByType('Metric' as any).length, 3);
   await act(() => tree.root.findAllByProps({ accessibilityRole: 'tab' })[0].props.onPress());
   assert.equal(tree.root.findAllByType('RadiusPicker' as any).length, 0);
@@ -110,5 +117,16 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   await act(() => tree.root.findAllByProps({ accessibilityRole: 'tab' })[1].props.onPress());
   assert.match(allText(), /0 av 1 stier gått/);
   assert.equal(tree.root.findAllByType('Metric' as any).length, 3);
+  items[0] = {...items[0], name:'Sti uten navn', unnamed:true} as any;
+  report = {...trailActivity.emptyTrailActivity(),log:[{id:'completion',tripId:active!.id,itemId:'wood',referenceId:'wood',name:'Sti uten navn',source:'nature',direction:'forward',status:'completed',startedAt:Date.now()-30000,timestamp:Date.now(),seconds:30}]};
+  await act(() => appState('active'));
+  assert.match(allText(), /✓ Sti fullført/);
+  await act(() => tree.root.findAllByProps({title:'Gi stien et navn'})[0].props.onPress());
+  const review = tree.root.findByType('TrailReview' as any);
+  await act(() => review.props.onSave({name:'Min skogsti',stars:5}));
+  assert.equal((settings.trailPersonalization as any).wood.name,'Min skogsti');
+  assert.equal(tree.root.findAllByProps({accessibilityLabel:'Lukk fullføringsvarselet'}).length,0);
+  await act(() => appState('active'));
+  assert.equal(tree.root.findAllByProps({accessibilityLabel:'Lukk fullføringsvarselet'}).length,0,'dismissed completion does not reappear');
   await act(() => tree.root.findAllByProps({ accessibilityRole: 'tab' })[0].props.onPress());
 });
