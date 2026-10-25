@@ -37,7 +37,7 @@ class HereboundArModule : Module() {
     OnActivityEntersForeground { HereboundArView.setForeground(true) }
     OnDestroy { HereboundArView.setForeground(false) }
     View(HereboundArView::class) {
-      Events("onState", "onInteract")
+      Events("onState", "onInteract", "onTarget")
       Prop("active") { view: HereboundArView, value: Boolean -> view.cameraRequested = value }
       Prop("scene") { view: HereboundArView, value: Map<String, Any?>? ->
         view.sceneId = value?.get("id") as? String
@@ -61,6 +61,7 @@ class HereboundArView(context: Context, appContext: AppContext) : ExpoView(conte
   }
   val onState by EventDispatcher()
   val onInteract by EventDispatcher()
+  val onTarget by EventDispatcher()
   @Volatile internal var sceneId: String? = null
   @Volatile internal var modelKind = "lantern"
   @Volatile internal var lit = false
@@ -81,6 +82,9 @@ class HereboundArView(context: Context, appContext: AppContext) : ExpoView(conte
     }
     views.add(this); addView(preview, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
   internal fun interact(id: String) { post { if (!disposed && attached) onInteract(mapOf("id" to id)) } }
+  internal fun target(id: String, x: Float, y: Float, visible: Boolean) {
+    post { if (!disposed && attached) onTarget(mapOf("id" to id, "x" to x, "y" to y, "visible" to visible)) }
+  }
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
     measureChild(preview, widthMeasureSpec, heightMeasureSpec)
     setMeasuredDimension(ViewGroup.resolveSize(preview.measuredWidth, widthMeasureSpec), ViewGroup.resolveSize(preview.measuredHeight, heightMeasureSpec))

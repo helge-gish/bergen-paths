@@ -57,3 +57,9 @@ Fullførte og avbrutte treningsøkter vises i samme kronologiske Logg som stier/
 ### Tråkk 0.4.8: personlige medaljer på avsluttede turer
 
 Medaljer knyttes til turen og vises ved avslutning og i LOGG. Fem turkategorier: ulike stier og egne strekk gått ende til ende, distanse, stigning og tid i bevegelse. Topp tre ulike resultater gir gull/sølv/bronse på tildelingstidspunktet; første resultat merkes, uavgjort gir ingen ny medalje. Tidsrekorder for hver sti og hvert strekk vurderes separat per retning og referansegeometri. Tildelinger beholdes når bedre resultater kommer senere. Detaljer og avgrensninger: `docs/release-0.4.8.md`.
+
+### Herebound 0.3.2: tydeligere Ultima-AR
+
+Feltprøven avdekket for store modeller og uklart valgt funn. Vis funn som miniatyrer, tilpass dem til kameraprojeksjonen ved plassering, og knytt et lesbart navneskilt til figuren med stiplet linje. Kompakt handling og målvelger; ikke bytt valgt funn automatisk ved GPS-endringer. Denne utgaven beholder lokale bakkeankre og eksisterende spillprogresjon. Geografiske ankere og mer detaljert kunst er egne senere steg.
+
+Feltprøvejustering: Funnet dukker opp automatisk når GPS tillater møtet og ARCore finner bakken. Direkte trykk på objekt/navneskilt åpner interaksjonen; manuell omplassering er bare en hjelpehandling.

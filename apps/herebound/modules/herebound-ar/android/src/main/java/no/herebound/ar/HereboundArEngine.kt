@@ -26,10 +26,13 @@ internal object HereboundArEngine {
   private var anchorId: String? = null
   private var anchorAt = 0L
   private var lastPlacement = -1
+  private var placementFailed = false
+  private var lastAutoTry = 0L
   private var trackingSince = 0L
   private var lastState = ""
   private var lastFrame = 0L
   private var lastFrameAt = 0L
+  private var lastTargetAt = 0L
   private val draw = object : Runnable {
     override fun run() {
       val view = owner ?: return
@@ -73,7 +76,7 @@ internal object HereboundArEngine {
     release() // Camera is released before JS can mount its fallback preview.
     view.report("unavailable", reason, false)
   }
-  private fun detachAnchor() { anchor?.detach(); anchor = null; anchorId = null }
+  private fun detachAnchor() { anchor?.detach(); anchor = null; anchorId = null; renderer?.resetActor(); lastTargetAt = 0L; placementFailed = false; lastAutoTry = 0L }
   private fun frame(view: HereboundArView) {
     val ar = session ?: return
     val gl = renderer ?: return
@@ -109,25 +112,36 @@ internal object HereboundArEngine {
           val distance = sqrt(p.indices.sumOf { (p[it] - c[it]).toDouble().pow(2) }).toFloat()
           if (anchorId != sceneId || held.trackingState == TrackingState.STOPPED || distance > 10f) detachAnchor()
         }
-        if (view.placement != lastPlacement) {
-          lastPlacement = view.placement; detachAnchor()
-          val hits = frame.hitTest(w * .5f, h * .65f)
+        val requested = view.placement != lastPlacement
+        if (requested) { lastPlacement = view.placement; detachAnchor() }
+        // Nearby encounters are already gated by fresh host GPS. Once camera
+        // tracking is stable, discover a ground surface without an extra tap.
+        if (ArFraming.shouldAutoPlace(anchor != null, trackingSince, elapsed, lastAutoTry)) {
+          lastAutoTry = elapsed
+          val hits = frame.hitTest(w * .5f, h * .58f)
           val hit = hits.firstOrNull {
             val plane = it.trackable as? Plane
             plane != null && plane.trackingState == TrackingState.TRACKING && plane.type == Plane.Type.HORIZONTAL_UPWARD_FACING &&
-              plane.isPoseInPolygon(it.hitPose) && it.distance in .5f..5f
+              plane.isPoseInPolygon(it.hitPose) && it.distance in 1.2f..5f
           }
+          placementFailed = hit == null
           if (hit != null) { anchor = hit.createAnchor(); anchorId = sceneId; anchorAt = elapsed }
         }
         val pinned = anchor
         if (pinned != null && pinned.trackingState == TrackingState.TRACKING) {
-          gl.actor(camera, pinned.pose, view.modelKind, view.lit, elapsed)
-          state(view, "anchored", "Trykk på figuren for å undersøke")
+          val bounds = gl.actor(camera, pinned.pose, view.modelKind, view.lit, elapsed)
+          state(view, "anchored", "Funnet er plassert")
+          if (elapsed - lastTargetAt >= 150) {
+            lastTargetAt = elapsed
+            val x = bounds?.let { ((it.left+it.right)/2+1)/2 } ?: .5f
+            val y = bounds?.let { (1-it.top)/2 } ?: .5f
+            view.target(sceneId, x.coerceIn(0f,1f), y.coerceIn(0f,1f), bounds?.visible == true)
+          }
           if (view.touchX >= 0) {
             val x = view.touchX; val y = view.touchY; view.touchX = -1f; view.touchY = -1f
             if (gl.hit(x / w * 2 - 1, 1 - y / h * 2)) view.interact(sceneId)
           }
-        } else { view.touchX = -1f; state(view, "surface", "Pek mot bakken og trykk Plasser") }
+        } else { view.touchX = -1f; state(view, "surface", if (placementFailed) "Finner bakken … pek rolig litt lenger frem" else "Pek mot bakken · funnet dukker opp automatisk") }
       }
     }
     if (!EGL14.eglSwapBuffers(display, surface)) throw IllegalStateException("EGL swap failed")
@@ -202,9 +216,11 @@ internal class HereboundArRenderer {
     GLES20.glDisableVertexAttribArray(GLES20.glGetAttribLocation(backgroundProgram, "a"))
     GLES20.glDisableVertexAttribArray(GLES20.glGetAttribLocation(backgroundProgram, "uv"))
   }
-  private var hitX = 0f; private var hitY = 0f; private var hitW = 0f; private var hitH = 0f
-  fun hit(x: Float, y: Float) = abs(x - hitX) <= hitW && abs(y - hitY) <= hitH
-  fun actor(camera: Camera, pose: Pose, kind: String, lit: Boolean, elapsed: Long) {
+  private var hitBounds: ArFraming.Rect? = null
+  private var fittedScale: Float? = null
+  fun resetActor() { hitBounds = null; fittedScale = null }
+  fun hit(x: Float, y: Float) = hitBounds?.hit(x,y) == true
+  fun actor(camera: Camera, pose: Pose, kind: String, lit: Boolean, elapsed: Long): ArFraming.Rect? {
     camera.getProjectionMatrix(projection, 0, .1f, 30f); camera.getViewMatrix(view, 0)
     pose.toMatrix(model, 0)
     if (kind == "sprite" || kind == "merchant") {
@@ -212,6 +228,13 @@ internal class HereboundArRenderer {
       Matrix.rotateM(model,0,Math.toDegrees(atan2(facing[0].toDouble(),facing[2].toDouble())).toFloat(),0f,1f,0f)
     }
     Matrix.multiplyMM(vp, 0, projection, 0, view, 0)
+    Matrix.multiplyMM(mvp,0,vp,0,model,0)
+    val scale = fittedScale ?: ArFraming.fittedScale(mvp,kind).also { fittedScale = it }
+    val bounds = ArFraming.project(mvp,kind,scale)
+    // Do not fill the camera with clipped geometry if the player walks into it.
+    hitBounds = bounds?.takeIf { it.visible && it.width <= 1.4f && it.height <= 1.4f }
+    if (hitBounds == null || scale <= .001f) return null
+    Matrix.scaleM(model,0,scale,scale,scale)
     GLES20.glUseProgram(actorProgram); GLES20.glEnable(GLES20.GL_DEPTH_TEST)
     val color = GLES20.glGetUniformLocation(actorProgram, "color")
     fun block(x: Float, y: Float, z: Float, sx: Float, sy: Float, sz: Float, r: Float, g: Float, b: Float) {
@@ -251,16 +274,7 @@ internal class HereboundArRenderer {
       block(.12f,.61f+bounce,.19f,.07f,.08f,.03f,.94f,.9f,.68f)
       block(.07f,.79f+bounce,0f,.14f,.16f,.08f,.44f,.62f,.24f)
     }
-    // Project the actual model bounds; touch events refer to the rendered object.
-    Matrix.multiplyMM(mvp,0,vp,0,model,0)
-    var minX=Float.POSITIVE_INFINITY; var maxX=Float.NEGATIVE_INFINITY
-    var minY=Float.POSITIVE_INFINITY; var maxY=Float.NEGATIVE_INFINITY
-    val height = if (kind == "merchant") 1.65f else .9f
-    for(x in listOf(-.6f,.6f)) for(y in listOf(0f,height)) for(z in listOf(-.4f,.65f)) {
-      val clip=FloatArray(4); Matrix.multiplyMV(clip,0,mvp,0,floatArrayOf(x,y,z,1f),0)
-      if(clip[3] > .01f) { minX=min(minX,clip[0]/clip[3]);maxX=max(maxX,clip[0]/clip[3]);minY=min(minY,clip[1]/clip[3]);maxY=max(maxY,clip[1]/clip[3]) }
-    }
-    hitX=(minX+maxX)/2;hitY=(minY+maxY)/2;hitW=max(.05f,(maxX-minX)/2);hitH=max(.05f,(maxY-minY)/2)
+    return hitBounds
   }
   private fun attribute(program: Int, name: String, data: FloatBuffer, size: Int) {
     val at = GLES20.glGetAttribLocation(program, name)

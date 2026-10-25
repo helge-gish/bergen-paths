@@ -50,6 +50,8 @@ architectures = env.get('HEREBOUND_ANDROID_ARCHITECTURES', 'arm64-v8a')
 if not re.fullmatch(r'(arm64-v8a|x86_64)(,(arm64-v8a|x86_64))*', architectures):
     raise SystemExit('Unsupported Android architecture list.')
 args = ['./gradlew', ':app:assembleRelease', '--no-daemon', '--max-workers=2', '-PreactNativeArchitectures=' + architectures]
+if env.get('HEREBOUND_ANDROID_CHECKS') == '1':
+    args.append(':herebound-ar:testReleaseUnitTest')
 if env.get('HEREBOUND_ANDROID_CLEAN') == '1':
     # Metro's copied drawables can outlive a removed JS asset in an incremental
     # build. Use a clean app build when replacing bundled artwork.
