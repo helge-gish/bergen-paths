@@ -48,7 +48,7 @@ test('native final-APK fixture uses the production coaching plan without acceler
   assert.deepEqual(plan, { cues: workoutCues, phases: workoutPhases, totalMs: WORKOUT_MS });
 });
 
-for (const [kind, minutes, rounds] of [['interval-walk', 30, 5], ['walk-jog', 25, 6]] as const) {
+for (const [kind, minutes, rounds] of [['interval-walk', 30, 5], ['walk-jog', 25, 6], ['minute-intervals', 30, 10], ['pyramid', 23, 5]] as const) {
   test(`${kind}: exact phase boundaries, completion, pause/restart and native transition cues`, () => {
     const plan = workoutPlan(kind), w = createWorkout(1000, false, kind);
     assert.equal(plan.totalMs, minutes * 60000);
@@ -82,4 +82,12 @@ test('Japanese walking is five slow/fast 3-minute pairs; walk/jog includes six s
   assert.equal(jog[0].kind, 'warmup'); assert.equal(jog.at(-1)?.kind, 'cooldown');
   assert.equal(jog.filter(p => p.kind === 'fast' && p.seconds === 60).length, 6);
   assert.equal(jog.filter(p => p.kind === 'easy' && p.seconds === 120).length, 6);
+});
+
+test('short intervals and pyramid have their advertised pattern and warmup/cooldown',()=>{
+ const minute=workoutPlan('minute-intervals'),pyramid=workoutPlan('pyramid');
+ assert.deepEqual(minute.phases.slice(1,-1).map(p=>[p.kind,p.seconds]),Array.from({length:10},()=>[['fast',60],['easy',60]]).flat());
+ assert.deepEqual(pyramid.phases.filter(p=>p.kind==='fast').map(p=>p.seconds),[60,120,180,120,60]);
+ assert.equal(pyramid.phases.filter(p=>p.kind==='easy'&&p.seconds===60).length,4);
+ for(const p of [minute,pyramid]){assert.equal(p.phases[0].seconds,300);assert.equal(p.phases[0].kind,'warmup');assert.equal(p.phases.at(-1)?.seconds,300);assert.equal(p.phases.at(-1)?.kind,'cooldown');}
 });

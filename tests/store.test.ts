@@ -425,3 +425,17 @@ test('explicit segment drafts survive reopening, cancel without changing the tra
   assert.equal(reopened.segmentWindow(trip.id).draft, false);
   assert.equal(reopened.trails().length, 1); raw.close();
 });
+
+test('new training plans and their true finish times survive ending and reopening the tour',()=>{
+ const {store,db,raw}=database(),trip=store.begin(null,false,1000);
+ store.startWorkout(trip.id,'minute-intervals',10000);
+ store.startWorkout(trip.id,'pyramid',2000000);
+ store.finish(trip.id,6000000);
+ const saved=createStore(db).getTrip(trip.id)!;
+ assert.equal(saved.workoutHistory?.[0].kind,'minute-intervals');
+ assert.equal(saved.workoutHistory?.[0].completedAt,1810000);
+ assert.equal(saved.workout?.kind,'pyramid');
+ assert.equal(saved.workout?.completedAt,3380000);
+ assert.equal(saved.workout?.endedAt,6000000);
+ assert.equal(saved.endedAt,6000000);raw.close();
+});

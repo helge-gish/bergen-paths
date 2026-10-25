@@ -10,6 +10,7 @@ import * as natureTiming from '../src/domain/natureTiming';
 import * as metrics from '../src/domain/metrics';
 import * as peg from '../src/domain/activePeg';
 import * as workout from '../src/domain/workout';
+import * as trainingHistory from '../src/domain/workoutLog';
 import * as completion from '../src/domain/completionNotice';
 import * as groups from '../src/domain/discoveryGroups';
 import * as finder from '../src/domain/trailFinder';
@@ -25,6 +26,7 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   const recorder = createAutomaticRecorder({ preference: () => preference, setPreference: p => { preference = p; }, active: () => !!active, running: async () => !!active, start: async () => { if (denyPermission) throw new Error('Gi posisjonstilgang'); starts++; active = { id: 'auto', startedAt: Date.now(), endedAt: null, points: [{ latitude: 60, longitude: 5, timestamp: Date.now(), accuracy: 5, speed: 1, altitude: null, altitudeAccuracy: null }], name: '', ghostId: null, audioEnabled: false, lastCueAt: 0 }; }, resume: async () => {}, finish: async () => { active = null; } });
   const native = { ActivityIndicator: 'ActivityIndicator', Alert: { alert() {} }, AppState: { currentState: 'active', addEventListener: (_: string, cb: typeof appState) => { appState = cb; return { remove() {} }; } }, Image: 'Image', Linking: {}, Modal: 'Modal', Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View' };
   const { Trakk } = component('App.tsx', {
+    './src/domain/workoutLog': trainingHistory,
     './src/ui/useAreaName': {useAreaName: ()=>'Sandviken, Bergen'}, './src/domain/completionNotice': completion, './src/domain/discoveryGroups': groups,
     './src/domain/trailActivity': trailActivity, './src/ui/useTrailActivity': { useTrailActivity: () => ({report,pending:false,error:null}) }, './src/ui/TrailReview': { TrailReview: 'TrailReview' },
     'react-native': native, 'react-native-safe-area-context': { SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView' }, 'expo-status-bar': { StatusBar: 'StatusBar' }, './assets/trakk-icon.png': 1,
@@ -89,11 +91,16 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   assert.equal((settings.activeNatureArea as any).latitude, 60.0001);
   await act(() => tree.root.findByProps({ accessibilityLabel: 'Velg treningsmodus' }).props.onPress());
   assert.equal(starts, 1);
+  assert.ok(tree.root.findByProps({title:'Minuttintervaller · 30 min'}));
+  assert.ok(tree.root.findByProps({title:'Pyramide · 23 min'}));
   await act(() => tree.root.findByProps({ title: 'Japansk intervallgange · 30 min' }).props.onPress());
   assert.equal(starts, 1); assert.equal(active.workout.kind, 'interval-walk');
   assert.equal(tree.root.findAllByType('Modal' as any).length, 0);
   await act(() => tree.root.findByProps({ title: 'Avslutt tur' }).props.onPress());
   assert.equal(preference, 'paused'); assert.equal(active, null);
+  assert.match(allText(), /Turen er lagret/);
+  await act(()=>appState('background'));
+  assert.doesNotMatch(allText(), /Turen er lagret/);
   assert.equal(tree.root.findAllByType('TrailMap' as any).length, 1);
   assert.equal(tree.root.findAllByProps({ accessibilityRole: 'tab' }).length, 2);
   assert.ok(tree.root.findByProps({title:'Start tur'}));assert.equal(tree.root.findAllByProps({title:'Avslutt tur'}).length,0);
@@ -102,6 +109,7 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   await act(() => tree.unmount());
   await act(() => { tree = create(React.createElement(Trakk, { initial: initial() })); });
   assert.equal(starts, 1); assert.ok(nearbyCalls >= callsAtPause);
+  assert.doesNotMatch(allText(), /Turen er lagret/);
   await act(() => tree.root.findByProps({ title: 'Start tur' }).props.onPress());
   assert.equal(starts, 2); assert.equal((active as any).workout, undefined);
   await act(() => tree.root.findByProps({ title: 'Avslutt tur' }).props.onPress());
@@ -128,5 +136,11 @@ test('Start tur explicitly records; Avslutt tur stops recording, while map, AR a
   assert.equal(tree.root.findAllByProps({accessibilityLabel:'Lukk fullføringsvarselet'}).length,0);
   await act(() => appState('active'));
   assert.equal(tree.root.findAllByProps({accessibilityLabel:'Lukk fullføringsvarselet'}).length,0,'dismissed completion does not reappear');
+  const ended=Date.now()-5000;
+  active={...active!,workout:{...workout.createWorkout(ended-workout.workoutPlan('pyramid').totalMs,true,'pyramid'),id:'pyramid-done'}};
+  await act(()=>appState('active'));
+  assert.ok(tree.root.findByProps({accessibilityLabel:'Pyramide · Fullført'}));
+  assert.match(allText(),/1 treningsøkt fullført/);
+  assert.ok(active,'completed training does not finish the tour');
   await act(() => tree.root.findAllByProps({ accessibilityRole: 'tab' })[0].props.onPress());
 });

@@ -49,3 +49,7 @@ Logoen får «utforsk stiene nær deg». Området merkes med stedsnavn fra det f
 ## Valg og avbryt i 0.4.6
 
 Finn sti/strekk skal ha synlig avbryt både på kartet og i AR, også i fullskjerm og infovisning. Avbryt fjerner mål og veivisning samlet, beholder kart/kamera åpent og påvirker ikke turregistreringen. Ingen bekreftelsesdialog er nødvendig for denne reversible handlingen.
+
+## Treningslogg i 0.4.7
+
+Fullførte og avbrutte treningsøkter vises i samme kronologiske Logg som stier/strekk. Naturlig fullføring av trening krever ikke at turen avsluttes. Tidspunkt og pauser bevares; nye økter får egne identiteter. Minuttintervaller (30 min) og pyramide (23 min) føyes til de tre eksisterende planene. «Turen er lagret» er en kort lokal bekreftelse etter avslutning, aldri en oppstartstilstand.
