@@ -34,7 +34,9 @@ env.update(
     npm_config_cache=env.get('npm_config_cache', '/workspace/.npm-cache'),
     EXPO_NO_TELEMETRY='1', EXPO_OFFLINE='1', CI='1', NODE_ENV='production',
 )
+subprocess.run(['node', str(repo / 'scripts/patch-gatekampen-startup.cjs'), '--prepare-prebuild'], check=True)
 subprocess.run([str(repo / 'node_modules/.bin/expo'), 'prebuild', '--platform', 'android', '--no-install'], cwd=root, env=env, check=True)
+subprocess.run(['node', str(repo / 'scripts/patch-gatekampen-startup.cjs')], check=True)
 wrapper = root / 'android/gradle/wrapper/gradle-wrapper.properties'
 contents = wrapper.read_text()
 if 'distributionSha256Sum=' not in contents:
@@ -56,7 +58,7 @@ if env.get('GATEKAMPEN_ANDROID_CLEAN') == '1':
     # build. Use a clean app build when replacing bundled artwork.
     args.insert(1, ':app:clean')
 if env.get('GATEKAMPEN_ANDROID_CHECKS') == '1':
-    args.append(':expo-location:testReleaseUnitTest')
+    args.extend([':expo-location:testReleaseUnitTest', ':app:testReleaseUnitTest'])
 jvm = '-Xmx4g -XX:MaxMetaspaceSize=1g'
 # The system Java trust store contains this environment's configured root CAs.
 # Keep certificate validation enabled when using a separately installed JDK.

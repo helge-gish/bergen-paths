@@ -2,14 +2,14 @@
   "expo": {
     "name": "Gatekampen",
     "slug": "gatekampen",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "gatekampen",
     "icon": "./assets/icon.png",
     "android": {
       "package": "no.gatekampen.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
       ],
