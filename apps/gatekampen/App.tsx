@@ -9,7 +9,7 @@ import {Groups} from './Groups';
 import {areas,areaStreets,StreetAnalysis,hunts,huntSolved,type Area} from './domain';
 import {loadCatalogue} from './catalogue';
 import * as store from './store';
-import {asFix,startRecording,stopRecording,recordingRunning} from './tracking';
+import {asFix,startRecording,stopRecording,recordingRunning,prepareRecording} from './tracking';
 import {collectionProgressAsync,type Progress} from '../../src/domain/discoveries';
 import type {Fix} from '../../src/domain/types';
 import {streetLength} from '../../src/domain/streets';
@@ -30,8 +30,8 @@ function Screen(){
  useEffect(()=>{
    let live=true;
    void Location.getForegroundPermissionsAsync().then(async p=>{if(p.granted){const last=await Location.getLastKnownPositionAsync();if(live&&last)setPosition(asFix(last));}}).catch(()=>{});
-   const timer=setInterval(()=>{if(AppState.currentState!=='active')return;setTick(t=>t+1);setActive(!!store.activeWalk());const fix=store.latestFix();if(fix)setPosition(fix);const issue=store.setting<string|null>('trackingError',null);if(issue)setError(issue);},3000);
-   const check=()=>{setTrips(store.walks());void recordingRunning().then(running=>{setInterrupted(!running&&!!store.activeWalk());}).catch(()=>{});};check();
+   const timer=setInterval(()=>{if(AppState.currentState!=='active')return;setTick(t=>t+1);setActive(!!store.activeWalk());const fix=store.latestFix();if(fix)setPosition(fix);const issue=store.setting<string|null>('trackingError',null);if(issue){setError(issue);setInterrupted(!!store.activeWalk());}},3000);
+   const check=()=>{setTrips(store.walks());void prepareRecording().then(recordingRunning).then(running=>{if(live)setInterrupted(!running&&!!store.activeWalk());}).catch(()=>{if(live){setInterrupted(!!store.activeWalk());setError('Kunne ikke klargjøre GPS. Prøv registrering igjen.');}});};check();
    const sub=AppState.addEventListener('change',state=>{if(state==='active')check();});
    return()=>{live=false;clearInterval(timer);sub.remove();};
  },[]);
@@ -92,7 +92,7 @@ function Screen(){
  </ScrollView>
  <View style={{flexDirection:'row',borderTopWidth:1,borderTopColor:colors.line,padding:10,backgroundColor:colors.paper}}>{(['Kart','Samling','Kampen'] as const).map(t=><Pressable accessibilityRole="tab" accessibilityState={{selected:tab===t}} key={t} onPress={()=>setTab(t)} style={{flex:1,alignItems:'center',paddingVertical:13,borderRadius:16,backgroundColor:tab===t?colors.pale:'transparent'}}><Text style={{fontSize:18,fontWeight:'700',color:tab===t?colors.ink:colors.muted}}>{t}</Text></Pressable>)}</View>
  <Modal visible={full} animationType="slide" onRequestClose={()=>setFull(false)}><SafeAreaView style={styles.screen}>{map(true)}{details&&<ScrollView style={{maxHeight:'38%'}} contentContainerStyle={{padding:18}}>{details}</ScrollView>}</SafeAreaView></Modal>
- <Modal visible={help} animationType="slide" onRequestClose={()=>setHelp(false)}><SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.body}><Text style={styles.heading}>Gate for gate.</Text><Text style={styles.text}>Gå minst 95 % av gaten på samme tur og besøk alle gateendene. Fortausgange teller. GPS-hull og bilfart fyller ikke inn manglende deler.</Text><Text style={styles.text}>Pause avslutter turen. Delvis gåtte gater fra separate turer legges ikke sammen. Gåtte gater blir værende i samlingen.</Text><Text style={styles.text}>Registreringen stopper etter ti minutter med bekreftet stillstand, eller etter seks timer. Åpne appen og start igjen når du vil gå videre.</Text><Text style={styles.text}>Kun gater i denne utgaven. Trapper og gangstier er ikke konkurransemål.</Text><Text style={styles.muted}>Gatekampen 0.1.1 · Områdegrensene er foreløpige testgrenser. Hele gater beholdes også når de fortsetter utenfor grensen. Kartdata © OpenStreetMap-bidragsytere. Ingen Tråkk-spor importeres automatisk.</Text><Button title="Ferdig" onPress={()=>setHelp(false)}/></ScrollView></SafeAreaView></Modal>
+ <Modal visible={help} animationType="slide" onRequestClose={()=>setHelp(false)}><SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.body}><Text style={styles.heading}>Gate for gate.</Text><Text style={styles.text}>Gå minst 95 % av gaten på samme tur og besøk alle gateendene. Fortausgange teller. GPS-hull og bilfart fyller ikke inn manglende deler.</Text><Text style={styles.text}>Pause avslutter turen. Delvis gåtte gater fra separate turer legges ikke sammen. Gåtte gater blir værende i samlingen.</Text><Text style={styles.text}>Registreringen stopper etter ti minutter med bekreftet stillstand, eller etter seks timer. Åpne appen og start igjen når du vil gå videre.</Text><Text style={styles.text}>Kun gater i denne utgaven. Trapper og gangstier er ikke konkurransemål.</Text><Text style={styles.muted}>Gatekampen 0.1.2 · Områdegrensene er foreløpige testgrenser. Hele gater beholdes også når de fortsetter utenfor grensen. Kartdata © OpenStreetMap-bidragsytere. Ingen Tråkk-spor importeres automatisk.</Text><Button title="Ferdig" onPress={()=>setHelp(false)}/></ScrollView></SafeAreaView></Modal>
  </SafeAreaView>;
 }
 export default function App(){return <SafeAreaProvider><Screen/></SafeAreaProvider>;}

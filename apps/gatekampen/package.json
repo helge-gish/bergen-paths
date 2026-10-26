@@ -1,6 +1,6 @@
 {
   "name": "gatekampen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -33,7 +33,12 @@
         "expo-dev-client",
         "expo-speech",
         "expo-camera"
-      ]
+      ],
+      "android": {
+        "buildFromSource": [
+          "expo-location"
+        ]
+      }
     }
   }
 }

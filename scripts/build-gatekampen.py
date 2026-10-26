@@ -16,6 +16,7 @@ repo = Path(__file__).resolve().parents[1]
 root = repo / 'apps/gatekampen'
 subprocess.run(['node', str(repo / 'scripts/patch-map-gestures.cjs')], check=True)
 subprocess.run(['node', str(repo / 'scripts/patch-camera-preview.cjs')], check=True)
+subprocess.run(['node', str(repo / 'scripts/patch-location-service.cjs')], check=True)
 env = os.environ.copy()
 sdk = Path(env.get('ANDROID_HOME', '/workspace/.android-sdk'))
 jdks = sorted(Path('/workspace/.java').glob('jdk-17*'))
@@ -54,6 +55,8 @@ if env.get('GATEKAMPEN_ANDROID_CLEAN') == '1':
     # Metro's copied drawables can outlive a removed JS asset in an incremental
     # build. Use a clean app build when replacing bundled artwork.
     args.insert(1, ':app:clean')
+if env.get('GATEKAMPEN_ANDROID_CHECKS') == '1':
+    args.append(':expo-location:testReleaseUnitTest')
 jvm = '-Xmx4g -XX:MaxMetaspaceSize=1g'
 # The system Java trust store contains this environment's configured root CAs.
 # Keep certificate validation enabled when using a separately installed JDK.

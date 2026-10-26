@@ -1,0 +1,71 @@
+  // A normal start while foregrounded avoids arming Android's fatal FGS deadline
+  // before the asynchronous bind callback. Promotion can still be rejected when
+  // permissions or Activity eligibility change; handle that on the native thread.
+  private fun maybeStartForegroundService() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !AppForegroundedSingleton.isForegrounded) return
+    val task = mTask ?: return
+    if (!shouldUseForegroundService(task.options)) { stopForegroundService(); return }
+    val serviceOptions = MapArguments(task.options).getArguments(FOREGROUND_SERVICE_KEY).toBundle()
+    val context = context ?: return
+    if (mService != null) {
+      try { mService?.startForeground(serviceOptions) }
+      catch (e: RuntimeException) { foregroundStartFailed(e) }
+      return
+    }
+    if (mServiceConnection != null) return
+    val intent = Intent(context, LocationTaskService::class.java).apply {
+      putExtra("appId", task.appScopeKey)
+      putExtra("taskName", task.name)
+      putExtra("killService", serviceOptions.getBoolean("killServiceOnDestroy", false))
+    }
+    val connection = object : ServiceConnection {
+      override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+        if (mServiceConnection !== this || mTask == null) return
+        try {
+          val service = (binder as? ServiceBinder)?.service
+            ?: throw IllegalStateException("Location service binder missing")
+          mService = service
+          service.setParentContext(context)
+          service.startForeground(serviceOptions)
+        } catch (e: RuntimeException) { foregroundStartFailed(e) }
+      }
+      override fun onServiceDisconnected(name: ComponentName) {
+        if (mServiceConnection === this) foregroundStartFailed(IllegalStateException("Location service disconnected"))
+      }
+      override fun onNullBinding(name: ComponentName) {
+        if (mServiceConnection === this) foregroundStartFailed(IllegalStateException("Location service binding failed"))
+      }
+      override fun onBindingDied(name: ComponentName) {
+        if (mServiceConnection === this) foregroundStartFailed(IllegalStateException("Location service binding died"))
+      }
+    }
+    mServiceConnection = connection
+    mServiceIntent = intent
+    try {
+      context.startService(intent)
+      if (!context.bindService(intent, connection, Context.BIND_AUTO_CREATE)) {
+        foregroundStartFailed(IllegalStateException("Location service could not bind"))
+      }
+    } catch (e: RuntimeException) { foregroundStartFailed(e) }
+  }
+
+  private fun foregroundStartFailed(error: RuntimeException) {
+    Log.w(TAG, "Location foreground service rejected; recording interrupted", error)
+    stopForegroundService()
+    try { stopLocationUpdates() } catch (e: RuntimeException) { Log.w(TAG, "Could not remove location updates", e) }
+    // Deliver a normal task error to JS; never throw from ServiceConnection.
+    try { mTask?.execute(null, Error("GPS-tjenesten kunne ikke starte. Åpne appen og trykk Fortsett registrering.")) }
+    catch (e: RuntimeException) { Log.w(TAG, "Could not deliver location service error", e) }
+  }
+
+  private fun stopForegroundService() {
+    val connection = mServiceConnection
+    val intent = mServiceIntent
+    val service = mService
+    mServiceConnection = null
+    mServiceIntent = null
+    mService = null
+    try { service?.stop() } catch (e: RuntimeException) { Log.w(TAG, "Could not stop location service", e) }
+    if (connection != null) try { context?.unbindService(connection) } catch (e: RuntimeException) { Log.w(TAG, "Location service already unbound", e) }
+    if (intent != null) try { context?.stopService(intent) } catch (e: RuntimeException) { Log.w(TAG, "Could not stop pending location service", e) }
+  }
